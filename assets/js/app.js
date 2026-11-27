@@ -6,6 +6,8 @@ import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClai
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
+import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
+import { syncProgress } from './auth.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -27,6 +29,7 @@ function saveProgress(stage, n, data) {
   const all = progress();
   all[pkey(stage, n)] = { ...(all[pkey(stage, n)] || {}), ...data };
   store.set('progress', all);
+  syncProgress(all);
 }
 
 // ---------------------------------------------------------------- chrome
@@ -43,11 +46,12 @@ function renderChrome() {
       <a class="brand" href="#/" aria-label="LEANgame">${LOGO}<span class="wordmark"><b>LEAN</b>game</span><span class="brand-tag">${t('brand.tag')}</span></a>
       <nav class="mainnav" aria-label="${t('nav.home')}">
         <a href="#/" ${route.name === 'home' ? 'aria-current="page"' : ''}>${t('nav.home')}</a>
-        <a href="#/hs/geometry" ${route.name !== 'home' ? 'aria-current="page"' : ''}>${t('nav.geometry')}</a>
+        <a href="#/hs/geometry" ${route.name === 'topic' || route.name === 'problem' ? 'aria-current="page"' : ''}>${t('nav.geometry')}</a>
         <button type="button" class="navlink" data-scroll="topics">${t('nav.topics')}</button>
         <button type="button" class="navlink" data-scroll="how">${t('nav.how')}</button>
       </nav>
       <div class="tools">
+        ${accountSlot()}
         <button type="button" class="tool lang" id="langBtn" aria-label="${t('nav.langLabel')}" title="${t('nav.langLabel')}">${icon('globe')}<span>${t('nav.langShort')}</span></button>
         <button type="button" class="tool" id="themeBtn" aria-label="${t('nav.theme')}" title="${t('nav.theme')}">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button>
       </div>
@@ -104,6 +108,8 @@ function currentRoute() {
     }
     return { name: 'topic' };
   }
+  const acct = accountRoute(parts);
+  if (acct) return acct;
   return { name: 'home' };
 }
 
@@ -114,6 +120,7 @@ function render() {
   let after = null;
   if (route.name === 'home') { app.innerHTML = viewHome(); after = bindHome; document.title = 'LEANgame · ' + t('brand.tag'); }
   else if (route.name === 'topic') { app.innerHTML = viewTopic(); after = bindTopic; document.title = `${t('nav.geometry')} · LEANgame`; }
+  else if (route.name === 'acct') { app.innerHTML = viewAccount(route); after = (root) => bindAccount(root, route); document.title = accountTitle(route); }
   else { app.innerHTML = viewProblem(route); after = (root) => bindProblem(root, route); document.title = `${L(route.problem.title)} · LEANgame`; }
   cleanup = after ? after(app) || null : null;
   if (pendingScroll) {
@@ -1084,4 +1091,5 @@ function bindProblem(root, { stage, n, problem: p }) {
 
 // ---------------------------------------------------------------- start
 
+initAccounts({ rerender: render, routeName: () => currentRoute().name });
 render();

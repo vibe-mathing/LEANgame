@@ -1,0 +1,86 @@
+rules_version = '2';
+
+// LEANgame accounts: Firestore security rules.
+// Paste this file into Firebase console → Firestore Database → Rules, then press Publish.
+//
+// Before publishing, replace OWNER_LOGIN below with the owner's username (lower case),
+// the same value as OWNER_USERNAME in assets/js/firebase-config.js.
+// The owner is always an admin and is the only one who can appoint or remove other admins.
+//
+// Data:
+//   users/{uid}   { login, name, track: '3'|'4'|'5'|'uni'|'staff', blocked, progress (JSON string), createdAt, lastSeen }
+//   admins/{uid}  { since }                       an admin appointed by the owner
+//   config/site   { signupOpen: { '3': bool, … } } a track missing from the map is open
+//   config/tools  { tracks: { default?, '3'?, … } } proof-tool settings per track (tools.js)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function ownerEmail() { return 'OWNER_LOGIN@leangame.example'; }
+
+    function signedIn() { return request.auth != null; }
+    function isOwner() { return signedIn() && request.auth.token.email == ownerEmail(); }
+    function isAdmin() {
+      return isOwner()
+        || (signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+    function loginOfCaller() { return request.auth.token.email.split('@')[0]; }
+
+    function signupOpen(track) {
+      let cfg = /databases/$(database)/documents/config/site;
+      return !exists(cfg) || get(cfg).data.get('signupOpen', {}).get(track, true) == true;
+    }
+
+    function validName(n) { return n is string && n.size() > 0 && n.size() <= 60; }
+    function validProgress(p) { return p is string && p.size() <= 200000; }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+
+      // A student creates their own profile once, in an open track, with their own login.
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['login', 'name', 'track', 'blocked', 'progress', 'createdAt', 'lastSeen'])
+        && request.resource.data.login == loginOfCaller()
+        && validName(request.resource.data.name)
+        && request.resource.data.blocked == false
+        && validProgress(request.resource.data.progress)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastSeen == request.time
+        && ((request.resource.data.track in ['3', '4', '5', 'uni'] && signupOpen(request.resource.data.track))
+            || (request.resource.data.track == 'staff' && isOwner()));
+
+      // A student may change only their name, progress and last-seen time, and not while blocked.
+      // Admins may change anything (track, blocked, …).
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && resource.data.blocked != true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'progress', 'lastSeen'])
+            && validName(request.resource.data.name)
+            && validProgress(request.resource.data.progress)
+            && (!('lastSeen' in request.resource.data.diff(resource.data).affectedKeys())
+                || request.resource.data.lastSeen == request.time));
+
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow write: if isOwner();
+    }
+
+    match /config/site {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['signupOpen'])
+        && request.resource.data.signupOpen is map;
+    }
+
+    // Proof-tool settings per track (written from the admin page, read by every student).
+    match /config/tools {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['tracks'])
+        && request.resource.data.tracks is map;
+    }
+  }
+}
