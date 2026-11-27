@@ -300,6 +300,7 @@ const STR = {
     'lean.status.online': 'נבדק ב-Lean',
     'lean.status.offline': 'Lean לא זמין: בדיקה בדפדפן',
     'lean.status.unknown': 'מתחבר ל-Lean…',
+    'lean.status.unsupported': 'Lean עוד לא בודק את זה: בדיקה בדפדפן',
   },
   en: {
     'brand.tag': 'The proof game',
@@ -599,6 +600,7 @@ const STR = {
     'lean.status.online': 'Checked by Lean',
     'lean.status.offline': 'Lean offline: checked in the browser',
     'lean.status.unknown': 'Connecting to Lean…',
+    'lean.status.unsupported': 'Lean can’t check this yet: checked in the browser',
   },
 };
 

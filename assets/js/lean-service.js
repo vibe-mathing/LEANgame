@@ -78,7 +78,14 @@ export async function leanCheck(p, rows, results) {
       signal: AbortSignal.timeout(90000),
     });
     const res = await r.json();
-    return r.ok && res.ok ? res : null;
+    if (r.ok && res.ok) {
+      state = 'online';
+      return res;
+    }
+    // The service runs but can't check this proof yet (e.g. a claim type it doesn't know):
+    // the browser's check stands, and the page must not say "checked by Lean".
+    state = 'unsupported';
+    return null;
   } catch {
     state = 'offline';
     return null;
