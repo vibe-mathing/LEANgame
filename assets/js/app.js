@@ -156,7 +156,7 @@ function leanHTML(code) {
       if (/^\d+$/.test(m)) return `<span class="ln">${m}</span>`;
       if (/^(len|ang|Cong|Sbtw|Point|ℝ)$/.test(m)) return `<span class="lt">${m}</span>`;
       if (/^(cong_|vert_|adj_|rfl|linarith|bisector|midpoint)/.test(m)) return `<span class="lf">${m}</span>`;
-      if (/^(s|g|cfg)\d+$/.test(m)) return `<span class="lr">${m}</span>`;
+      if (/^(s|g|cfg|ray|nd)\d+$/.test(m)) return `<span class="lr">${m}</span>`;
       if (/^geo_/.test(m)) return `<span class="lf">${m}</span>`;
       return m;
     });
@@ -523,7 +523,7 @@ function viewProblem({ stage, n, problem: p }) {
           <span>${t('pp.problemOf', { n, m: list.length })}</span>
           ${next ? `<a class="pager-btn" href="#/hs/geometry/${stage}/${next.n}" aria-label="${t('pp.next')}">${icon('chevron', 'dir')}</a>` : '<span class="pager-btn" aria-hidden="true"></span>'}
         </div>
-        <span class="proto-badge">${icon('info')} ${t('pp.proto')}</span>
+        <span class="proto-badge" id="protoBadge">${icon('info')} ${t('pp.proto')}</span>
       </div>
 
       <div class="pp-grid">
@@ -680,6 +680,8 @@ function bindProblem(root, { stage, n, problem: p }) {
 
   function showLeanStatus() {
     leanStatusEl.hidden = !leanEnabled();
+    // "checking is simulated in the browser" is only true while Lean isn't answering
+    $('#protoBadge', root).hidden = leanEnabled() && leanState() === 'online';
     if (leanStatusEl.hidden) return;
     const s = leanState();
     leanStatusEl.className = 'lean-status is-' + s;

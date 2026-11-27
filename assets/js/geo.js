@@ -234,9 +234,11 @@ export function claimKey(c) {
   if (c.type === 'eq') {
     const v = eqVec(c);
     if (!v.size) return 'eq:0';
+    // Same claim up to swapping sides and reordering terms, but not multiplying through:
+    // "2∢BOD = 80°" is not the goal "∢BOD = 40°" (Lean agrees).
     const keys = [...v.keys()].sort();
-    const d = v.get(keys[0]);
-    return 'eq:' + keys.map((k) => `${k}=${(v.get(k) / d).toFixed(6)}`).join('|');
+    const d = Math.sign(v.get(keys[0]));
+    return 'eq:' + keys.map((k) => `${k}=${(v.get(k) * d).toFixed(6)}`).join('|');
   }
   const a = c.P.map((p, i) => p + c.Q[i]).sort().join(',');
   const b = c.Q.map((q, i) => q + c.P[i]).sort().join(',');
@@ -511,6 +513,18 @@ const CHECKS = {
     }
     return { ok: false, msg: { key: 'adjNotAdjacent' }, proof: base };
   },
+  straight_angle(claim, refRows, problem) {
+    const base = 'straight_angle';
+    const v = claim.type === 'eq' && claim.of === 'ang' ? eqVec(claim) : null;
+    const angs = v ? [...v.keys()].filter((k) => k.startsWith('a:')) : [];
+    if (angs.length !== 1 || Math.abs((v.get('1') || 0) + 180 * v.get(angs[0])) > 1e-6) {
+      return { ok: false, msg: { key: 'straightNeed' }, proof: base };
+    }
+    const t = [...claim.L.terms, ...claim.R.terms].map((x) => x.t).find((x) => termKey(x) === angs[0]);
+    const ci = betweenIdx(problem, t.p[0], t.p[1], t.p[2]);
+    if (ci < 0) return { ok: false, msg: { key: 'straightNotLine' }, proof: base };
+    return { ok: true, proof: `${base} cfg${ci + 1}` };
+  },
   algebra(claim, refRows) {
     const proof = refRows.length ? `by linarith [${refRows.map((r) => 's' + r.n).join(', ')}]` : 'by ring';
     if (claim.type !== 'eq') return { ok: false, msg: { key: 'algebraNeedEq' }, proof };
@@ -599,39 +613,10 @@ export function autoReason(problem, results, claim, upto) {
   return { reason: 'algebra', refs: keep.map((x) => pool[x].n) };
 }
 
-// ---------- one angle or segment, many names ----------
-
-const angTerm = (p, rays) => ({ kind: 'ang', p, key: angKey(p[0], p[1], p[2], rays) });
-const segTerm = (p) => ({ kind: 'seg', p, key: segKey(p[0], p[1]) });
-const sameClaim = (a, b, of) => ({
-  type: 'eq', of, left: a, right: b,
-  L: { terms: [{ c: 1, t: a }], k: 0, deg: false },
-  R: { terms: [{ c: 1, t: b }], k: 0, deg: false },
-});
-
-// Every name of the same angle (any point of each arm's ray, in either order) and of the
-// same segment (either order), as equalities. Lean receives them as facts from the
-// diagram, matching how the browser checker treats each angle and segment as one object.
-export function sameNameFacts(problem) {
-  const { pointNames: pts, rays } = problem;
-  const facts = [];
-  for (const V of pts) {
-    const groups = new Map();
-    for (const X of pts) {
-      for (const Y of pts) {
-        if (X === V || Y === V || X === Y || rays[V][X] === rays[V][Y]) continue;
-        const key = angKey(X, V, Y, rays);
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push([X, V, Y]);
-      }
-    }
-    for (const names of groups.values()) {
-      for (const n of names.slice(1)) facts.push(sameClaim(angTerm(names[0], rays), angTerm(n, rays), 'ang'));
-    }
-  }
-  for (const P of pts) for (const Q of pts) if (P < Q) facts.push(sameClaim(segTerm([P, Q]), segTerm([Q, P]), 'len'));
-  return facts;
-}
+// ---------- one angle, many names ----------
+// The Lean checker derives the same-name facts itself from the coordinates (it only trusts
+// facts it can justify from the diagram), naming them ray1, ray2, …; reversed names
+// (∢ABC = ∢CBA, AB = BA) are handled there by ang_comm and len_comm.
 
 const strictlyBetween = (pts, P, V, Q) => {
   const a = [pts[P][0] - pts[V][0], pts[P][1] - pts[V][1]];
@@ -672,14 +657,14 @@ export function renamedAngles(problem) {
 }
 
 // The problem statement as a Lean theorem, with the student's rows if given.
-// Other names of the same angle enter as facts from the diagram (n1, n2, ...); reversed
-// names (∢ABC = ∢CBA, AB = BA) are sent to the checker too but not listed here.
+// Other names of the same angle enter as facts from the diagram (ray1, ray2, …), as in
+// the Lean checker.
 export function leanTheorem(problem, results, upto) {
   const name = `geo_${problem.stage}_${String(problem.n).padStart(4, '0')}`;
   const renamed = renamedAngles(problem).flatMap((names) => names.slice(1).map((n) => `ang ${names[0].join(' ')} = ang ${n.join(' ')}`));
   const hyps = [
     ...problem.config.map((c, i) => `(cfg${i + 1} : ${c.lean})`),
-    ...renamed.map((s, i) => `(n${i + 1} : ${s})`),
+    ...renamed.map((s, i) => `(ray${i + 1} : ${s})`),
     ...problem.givensParsed.map((g, i) => `(g${i + 1} : ${leanClaim(g)})`),
   ];
   const lines = [`theorem ${name} (${problem.pointNames.join(' ')} : Point)`];

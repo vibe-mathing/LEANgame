@@ -86,6 +86,7 @@ export const REASONS = {
 
   // L01 angles
   adj_angles: R('L01', 'theorem', 0, 'adj_angles_sum', ['זוויות צמודות', 'סכום זוויות צמודות', 'סכום זוויות צמודות הוא $180°$.'], ['Adjacent angles', 'Adjacent angles', 'Adjacent angles sum to $180°$.'], true),
+  straight_angle: R('L01', 'theorem', 0, 'straight_angle', ['זווית שטוחה', 'זווית שטוחה', 'זווית שהשוקיים שלה יוצרות ישר אחד היא בת $180°$.'], ['Straight angle', 'Straight angle', 'An angle whose arms form one straight line measures $180°$.'], true),
   vert_angles: R('L01', 'theorem', 0, 'vert_angles_eq', ['זוויות קודקודיות', 'זוויות קודקודיות שוות', 'זוויות קודקודיות שוות זו לזו.'], ['Vertical angles', 'Vertical angles are equal', 'Vertical angles are equal.'], true),
   around_point: R('L01', 'theorem', 0, 'around_point_sum', ['זוויות סביב נקודה', 'זוויות סביב נקודה', 'סכום הזוויות סביב נקודה הוא $360°$.'], ['Angles around a point', 'Angles around a point', 'The angles around a point sum to $360°$.']),
   bisector_def: R('L01', 'definition', 0, 'bisector_def', ['חוצה זווית', 'הגדרת חוצה זווית', 'חוצה זווית מחלק אותה לשתי זוויות שוות.'], ['Angle bisector', 'Definition of angle bisector', 'An angle bisector splits an angle into two equal angles.'], true),

@@ -7,7 +7,7 @@
 // because browsers ask a visitor's permission before a public site may reach localhost.
 
 import { t, esc } from './i18n.js';
-import { fmtClaim, claimKey, sameNameFacts } from './geo.js';
+import { fmtClaim, claimKey } from './geo.js';
 
 const DEFAULT_URL = 'http://localhost:8790';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -54,8 +54,6 @@ function request(p, rows, results) {
     points: p.points,
     config: p.config.map(({ type, a, o, b }) => ({ type, a, o, b })),
     givens: p.givensParsed,
-    // Every name of the same angle or segment, as equalities: facts from the diagram.
-    nameFacts: sameNameFacts(p),
     goal: p.goalParsed,
     allowed: p.allowed,
     rows: rows.map((row, i) => ({
