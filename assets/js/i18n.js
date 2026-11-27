@@ -490,7 +490,8 @@ const STR = {
   },
 };
 
-let lang = document.documentElement.lang === 'en' ? 'en' : 'he';
+// typeof check: geo.js imports this module, and the parity tests run geo.js in Node.
+let lang = typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'he';
 
 export const getLang = () => lang;
 
