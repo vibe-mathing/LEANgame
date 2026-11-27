@@ -25,7 +25,8 @@ rules_version = '2';
 //   usernames/{id}  { uid, username }
 //   logins/{key}    { uid, email }
 //   config/owner  { uid }   written once by the owner
-//   config/staffInvite { code }   the teacher invite code; admins only (a sign-up with it starts as teacher)
+//   config/staffInvite { code }   a teacher invite code, admins only (kept for special sign-up codes later;
+//                                 for now the open staff link alone makes a teacher)
 //   config/site   { signupOpen: { '3': bool, …, staff: bool } }  a student track missing from the map is open;
 //                                                                 the staff link is closed unless set to true
 //   config/tools  { tracks: { default?, '3'?, … } }  proof-tool settings per track (tools.js)
@@ -95,11 +96,13 @@ service cloud.firestore {
                 && ((request.resource.data.role == 'student'
                      && request.resource.data.track in tracks()
                      && signupOpen(request.resource.data.track))
-                    // a teacher signs up through the admin's invite link: the code must match config/staffInvite
+                    // a teacher signs up through the staff link while the admin keeps it open
+                    // (an optional invite code is stored for later; special sign-up codes are not required yet)
                     || (request.resource.data.role == 'teacher'
                         && request.resource.data.track == 'staff'
                         && signupOpen('staff')
-                        && validInvite(request.resource.data.get('invite', ''))))));
+                        && request.resource.data.get('invite', '') is string
+                        && request.resource.data.get('invite', '').size() <= 64))));
 
       allow update: if
         // Admins change anything. Only the owner touches admins (including giving or removing the role).

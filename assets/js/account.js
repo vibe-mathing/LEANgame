@@ -79,7 +79,7 @@ const S = {
     'join.trackLabel': 'המסלול שלכם',
     'join.submit': 'פתיחת חשבון',
     'join.have': 'כבר יש לכם חשבון?',
-    'join.keep': 'כתבו לעצמכם את שם המשתמש והסיסמה. אין שחזור סיסמה במייל.',
+    'join.keep': 'כתבו לעצמכם את שם המשתמש והסיסמה. אם תוסיפו אימייל, אפשר יהיה לשחזר דרכו את הסיסמה.',
     'join.closedTitle': 'ההרשמה סגורה',
     'join.closed': 'ההרשמה למסלול {track} סגורה כרגע. פנו למורה.',
     'join.chooseTitle': 'באיזה מסלול אתם לומדים?',
@@ -156,7 +156,7 @@ const S = {
     'adm.col.actions': 'פעולות',
     'adm.allRoles': 'כל התפקידים',
     'adm.roleOf': 'התפקיד של {name}',
-    'adm.staffNote': 'קישור הזמנה למורים: מי שנרשם בו מקבל מיד חשבון מורה. שלחו אותו רק למורים, ואל תפרסמו אותו בפומבי. "קוד חדש" מבטל את הקישור הקודם.',
+    'adm.staffNote': 'קישור הרשמה למורים: מי שנרשם בו מקבל מיד חשבון מורה, שרואה את כל התלמידים ואת הפרטים שלהם. שלחו אותו רק למורים, וכבו את "פתוחה" כשכל המורים נרשמו.',
     'adm.staffNew': 'קוד חדש',
     'adm.staffMake': 'יצירת קישור הזמנה',
     'adm.staffNone': 'עוד אין קישור הזמנה.',
@@ -276,7 +276,7 @@ const S = {
     'join.trackLabel': 'Your track',
     'join.submit': 'Create account',
     'join.have': 'Already have an account?',
-    'join.keep': 'Write down your username and password. There is no password recovery by e-mail.',
+    'join.keep': 'Write down your username and password. If you add an e-mail, you can recover your password through it.',
     'join.closedTitle': 'Sign-up is closed',
     'join.closed': 'Sign-up for {track} is closed right now. Ask your teacher.',
     'join.chooseTitle': 'Which track are you in?',
@@ -353,7 +353,7 @@ const S = {
     'adm.col.actions': 'Actions',
     'adm.allRoles': 'All roles',
     'adm.roleOf': 'Role of {name}',
-    'adm.staffNote': 'Teacher invite link: whoever signs up through it gets a teacher account right away. Send it to teachers only and never post it publicly. "New code" cancels the previous link.',
+    'adm.staffNote': 'Teacher sign-up link: whoever signs up through it gets a teacher account right away, one that sees all students and their details. Send it to teachers only, and turn "Open" off once all the teachers have signed up.',
     'adm.staffNew': 'New code',
     'adm.staffMake': 'Create an invite link',
     'adm.staffNone': 'No invite link yet.',
@@ -724,8 +724,8 @@ async function pageJoin(host, route) {
 
   let open = !staff;
   try { open = (await auth.getSignupOpen())[track]; } catch (e) { console.warn(e); }
-  // The staff form stays visible when closed, because the owner signs up there.
-  if (!staff) {
+  // A closed link shows the closed card. The staff form stays open for the owner's very first sign-up.
+  if (!staff || auth.ownerSignedUp()) {
     if (!open) {
       host.innerHTML = `<div class="acct-card paper acct-narrow">
         <div class="join-track">${trackPill(track, true)}</div>
@@ -746,13 +746,11 @@ async function pageJoin(host, route) {
       <p class="kicker">${tt('join.kicker')}</p>
       <h1 class="acct-h">${staff ? tt('join.staffTitle') : tt('join.title')}</h1>
       <p class="acct-lead">${staff ? tt('join.staffLead') : tt('join.lead')}</p>
-      ${staff && !route.invite ? `<p class="acct-note">${ic('lock')}<span>${tt('join.staffNoInvite')}</span></p>` : ''}
-      ${staff && route.invite && !open ? `<p class="acct-note">${ic('lock')}<span>${tt('err.staff-closed')}</span></p>` : ''}
       ${staff && auth.mode === 'local' ? `<p class="acct-hint">${esc(tt('join.staffLocal', { u: auth.ownerUsername() }))}</p>` : ''}
       <form class="acct-form" novalidate>
         ${field('name', tt('f.name'), { autocomplete: 'name', hint: tt('f.nameHint') })}
         ${field('username', tt('f.username'), { autocomplete: 'username', auto: true, hint: tt('f.usernameHint') })}
-        ${staff && !route.invite ? '' : field('email', tt('f.email'), { type: 'email', autocomplete: 'email', ltr: true, hint: tt('f.emailHint'), optional: true })}
+        ${field('email', tt('f.email'), { type: 'email', autocomplete: 'email', ltr: true, hint: tt('f.emailHint'), optional: true })}
         ${field('password', tt('f.password'), { type: 'password', autocomplete: 'new-password', ltr: true, reveal: true, hint: tt('f.passwordHint', { n: auth.MIN_PASSWORD }) })}
         ${field('password2', tt('f.password2'), { type: 'password', autocomplete: 'new-password', ltr: true })}
         <p class="acct-note">${ic('info')}<span>${tt('join.keep')}</span></p>
@@ -921,10 +919,11 @@ async function pageAdmin(host, route, alive) {
   }
   const isAdm = me.isAdmin;
 
-  const st = { users: null, open: null, invite: null, q: '', track: 'all', role: 'all', expanded: null, armed: null, error: null };
+  const st = { users: null, open: null, q: '', track: 'all', role: 'all', expanded: null, armed: null, error: null };
   let armTimer = null;
-  // The staff card's link carries the teacher invite code: #/join/staff/<code>.
-  const linkFor = (t) => (t === auth.STAFF ? `${joinUrl(t)}/${st.invite}` : joinUrl(t));
+  // Every card links to its track's sign-up page (#/join/<track>); the staff link makes teachers.
+  // (Invite codes, #/join/staff/<code>, are kept in auth.js for special sign-up codes later.)
+  const linkFor = (t) => joinUrl(t);
 
   host.innerHTML = `${banner()}
     <div class="acct-head">
@@ -981,14 +980,11 @@ async function pageAdmin(host, route, alive) {
       return `
       <div class="adm-link paper${t === auth.STAFF ? ' adm-link-staff' : ''}">
         <div class="adm-link-top">${trackPill(t)}<span class="muted">${st.users ? esc(tt('adm.nStudents', { n: c[t] || 0 })) : ''}</span></div>
-        ${t !== auth.STAFF || st.invite ? `<div class="adm-link-row">
+        <div class="adm-link-row">
           <input class="acct-input adm-url" readonly dir="ltr" value="${esc(linkFor(t))}" aria-label="${esc(tt('trackLong.' + t))}">
           <button type="button" class="tool-btn" data-copy="${t}">${ic('copy')} <span>${tt('adm.copy')}</span></button>
-        </div>` : `<p class="acct-hint">${tt('adm.staffNone')}</p>`}
-        <div class="adm-link-row">
-          <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${on ? 'checked' : ''} ${st.open && isAdm ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
-          ${t === auth.STAFF ? `<button type="button" class="tool-btn" data-newinvite="1">${ic('reset')} <span>${st.invite ? tt('adm.staffNew') : tt('adm.staffMake')}</span></button>` : ''}
         </div>
+        <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${on ? 'checked' : ''} ${st.open && isAdm ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
         ${t === auth.STAFF ? `<p class="acct-hint">${tt('adm.staffNote')}</p>` : ''}
       </div>`;
     }).join('');
@@ -1068,11 +1064,8 @@ async function pageAdmin(host, route, alive) {
   async function load() {
     st.error = null;
     drawTable();
-    const [users, open, invite] = await Promise.allSettled([
-      auth.admin.listUsers(), auth.getSignupOpen(), isAdm ? auth.admin.getStaffInvite() : Promise.resolve(null),
-    ]);
+    const [users, open] = await Promise.allSettled([auth.admin.listUsers(), auth.getSignupOpen()]);
     if (!alive()) return;
-    st.invite = invite.status === 'fulfilled' ? invite.value : null;
     if (users.status === 'fulfilled') st.users = users.value;
     else { st.users = null; st.error = tt('adm.loadFail') + ' ' + errText(users.reason); }
     st.open = open.status === 'fulfilled' ? open.value : null;
@@ -1097,10 +1090,6 @@ async function pageAdmin(host, route, alive) {
       span.textContent = tt('adm.copied');
       b.classList.add('is-done');
       setTimeout(() => { span.textContent = tt('adm.copy'); b.classList.remove('is-done'); }, 1600);
-    } else if (b.dataset.newinvite) {
-      b.disabled = true;
-      await act(async () => { st.invite = await auth.admin.newStaffInvite(); });
-      drawLinks();
     } else if (b.dataset.expand) {
       st.expanded = st.expanded === b.dataset.expand ? null : b.dataset.expand;
       drawTable();

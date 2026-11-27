@@ -479,7 +479,7 @@ function localBackend() {
       if (d.usernames[id]) throw new AuthError('username-taken');
       const t = profile.track;
       const allowed = profile.role === 'admin' ? t === STAFF
-        : profile.role === 'teacher' ? t === STAFF && d.config.signupOpen?.staff === true && !!profile.invite && profile.invite === d.config.staffInvite?.code
+        : profile.role === 'teacher' ? t === STAFF && d.config.signupOpen?.staff === true
         : profile.role === 'student' && TRACKS.includes(t) && d.config.signupOpen?.[t] !== false;
       if (!allowed) throw new AuthError('denied');
       const uid = 'local-' + Math.random().toString(36).slice(2, 10);
@@ -569,6 +569,8 @@ async function need() {
 }
 
 export const accountsAvailable = async () => { await booted; return !!backend; };
+// True once the owner has signed up (their uid is pinned in config/owner).
+export const ownerSignedUp = () => !!(backend && backend.ownerClaimed());
 
 // ---------------------------------------------------------------- student actions
 
@@ -593,8 +595,9 @@ export async function getToolConfig() {
 }
 
 // email is optional. When given, the account logs in with it too and "forgot password" works for it.
-// invite: the code from the admin's teacher invite link (#/join/staff/<code>). With a valid code the account
-// starts as a teacher; firestore.rules check the code against config/staffInvite, which only admins can read.
+// track 'staff' (the staff link #/join/staff, while the admin keeps it open): the account starts as a teacher.
+// invite: an optional code from a link #/join/staff/<code>; it is stored with the profile for later use
+// (special sign-up codes), and no code is required for now.
 export async function signUp({ username, email, password, name, track, invite }) {
   const uname = normUsername(username);
   name = String(name || '').trim().replace(/\s+/g, ' ');
@@ -610,21 +613,19 @@ export async function signUp({ username, email, password, name, track, invite })
   if (asOwner && b.ownerClaimed()) throw new AuthError('username-taken');
   if (asOwner && track !== STAFF) throw new AuthError('owner-staff');
   if (asOwner && email) throw new AuthError('owner-email-later');
-  invite = String(invite || '').trim();
+  invite = String(invite || '').trim().slice(0, 64);
   const asTeacher = track === STAFF && !asOwner;
-  if (asTeacher && !invite) throw new AuthError('staff-need-invite');
   if (!asOwner && !(await getSignupOpen())[track]) throw new AuthError(track === STAFF ? 'staff-closed' : 'signup-closed');
   try { if (await b.usernameTaken(uname)) throw new AuthError('username-taken'); } catch (e) { if (e instanceof AuthError) throw e; }
   const addr = email || await loginEmail(uname);
   const profile = { name, track, role: asOwner ? 'admin' : asTeacher ? 'teacher' : 'student', blocked: false, progress: '{}' };
-  if (asTeacher) profile.invite = invite;
+  if (asTeacher && invite) profile.invite = invite;
   let p;
   try { p = await b.signUp(addr, uname, password, profile); } catch (e) {
     const err = toAuthError(e);
     if (err.code === 'email-taken' && !email) throw new AuthError('username-taken');
-    // A Firestore refusal: for a teacher invite, the code is wrong or was replaced; otherwise the page and
-    // firestore.rules disagree, so say so instead of hiding it.
-    if (err.code === 'denied') throw new AuthError(asTeacher ? 'bad-invite' : 'rules-denied');
+    // A Firestore refusal here means the page and firestore.rules disagree: say so instead of hiding it.
+    if (err.code === 'denied') throw new AuthError('rules-denied');
     throw err;
   }
   await handleProfile(p);
