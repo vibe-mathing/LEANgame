@@ -2,7 +2,7 @@
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
 import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList } from './data.js';
-import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim } from './geo.js';
+import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason } from './geo.js';
 import { renderDiagram, claimToItems } from './diagram.js';
 import { icon, glyph, LOGO } from './icons.js';
 
@@ -129,7 +129,9 @@ window.addEventListener('hashchange', render);
 
 // ---------------------------------------------------------------- helpers
 
-const reasonShort = (id) => L(REASONS[id]?.short);
+const reasonShort = (id) => esc(L(REASONS[id]?.short));
+const reasonsOfStage = (stageId) => Object.entries(REASONS).filter(([, r]) => r.stage === stageId);
+const plain = (s) => String(s).replace(/\$/g, '');
 const refsText = (refs) => (refs && refs.length ? ` <span class="refs" dir="ltr">(${[...refs].sort((a, b) => a - b).join(', ')})</span>` : '');
 
 function msgHTML(msg) {
@@ -430,7 +432,7 @@ function viewTopic() {
           <div class="stage-top"><span class="stage-label">${t('tp.stage', { n: idx + 1 })}</span><span class="badge b-${open ? 'open' : 'soon'}">${open ? t('status.open') : t('status.soon')}</span></div>
           <h3>${L(s.name)}</h3>
           <p class="stage-blurb">${rich(L(s.blurb))}</p>
-          <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${s.unlocks.map((u) => `<span class="chip">${rich(L(u))}</span>`).join('')}</div>
+          <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([, r]) => `<span class="chip">${esc(L(r.short))}</span>`).join('')}</div>
           ${open ? `<div class="stage-foot">
             <div class="pips" aria-label="${probs.length === 1 ? t('tp.problem1') : t('tp.problems', { n: probs.length })}">
               ${probs.map((p) => `<a class="pip${isSolved(s.id, p.n) ? ' done' : ''}" href="#/hs/geometry/${s.id}/${p.n}" title="${esc(L(p.title))}${isSolved(s.id, p.n) ? ' · ' + t('tp.solved') : ''}">${isSolved(s.id, p.n) ? icon('check') : p.n}</a>`).join('')}
@@ -442,7 +444,7 @@ function viewTopic() {
     </li>`;
   };
 
-  const catalog = Object.entries(REASONS).filter(([, r]) => r.stage === null || r.stage === 'L01' || r.stage === 'L02');
+  const groups = [{ id: null, title: t('pp.groupBasic') }, ...STAGES.map((s, i) => ({ id: s.id, title: `${t('tp.stage', { n: i + 1 })} · ${L(s.name)}` }))];
 
   return `
   <section class="topic-hero">
@@ -477,16 +479,18 @@ function viewTopic() {
     <div class="wrap">
       <h2 class="h2">${t('tp.toolbox')}</h2>
       <p class="section-lead">${t('tp.toolboxText')}</p>
-      <div class="catalog">
-        ${catalog.map(([id, r]) => `
-          <article class="reason-card k-${r.kind}">
-            <div class="rc-top"><span class="rc-kind">${t('kind.' + r.kind)}</span><span class="rc-stage">${r.stage ? t('tp.stage', { n: stageNumber(r.stage) }) : t('tp.always')}</span></div>
-            <h3>${L(r.short)}</h3>
-            <p class="rc-alt">${getLang() === 'he' ? r.short.en : r.short.he}</p>
-            <p>${rich(L(r.statement))}</p>
-            <code dir="ltr">${r.lean}</code>
-          </article>`).join('')}
-      </div>
+      ${groups.map((g) => `
+        <h3 class="catalog-title">${g.title}</h3>
+        <div class="catalog">
+          ${reasonsOfStage(g.id).map(([, r]) => `
+            <article class="reason-card k-${r.kind}">
+              <div class="rc-top"><span class="rc-kind">${t('kind.' + r.kind)}</span>${r.playable ? `<span class="rc-demo">${icon('check')} ${t('tp.demoTag')}</span>` : ''}</div>
+              <h4>${esc(L(r.short))}</h4>
+              <p class="rc-alt">${esc(getLang() === 'he' ? r.short.en : r.short.he)}</p>
+              <p>${rich(L(r.statement))}</p>
+              <code dir="ltr">${r.lean}</code>
+            </article>`).join('')}
+        </div>`).join('')}
     </div>
   </section>`;
 }
@@ -574,23 +578,30 @@ function viewProblem({ stage, n, problem: p }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', '≅', '=', '°'].map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', '≅', '=', '+', '°'].map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
-              <span class="cmp-label">${t('pp.reason')}</span>
-              <div class="reason-chips" id="reasonChips" role="radiogroup" aria-label="${t('pp.reason')}">
-                ${p.allowed.map((id) => {
-                  const r = REASONS[id];
-                  const from = r.stage && r.stage !== stage ? `<small>${t('pp.fromStage', { n: stageNumber(r.stage) })}</small>` : '';
-                  return `<button type="button" class="rchip k-${r.kind}" role="radio" aria-checked="false" data-r="${id}">${L(r.short)}${from}</button>`;
-                }).join('')}
+              <span class="cmp-label" id="reasonLabel">${t('pp.reason')}</span>
+              <div class="reason-field" id="reasonField">
+                <div class="reason-row">
+                  <button type="button" class="reason-trigger" id="reasonTrigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="reasonPop">
+                    ${icon('search', 'rt-ic')}<span class="rt-value" id="reasonValue"></span>${icon('chevron', 'rt-chev')}
+                  </button>
+                  <button type="button" class="mini rt-clear" id="reasonClear" hidden aria-label="${t('pp.reasonClear')}">${icon('x')}</button>
+                </div>
+                <div class="reason-pop" id="reasonPop" hidden>
+                  <div class="rp-search">${icon('search')}<input id="reasonSearch" type="search" placeholder="${t('pp.reasonSearch')}" autocomplete="off" spellcheck="false"></div>
+                  <div class="rp-list" id="reasonList" role="listbox" aria-labelledby="reasonLabel">${reasonPickerHTML(p)}</div>
+                  <p class="rp-empty" id="reasonEmpty" hidden>${t('pp.reasonNone')}</p>
+                </div>
               </div>
               <p class="rinfo" id="rinfo"></p>
               <div class="refs-field" id="refsField" hidden>
                 <span class="cmp-label">${t('pp.refs')} <small id="refsHint"></small></span>
                 <div class="ref-chips" id="refChips"></div>
               </div>
+              <p class="cmp-msg" id="cmpMsg" role="alert" hidden></p>
               <div class="cmp-actions">
                 <button type="button" class="btn btn-ghost btn-small" id="cancelEdit" hidden>${t('pp.cancel')}</button>
                 <button type="submit" class="btn btn-primary" id="addBtn">${icon('enter')} <span id="addLabel">${t('pp.add')}</span></button>
@@ -601,6 +612,25 @@ function viewProblem({ stage, n, problem: p }) {
       </div>
     </div>
   </div>`;
+}
+
+// The whole toolbox, grouped by level. Reasons from later levels are shown locked,
+// so the student picks the right tool from many rather than from the few needed.
+function reasonPickerHTML(p) {
+  const groups = [{ id: null, title: t('pp.groupBasic') }, ...STAGES.map((s, i) => ({ id: s.id, title: `${t('tp.stage', { n: i + 1 })} · ${L(s.name)}` }))];
+  return groups.map((g) => {
+    const items = reasonsOfStage(g.id);
+    const locked = g.id !== null && !p.allowed.includes(items[0]?.[0]);
+    return `<div class="rgroup${locked ? ' is-locked' : ''}">
+      <p class="rg-title">${locked ? icon('lock') : ''}${g.title}${locked ? `<small>${t('pp.lockedNote')}</small>` : ''}</p>
+      ${items.map(([id, r]) => {
+        const search = [r.short.he, r.short.en, r.name.he, r.name.en, plain(r.statement.he), plain(r.statement.en), r.lean].join(' ').toLowerCase();
+        return `<button type="button" class="ritem k-${r.kind}" role="option" aria-selected="false" data-r="${id}" data-search="${esc(search)}"${locked ? ' aria-disabled="true" tabindex="-1"' : ''}>
+          <span class="ri-name">${esc(L(r.short))}</span><span class="ri-text">${rich(L(r.statement))}</span>
+        </button>`;
+      }).join('')}
+    </div>`;
+  }).join('');
 }
 
 function bindProblem(root, { stage, n, problem: p }) {
@@ -654,7 +684,7 @@ function bindProblem(root, { stage, n, problem: p }) {
       return `<li class="prow ${cls}${r.goal && r.ok ? ' is-goal' : ''}${state.editing === i ? ' is-editing' : ''}" data-i="${i}" tabindex="0">
         <span class="pnum">${i + 1}</span>
         <span class="pclaim">${claimHTML}${r.goal && r.ok ? `<span class="goal-tag">${t('pp.goalRow')}</span>` : ''}</span>
-        <span class="preason">${row.reason ? reasonShort(row.reason) : '—'}${refsText(row.refs)}</span>
+        <span class="preason">${row.reason ? reasonShort(row.reason) : '—'}${refsText(row.refs)}${row.auto ? `<span class="auto-tag" title="${t('pp.autoTitle')}">${icon('spark')}${t('pp.autoTag')}</span>` : ''}</span>
         <span class="pstat" title="${r.ok ? t('pp.ok') : t('pp.bad')}">${icon(r.ok ? 'check' : 'x')}<span class="sr">${r.ok ? t('pp.ok') : t('pp.bad')}</span></span>
         <span class="pactions">
           <button type="button" class="mini" data-act="edit" aria-label="${t('pp.edit', { n: i + 1 })}">${icon('edit')}</button>
@@ -708,9 +738,12 @@ function bindProblem(root, { stage, n, problem: p }) {
     $('#cmpRow', root).textContent = state.editing != null ? t('pp.editing', { n: nextN }) : t('pp.row', { n: nextN });
     $('#addLabel', root).textContent = state.editing != null ? t('pp.update') : t('pp.add');
     $('#cancelEdit', root).hidden = state.editing == null;
-    $$('.rchip', root).forEach((c) => c.setAttribute('aria-checked', String(c.dataset.r === state.reason)));
+    $$('.ritem', root).forEach((c) => c.setAttribute('aria-selected', String(c.dataset.r === state.reason)));
     const r = state.reason ? REASONS[state.reason] : null;
-    $('#rinfo', root).innerHTML = r ? `<b>${L(r.name)}.</b> ${rich(L(r.statement))}` : '';
+    $('#reasonValue', root).innerHTML = r ? `<b>${esc(L(r.short))}</b>` : `<span class="muted">${t('pp.reasonPick')}</span>`;
+    $('#reasonTrigger', root).classList.toggle('has-value', !!r);
+    $('#reasonClear', root).hidden = !r;
+    $('#rinfo', root).innerHTML = r ? `<b>${esc(L(r.name))}.</b> ${rich(L(r.statement))}` : '';
     const needs = r ? r.refs : 0;
     const field = $('#refsField', root);
     field.hidden = !needs;
@@ -734,8 +767,10 @@ function bindProblem(root, { stage, n, problem: p }) {
     const r = input.value.trim() ? parseClaim(input.value, p.pointNames) : null;
     const nn = state.editing != null ? state.editing + 1 : state.rows.length + 1;
     const claim = r && r.ok ? leanClaim(r.claim) : '…';
-    const reason = state.reason ? REASONS[state.reason].lean : '…';
-    const refs = [...state.refs].sort((a, b) => a - b).map((k) => 's' + k).join(' ');
+    const auto = currentAuto();
+    const rid = state.reason || (auto && auto.reason);
+    const reason = rid ? REASONS[rid].lean : '…';
+    const refs = (state.reason ? [...state.refs] : auto ? auto.refs : []).sort((a, b) => a - b).map((k) => 's' + k).join(' ');
     liveLean.innerHTML = `<span class="ll-tag">${t('pp.livePrefix')}</span> ${leanHTML(`have s${nn} : ${claim} := ${reason}${refs ? ' ' + refs : ''}`)}`;
   }
 
@@ -747,10 +782,32 @@ function bindProblem(root, { stage, n, problem: p }) {
     } else {
       const r = parseClaim(v, p.pointNames);
       preview.className = 'claim-preview ' + (r.ok ? 'is-ok' : 'is-err');
-      preview.innerHTML = r.ok ? mathSpan(fmtClaim(r.claim)) : msgHTML(r.error);
+      const auto = r.ok ? currentAuto() : null;
+      preview.innerHTML = r.ok
+        ? mathSpan(fmtClaim(r.claim)) + (auto ? `<span class="auto-note">${icon('spark')} ${t('pp.autoNote', { r: reasonShort(auto.reason) + refsText(auto.refs) })}</span>` : '')
+        : msgHTML(r.error);
     }
     syncPreviewHighlight();
     updateLiveLean();
+  }
+
+  const upto = () => (state.editing != null ? state.editing : state.rows.length);
+
+  // A calculation (or an identity such as AB = AB) fills in its own reason.
+  function currentAuto() {
+    if (state.reason) return null;
+    const v = input.value.trim();
+    if (!v) return null;
+    const r = parseClaim(v, p.pointNames);
+    if (!r.ok) return null;
+    const a = autoReason(result.results, r.claim, upto());
+    return a && p.allowed.includes(a.reason) ? a : null;
+  }
+
+  function showMsg(html) {
+    const m = $('#cmpMsg', root);
+    m.hidden = !html;
+    m.innerHTML = html || '';
   }
 
   function resetComposer() {
@@ -758,11 +815,88 @@ function bindProblem(root, { stage, n, problem: p }) {
     state.reason = null;
     state.refs = new Set();
     state.editing = null;
+    showMsg('');
+    closePicker();
     updatePreview();
   }
 
+  // --- reason picker
+  const trigger = $('#reasonTrigger', root);
+  const pop = $('#reasonPop', root);
+  const search = $('#reasonSearch', root);
+  const list = $('#reasonList', root);
+  const visibleItems = () => $$('.ritem:not([aria-disabled="true"])', list).filter((x) => !x.hidden);
+
+  function openPicker() {
+    pop.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    search.value = '';
+    filterPicker();
+    const sel = $('.ritem[aria-selected="true"]', list);
+    if (sel) sel.scrollIntoView({ block: 'nearest' }); else list.scrollTop = 0;
+    search.focus();
+  }
+  function closePicker() {
+    if (pop.hidden) return;
+    pop.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  }
+  function filterPicker() {
+    const q = search.value.trim().toLowerCase();
+    let any = false;
+    $$('.rgroup', list).forEach((g) => {
+      let n = 0;
+      $$('.ritem', g).forEach((it) => {
+        const show = !q || it.dataset.search.includes(q);
+        it.hidden = !show;
+        if (show) n++;
+      });
+      g.hidden = n === 0;
+      if (n) any = true;
+    });
+    $('#reasonEmpty', root).hidden = any;
+  }
+  function pickReason(id) {
+    state.reason = id;
+    if (!REASONS[id].refs) state.refs = new Set();
+    showMsg('');
+    closePicker();
+    renderComposerMeta();
+    updatePreview();
+    trigger.focus();
+  }
+  trigger.addEventListener('click', () => (pop.hidden ? openPicker() : closePicker()));
+  $('#reasonClear', root).addEventListener('click', () => {
+    state.reason = null;
+    state.refs = new Set();
+    renderComposerMeta();
+    updatePreview();
+    trigger.focus();
+  });
+  search.addEventListener('input', filterPicker);
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); visibleItems()[0]?.focus(); }
+    if (e.key === 'Enter') { e.preventDefault(); const first = visibleItems()[0]; if (first) pickReason(first.dataset.r); }
+  });
+  list.addEventListener('click', (e) => {
+    const it = e.target.closest('.ritem');
+    if (!it || it.getAttribute('aria-disabled') === 'true') return;
+    pickReason(it.dataset.r);
+  });
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const items = visibleItems();
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowUp' && i <= 0) { search.focus(); return; }
+    items[Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))]?.focus();
+  });
+  pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); closePicker(); trigger.focus(); } });
+  const outside = (e) => { if (!pop.hidden && !e.target.closest('#reasonField')) closePicker(); };
+  document.addEventListener('pointerdown', outside);
+
   // --- events
-  input.addEventListener('input', updatePreview);
+  input.addEventListener('input', () => { showMsg(''); updatePreview(); });
   $$('.symkey', root).forEach((b) => b.addEventListener('click', () => {
     const s = b.dataset.sym;
     const a = input.selectionStart ?? input.value.length;
@@ -773,13 +907,6 @@ function bindProblem(root, { stage, n, problem: p }) {
     input.setSelectionRange(a + ins.length, a + ins.length);
     updatePreview();
   }));
-  $('#reasonChips', root).addEventListener('click', (e) => {
-    const b = e.target.closest('.rchip');
-    if (!b) return;
-    state.reason = state.reason === b.dataset.r ? null : b.dataset.r;
-    if (!state.reason || !REASONS[state.reason].refs) state.refs = new Set();
-    renderComposerMeta();
-  });
   $('#refChips', root).addEventListener('click', (e) => {
     const b = e.target.closest('.refchip');
     if (!b) return;
@@ -791,7 +918,15 @@ function bindProblem(root, { stage, n, problem: p }) {
     e.preventDefault();
     const text = input.value.trim();
     if (!text) { input.focus(); preview.className = 'claim-preview is-err'; preview.innerHTML = msgHTML({ key: 'empty' }); return; }
-    const row = { text, reason: state.reason, refs: [...state.refs].sort((a, b) => a - b) };
+    if (!parseClaim(text, p.pointNames).ok) { input.focus(); updatePreview(); return; }
+    let row;
+    if (state.reason) {
+      row = { text, reason: state.reason, refs: [...state.refs].sort((a, b) => a - b) };
+    } else {
+      const auto = currentAuto();
+      if (!auto) { showMsg(`${icon('info')} ${t('pp.needReason')}`); openPicker(); return; }
+      row = { text, reason: auto.reason, refs: auto.refs, auto: true };
+    }
     if (state.editing != null) state.rows[state.editing] = row; else state.rows.push(row);
     resetComposer();
     renderRows();
@@ -812,8 +947,8 @@ function bindProblem(root, { stage, n, problem: p }) {
       const row = state.rows[i];
       state.editing = i;
       input.value = row.text;
-      state.reason = row.reason;
-      state.refs = new Set(row.refs);
+      state.reason = row.auto ? null : row.reason;
+      state.refs = new Set(row.auto ? [] : row.refs);
       updatePreview();
       renderRows();
       input.focus();
@@ -860,7 +995,10 @@ function bindProblem(root, { stage, n, problem: p }) {
 
   updatePreview();
   renderRows();
-  return () => { if (resetArmed) clearTimeout(resetArmed); };
+  return () => {
+    if (resetArmed) clearTimeout(resetArmed);
+    document.removeEventListener('pointerdown', outside);
+  };
 }
 
 // ---------------------------------------------------------------- start

@@ -1,12 +1,14 @@
 // The demo checker. In the real game every row is compiled by Lean; here the same
 // catalog rules run in the browser so the site can be played without a server.
-// It parses school notation, normalizes it (AB = BA, ∢ABC = ∢CBA, letter order in
-// congruences), checks each row on its own context, and emits the matching Lean.
+// It parses school notation (including sums like ∢AOC + ∢COB = 180°), normalizes it
+// (AB = BA, ∢ABC = ∢CBA, letter order in congruences), checks each row against only
+// the rows it cites, spots pure calculation steps, and emits the matching Lean.
 
-import { REASONS } from './data.js';
+import { REASONS, STAGES } from './data.js';
 
 const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 const others = (k) => [0, 1, 2].filter((x) => x !== k);
+const EPS = 1e-9;
 
 const ok = (claim) => ({ ok: true, claim });
 const fail = (key, vars) => ({ ok: false, error: { key, vars } });
@@ -18,38 +20,84 @@ export function normalizeInput(s) {
     .replace(/[Δ∆▵▲]/g, '△')
     .replace(/~=|=~|≡|≃|≌/g, '≅')
     .replace(/[º˚]/g, '°')
+    .replace(/[−–]/g, '-')
+    .replace(/[·×]/g, '*')
     .replace(/\s+/g, '')
     .toUpperCase();
 }
 
-const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=.,+\-]/g, '');
+const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=.,+\-*]/g, '');
 
-function parseTerm(p, points) {
+// ---------- keys ----------
+
+export const segKey = (a, b) => 's:' + [a, b].sort().join('');
+export const angKey = (a, v, b) => 'a:' + v + ':' + [a, b].sort().join('');
+
+export function termKey(t) {
+  if (t.kind === 'seg') return segKey(...t.p);
+  if (t.kind === 'ang') return angKey(...t.p);
+  return 'n:' + t.type + ':' + t.v;
+}
+
+// ---------- parsing ----------
+
+function parseAtom(body, points) {
   let m;
-  if ((m = p.match(/^∢([A-Z])([A-Z])([A-Z])$/))) {
+  if ((m = body.match(/^∢([A-Z])([A-Z])([A-Z])$/))) {
     const pts = [m[1], m[2], m[3]];
     const bad = pts.find((x) => !points.includes(x));
     if (bad) return fail('unknownPoint', { p: `$${bad}$` });
     if (new Set(pts).size < 3) return fail('repeatPoint');
     return { ok: true, term: { kind: 'ang', p: pts } };
   }
-  if (/^∢[A-Z]{1,2}$/.test(p)) return fail('angle3');
-  if ((m = p.match(/^([A-Z])([A-Z])$/))) {
+  if (/^∢[A-Z]{1,2}$/.test(body)) return fail('angle3');
+  if ((m = body.match(/^([A-Z])([A-Z])$/))) {
     const pts = [m[1], m[2]];
     const bad = pts.find((x) => !points.includes(x));
     if (bad) return fail('unknownPoint', { p: `$${bad}$` });
     if (pts[0] === pts[1]) return fail('repeatPoint');
     return { ok: true, term: { kind: 'seg', p: pts } };
   }
-  if ((m = p.match(/^(\d+(?:[.,]\d+)?)(°)?$/))) {
-    return { ok: true, term: { kind: 'num', v: parseFloat(m[1].replace(',', '.')), deg: !!m[2] } };
-  }
-  if (/^△/.test(p)) return fail('triangleNeedsCong');
-  const shown = safe(p);
+  if (/△/.test(body)) return fail('triangleNeedsCong');
+  const shown = safe(body);
   return fail('unknownTerm', { t: shown ? `$${shown}$` : '…' });
 }
 
-const typeOf = (t) => (t.kind === 'seg' ? 'len' : t.kind === 'ang' ? 'ang' : t.deg ? 'ang' : null);
+// One side of an equation: a sum of (coefficient × segment/angle) plus a constant.
+function parseSide(src, points) {
+  if (!src) return fail('noRelation');
+  const tokens = src.match(/[+-]?[^+-]+/g);
+  if (!tokens || tokens.join('') !== src) return fail('unknownTerm', { t: `$${safe(src)}$` });
+  const terms = [];
+  let k = 0;
+  let deg = false;
+  for (const tok of tokens) {
+    const sign = tok[0] === '-' ? -1 : 1;
+    const body = tok.replace(/^[+-]/, '');
+    let m;
+    if ((m = body.match(/^(\d+(?:[.,]\d+)?)(°)?$/))) {
+      k += sign * parseFloat(m[1].replace(',', '.'));
+      if (m[2]) deg = true;
+      continue;
+    }
+    m = body.match(/^(\d+(?:[.,]\d+)?)?\*?(.+)$/);
+    const coef = m && m[1] ? parseFloat(m[1].replace(',', '.')) : 1;
+    const r = parseAtom(m ? m[2] : body, points);
+    if (!r.ok) return r;
+    const key = termKey(r.term);
+    const same = terms.find((x) => termKey(x.t) === key);
+    if (same) same.c += sign * coef; else terms.push({ c: sign * coef, t: r.term });
+  }
+  return { ok: true, side: { terms: terms.filter((x) => Math.abs(x.c) > EPS), k, deg } };
+}
+
+const kindType = (t) => (t.kind === 'seg' ? 'len' : 'ang');
+
+function simpleTerm(side, of) {
+  if (side.terms.length === 1 && Math.abs(side.terms[0].c - 1) < EPS && Math.abs(side.k) < EPS) return side.terms[0].t;
+  if (side.terms.length === 0) return { kind: 'num', v: side.k, type: of };
+  return null;
+}
 
 export function parseClaim(input, points) {
   const s = normalizeInput(input);
@@ -69,37 +117,82 @@ export function parseClaim(input, points) {
   const parts = s.split('=');
   if (parts.length > 2) return fail('oneRelation');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return fail('noRelation');
-  const terms = [];
+  const sides = [];
   for (const part of parts) {
-    const r = parseTerm(part, points);
+    const r = parseSide(part, points);
     if (!r.ok) return r;
-    terms.push(r.term);
+    sides.push(r.side);
   }
-  const [l, r] = terms;
-  if (l.kind === 'num' && r.kind === 'num') return fail('onlyNumbers');
-  const tl = typeOf(l);
-  const tr = typeOf(r);
-  if (tl && tr && tl !== tr) return fail('mixedTypes');
-  const type = tl || tr;
-  if (l.kind === 'num') l.type = type;
-  if (r.kind === 'num') r.type = type;
-  return ok({ type: 'eq', left: l, right: r, of: type });
+  const [L, R] = sides;
+  const all = [...L.terms, ...R.terms];
+  if (!all.length) return fail('onlyNumbers');
+  const types = new Set(all.map((x) => kindType(x.t)));
+  if (L.deg || R.deg) types.add('ang');
+  if (types.size > 1) return fail('mixedTypes');
+  const of = [...types][0];
+  return ok({ type: 'eq', L, R, of, left: simpleTerm(L, of), right: simpleTerm(R, of) });
 }
 
-// ---------- normalization ----------
+// ---------- linear algebra over the cited rows ----------
 
-export const segKey = (a, b) => 's:' + [a, b].sort().join('');
-export const angKey = (a, v, b) => 'a:' + v + ':' + [a, b].sort().join('');
-
-export function termKey(t) {
-  if (t.kind === 'seg') return segKey(...t.p);
-  if (t.kind === 'ang') return angKey(...t.p);
-  return 'n:' + t.type + ':' + t.v;
+function addTo(m, k, v) {
+  const nv = (m.get(k) || 0) + v;
+  if (Math.abs(nv) < EPS) m.delete(k); else m.set(k, nv);
 }
+
+// The equation as a vector: (left − right) = 0, keyed by segment/angle, '1' for the constant.
+export function eqVec(c) {
+  const m = new Map();
+  for (const { c: co, t } of c.L.terms) addTo(m, termKey(t), co);
+  if (c.L.k) addTo(m, '1', c.L.k);
+  for (const { c: co, t } of c.R.terms) addTo(m, termKey(t), -co);
+  if (c.R.k) addTo(m, '1', -c.R.k);
+  return m;
+}
+
+const diffVec = (k1, k2) => { const m = new Map(); addTo(m, k1, 1); addTo(m, k2, -1); return m; };
+
+// Is `target` a linear combination of `vectors`? (What linarith does for equalities.)
+export function inSpan(vectors, target) {
+  const basis = [];
+  const reduce = (vec) => {
+    const r = new Map(vec);
+    for (const b of basis) {
+      const c = r.get(b.pivot);
+      if (c) for (const [k, v] of b.vec) addTo(r, k, -c * v);
+    }
+    return r;
+  };
+  for (const v of vectors) {
+    const r = reduce(v);
+    if (!r.size) continue;
+    let pivot = null; let best = 0;
+    for (const [k, val] of r) if (Math.abs(val) > best) { best = Math.abs(val); pivot = k; }
+    const pv = r.get(pivot);
+    const norm = new Map();
+    for (const [k, val] of r) norm.set(k, val / pv);
+    for (const b of basis) {
+      const c = b.vec.get(pivot);
+      if (c) for (const [k, val] of norm) addTo(b.vec, k, -c * val);
+    }
+    basis.push({ pivot, vec: norm });
+  }
+  return reduce(target).size === 0;
+}
+
+const refVectors = (refRows) => refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
+
+// ---------- canonical form ----------
 
 export function claimKey(c) {
   if (!c) return '';
-  if (c.type === 'eq') return [termKey(c.left), termKey(c.right)].sort().join('=');
+  if (c.type === 'eq') {
+    const v = eqVec(c);
+    if (!v.size) return 'eq:0';
+    const keys = [...v.keys()].sort();
+    const d = v.get(keys[0]);
+    return 'eq:' + keys.map((k) => `${k}=${(v.get(k) / d).toFixed(6)}`).join('|');
+  }
   const a = c.P.map((p, i) => p + c.Q[i]).sort().join(',');
   const b = c.Q.map((q, i) => q + c.P[i]).sort().join(',');
   return 'cong:' + (a < b ? a : b);
@@ -108,57 +201,69 @@ export function claimKey(c) {
 // ---------- formatting ----------
 
 const fmtNum = (v) => String(Math.round(v * 1000) / 1000);
+const atomStr = (t) => (t.kind === 'seg' ? t.p.join('') : '∢' + t.p.join(''));
 
 export function fmtTerm(t) {
-  if (t.kind === 'seg') return t.p.join('');
-  if (t.kind === 'ang') return '∢' + t.p.join('');
-  return fmtNum(t.v) + (t.type === 'ang' ? '°' : '');
+  if (t.kind === 'num') return fmtNum(t.v) + (t.type === 'ang' ? '°' : '');
+  return atomStr(t);
+}
+
+function fmtSide(side, of) {
+  const unit = of === 'ang' ? '°' : '';
+  const parts = [];
+  side.terms.forEach(({ c, t }, i) => {
+    const a = Math.abs(c);
+    const body = (Math.abs(a - 1) < EPS ? '' : fmtNum(a)) + atomStr(t);
+    parts.push(i === 0 ? (c < 0 ? '−' : '') + body : (c < 0 ? ' − ' : ' + ') + body);
+  });
+  if (!side.terms.length) parts.push(fmtNum(side.k) + unit);
+  else if (Math.abs(side.k) > EPS) parts.push((side.k < 0 ? ' − ' : ' + ') + fmtNum(Math.abs(side.k)) + unit);
+  return parts.join('');
 }
 
 export function fmtClaim(c) {
   if (!c) return '';
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
-  return `${fmtTerm(c.left)} = ${fmtTerm(c.right)}`;
+  return `${fmtSide(c.L, c.of)} = ${fmtSide(c.R, c.of)}`;
 }
 
-function leanTerm(t) {
-  if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
-  if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
-  return fmtNum(t.v);
+const leanAtom = (t) => (t.kind === 'seg' ? `len ${t.p[0]} ${t.p[1]}` : `ang ${t.p.join(' ')}`);
+
+function leanSide(side) {
+  const parts = [];
+  side.terms.forEach(({ c, t }, i) => {
+    const a = Math.abs(c);
+    const body = (Math.abs(a - 1) < EPS ? '' : `${fmtNum(a)} * `) + leanAtom(t);
+    parts.push(i === 0 ? (c < 0 ? '-' : '') + body : (c < 0 ? ' - ' : ' + ') + body);
+  });
+  if (!side.terms.length) parts.push(fmtNum(side.k));
+  else if (Math.abs(side.k) > EPS) parts.push((side.k < 0 ? ' - ' : ' + ') + fmtNum(Math.abs(side.k)));
+  return parts.join('');
 }
 
 export function leanClaim(c) {
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
-  return `${leanTerm(c.left)} = ${leanTerm(c.right)}`;
-}
-
-// ---------- equality reasoning (only over the cited rows) ----------
-
-class UnionFind {
-  constructor() { this.parent = new Map(); }
-  find(x) {
-    if (!this.parent.has(x)) this.parent.set(x, x);
-    let r = x;
-    while (this.parent.get(r) !== r) r = this.parent.get(r);
-    this.parent.set(x, r);
-    return r;
-  }
-  union(a, b) { this.parent.set(this.find(a), this.find(b)); }
-  same(a, b) { return a === b || this.find(a) === this.find(b); }
-}
-
-function ufFrom(refRows) {
-  const uf = new UnionFind();
-  for (const r of refRows) if (r.claim.type === 'eq') uf.union(termKey(r.claim.left), termKey(r.claim.right));
-  return uf;
+  return `${leanSide(c.L)} = ${leanSide(c.R)}`;
 }
 
 // ---------- problem preparation ----------
+
+const stageIndex = (id) => STAGES.findIndex((s) => s.id === id);
+
+// Every reason unlocked at a stage: the basics plus everything from this stage or earlier.
+export function unlockedReasons(stageId) {
+  const si = stageIndex(stageId);
+  return Object.keys(REASONS).filter((id) => {
+    const r = REASONS[id];
+    return r.stage === null || stageIndex(r.stage) <= si;
+  });
+}
 
 export function prepareProblem(p, stageId) {
   if (p.prepared) return p;
   p.stage = stageId;
   p.pointNames = Object.keys(p.points);
+  p.allowed = p.allowed || unlockedReasons(stageId);
   p.givensParsed = p.givens.map((g) => {
     const r = parseClaim(g.claim, p.pointNames);
     if (!r.ok) console.error('Bad given', g.claim, r.error);
@@ -172,6 +277,11 @@ export function prepareProblem(p, stageId) {
   return p;
 }
 
+const dist = (problem, a, b) => {
+  const A = problem.points[a]; const B = problem.points[b];
+  return Math.hypot(A[0] - B[0], A[1] - B[1]);
+};
+
 function degenerate(problem, T) {
   const [a, b, c] = T.map((x) => problem.points[x]);
   const cross = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -180,10 +290,10 @@ function degenerate(problem, T) {
 
 // ---------- congruence criteria ----------
 
-const sideEq = (P, Q, uf, i, j) => uf.same(segKey(P[i], P[j]), segKey(Q[i], Q[j]));
-const angEq = (P, Q, uf, k) => {
+const sideEq = (P, Q, V, i, j) => inSpan(V, diffVec(segKey(P[i], P[j]), segKey(Q[i], Q[j])));
+const angEq = (P, Q, V, k) => {
   const [i, j] = others(k);
-  return uf.same(angKey(P[i], P[k], P[j]), angKey(Q[i], Q[k], Q[j]));
+  return inSpan(V, diffVec(angKey(P[i], P[k], P[j]), angKey(Q[i], Q[k], Q[j])));
 };
 const sideStr = (P, Q, i, j) => `${P[i]}${P[j]} = ${Q[i]}${Q[j]}`;
 const angStr = (P, Q, k) => {
@@ -198,30 +308,50 @@ function best(options) {
 }
 
 const CRITERIA = {
-  SSS: (P, Q, uf) => best([[[0, 1], [1, 2], [0, 2]].filter(([i, j]) => !sideEq(P, Q, uf, i, j)).map(([i, j]) => sideStr(P, Q, i, j))]),
-  SAS: (P, Q, uf) => best([0, 1, 2].map((k) => {
+  SSS: (P, Q, V) => best([[[0, 1], [1, 2], [0, 2]].filter(([i, j]) => !sideEq(P, Q, V, i, j)).map(([i, j]) => sideStr(P, Q, i, j))]),
+  SAS: (P, Q, V) => best([0, 1, 2].map((k) => {
     const [i, j] = others(k);
     const miss = [];
-    if (!sideEq(P, Q, uf, k, i)) miss.push(sideStr(P, Q, k, i));
-    if (!angEq(P, Q, uf, k)) miss.push(angStr(P, Q, k));
-    if (!sideEq(P, Q, uf, k, j)) miss.push(sideStr(P, Q, k, j));
+    if (!sideEq(P, Q, V, k, i)) miss.push(sideStr(P, Q, k, i));
+    if (!angEq(P, Q, V, k)) miss.push(angStr(P, Q, k));
+    if (!sideEq(P, Q, V, k, j)) miss.push(sideStr(P, Q, k, j));
     return miss;
   })),
-  ASA: (P, Q, uf) => best([0, 1, 2].map((k) => {
+  ASA: (P, Q, V) => best([0, 1, 2].map((k) => {
     const [i, j] = others(k);
     const miss = [];
-    if (!angEq(P, Q, uf, i)) miss.push(angStr(P, Q, i));
-    if (!sideEq(P, Q, uf, i, j)) miss.push(sideStr(P, Q, i, j));
-    if (!angEq(P, Q, uf, j)) miss.push(angStr(P, Q, j));
+    if (!angEq(P, Q, V, i)) miss.push(angStr(P, Q, i));
+    if (!sideEq(P, Q, V, i, j)) miss.push(sideStr(P, Q, i, j));
+    if (!angEq(P, Q, V, j)) miss.push(angStr(P, Q, j));
     return miss;
   })),
+  // Two sides and the angle opposite the larger of them.
+  SSA: (P, Q, V, problem) => {
+    const opts = [];
+    let sizeOnly = false;
+    for (const k of [0, 1, 2]) {
+      const [i, j] = others(k);
+      for (const adj of [i, j]) {
+        const miss = [];
+        if (!angEq(P, Q, V, k)) miss.push(angStr(P, Q, k));
+        if (!sideEq(P, Q, V, i, j)) miss.push(sideStr(P, Q, i, j));
+        if (!sideEq(P, Q, V, k, adj)) miss.push(sideStr(P, Q, k, adj));
+        const larger = dist(problem, P[i], P[j]) > dist(problem, P[k], P[adj]) + 1e-9;
+        if (larger) opts.push(miss);
+        else if (!miss.length) sizeOnly = true;
+      }
+    }
+    const r = opts.length ? best(opts) : { ok: false, missing: [] };
+    if (!r.ok && sizeOnly && !opts.some((o) => !o.length)) r.sizeOnly = true;
+    return r;
+  },
 };
 
 // ---------- per-reason checks ----------
 // Each returns { ok, msg?, proof } where proof is the Lean term for the row.
 
 const refNames = (refRows) => refRows.map((r) => 's' + r.n).join(' ');
-const isEqOf = (c, kind) => c.type === 'eq' && c.left.kind === kind && c.right.kind === kind;
+const isEqOf = (c, kind) => c.type === 'eq' && c.left && c.right && c.left.kind === kind && c.right.kind === kind;
 
 function congruenceCheck(rid) {
   return (claim, refRows, problem) => {
@@ -231,16 +361,17 @@ function congruenceCheck(rid) {
       if (degenerate(problem, T)) return { ok: false, msg: { key: 'degenerate', vars: { t: `$△${T.join('')}$` } }, proof };
     }
     if (refRows.length < 3) return { ok: false, msg: { key: 'needRefsN', vars: { rid, n: 3 } }, proof };
-    const uf = ufFrom(refRows);
+    const V = refVectors(refRows);
     const crit = CRITERIA[rid];
-    const r0 = crit(claim.P, claim.Q, uf);
+    const r0 = crit(claim.P, claim.Q, V, problem);
     if (r0.ok) return { ok: true, proof };
     for (const perm of PERMS.slice(1)) {
       const Q2 = perm.map((i) => claim.Q[i]);
-      if (crit(claim.P, Q2, uf).ok) {
+      if (crit(claim.P, Q2, V, problem).ok) {
         return { ok: false, msg: { key: 'wrongOrder', vars: { s: `$△${claim.P.join('')} ≅ △${Q2.join('')}$` } }, proof };
       }
     }
+    if (r0.sizeOnly) return { ok: false, msg: { key: 'ssaNotLarger' }, proof };
     const m = r0.missing.map((x) => `$${x}$`).join(', ');
     return { ok: false, msg: { key: r0.missing.length === 1 ? 'critMissing1' : 'critMissingN', vars: { rid, m } }, proof };
   };
@@ -272,6 +403,9 @@ function cpctCheck(kind) {
   };
 }
 
+// Index of a "between" fact of the diagram: O strictly between p and q.
+const betweenIdx = (problem, p, o, q) => problem.config.findIndex((c) => c.type === 'between' && c.o === o && ((c.a === p && c.b === q) || (c.a === q && c.b === p)));
+
 const CHECKS = {
   given(claim, refRows, problem) {
     const gi = problem.givensParsed.findIndex((g) => claimKey(g) === claimKey(claim));
@@ -294,20 +428,44 @@ const CHECKS = {
     const [X, V, Y] = claim.left.p;
     const [Z, V2, W] = claim.right.p;
     if (V !== V2) return { ok: false, msg: { key: 'vertSameVertex' }, proof: base };
-    const opp = (p, q) => problem.config.findIndex((c) => c.type === 'between' && c.o === V && ((c.a === p && c.b === q) || (c.a === q && c.b === p)));
     for (const [a, b] of [[Z, W], [W, Z]]) {
-      const c1 = opp(X, a);
-      const c2 = opp(Y, b);
+      const c1 = betweenIdx(problem, X, V, a);
+      const c2 = betweenIdx(problem, Y, V, b);
       if (c1 >= 0 && c2 >= 0) return { ok: true, proof: `${base} cfg${c1 + 1} cfg${c2 + 1}` };
     }
     return { ok: false, msg: { key: 'vertNotOpposite' }, proof: base };
   },
+  adj_angles(claim, refRows, problem) {
+    const base = 'adj_angles_sum';
+    if (claim.type !== 'eq' || claim.of !== 'ang') return { ok: false, msg: { key: 'adjNeedSum' }, proof: base };
+    const v = eqVec(claim);
+    const angs = [...v.keys()].filter((k) => k.startsWith('a:'));
+    const c1 = v.get(angs[0]);
+    if (angs.length !== 2 || Math.abs(c1 - v.get(angs[1])) > 1e-9 || Math.abs((v.get('1') || 0) + 180 * c1) > 1e-6) {
+      return { ok: false, msg: { key: 'adjNeedSum' }, proof: base };
+    }
+    const terms = [...claim.L.terms, ...claim.R.terms].map((x) => x.t).filter((t) => t.kind === 'ang');
+    const [t1, t2] = angs.map((k) => terms.find((t) => termKey(t) === k));
+    if (t1.p[1] !== t2.p[1]) return { ok: false, msg: { key: 'adjSameVertex' }, proof: base };
+    const O = t1.p[1];
+    const r1 = [t1.p[0], t1.p[2]];
+    const r2 = [t2.p[0], t2.p[2]];
+    const shared = r1.find((x) => r2.includes(x));
+    if (shared) {
+      const a = r1.find((x) => x !== shared);
+      const b = r2.find((x) => x !== shared);
+      const ci = betweenIdx(problem, a, O, b);
+      if (ci >= 0) return { ok: true, proof: `${base} cfg${ci + 1}` };
+    }
+    return { ok: false, msg: { key: 'adjNotAdjacent' }, proof: base };
+  },
   algebra(claim, refRows) {
-    const proof = `by linarith [${refRows.map((r) => 's' + r.n).join(', ')}]`;
+    const proof = refRows.length ? `by linarith [${refRows.map((r) => 's' + r.n).join(', ')}]` : 'by ring';
     if (claim.type !== 'eq') return { ok: false, msg: { key: 'algebraNeedEq' }, proof };
+    const target = eqVec(claim);
+    if (!target.size) return { ok: true, proof: 'by ring' };
     if (!refRows.length) return { ok: false, msg: { key: 'needRefs' }, proof };
-    const uf = ufFrom(refRows);
-    if (uf.same(termKey(claim.left), termKey(claim.right))) return { ok: true, proof };
+    if (inSpan(refVectors(refRows), target)) return { ok: true, proof };
     return {
       ok: false,
       msg: { key: 'algebraFail', vars: { rows: refRows.map((r) => r.n).join(', '), claim: `$${fmtClaim(claim)}$` } },
@@ -317,6 +475,7 @@ const CHECKS = {
   SAS: congruenceCheck('SAS'),
   ASA: congruenceCheck('ASA'),
   SSS: congruenceCheck('SSS'),
+  SSA: congruenceCheck('SSA'),
   cpct_side: cpctCheck('side'),
   cpct_angle: cpctCheck('angle'),
 };
@@ -331,17 +490,25 @@ export function checkProof(problem, rows) {
     results.push(res);
     if (!parsed.ok) { res.msg = parsed.error; return; }
     const claim = parsed.claim;
-    res.goal = claimKey(claim) === problem.goalKey;
+    const key = claimKey(claim);
+    res.goal = key === problem.goalKey;
     const head = `have s${n} : ${leanClaim(claim)} :=`;
-    if (!row.reason) { res.msg = { key: 'noReason' }; res.lean = `${head} sorry`; return; }
-    if (!problem.allowed.includes(row.reason)) { res.msg = { key: 'reasonNotAllowed' }; res.lean = `${head} sorry`; return; }
+    const rid = row.reason;
+    if (!rid) { res.msg = { key: 'noReason' }; res.lean = `${head} sorry`; return; }
+    if (!problem.allowed.includes(rid)) { res.msg = { key: 'reasonNotAllowed' }; res.lean = `${head} sorry`; return; }
     const refs = [...(row.refs || [])].sort((a, b) => a - b);
     for (const r of refs) {
       if (r >= n || r < 1) { res.msg = { key: 'refFuture' }; res.lean = `${head} sorry`; return; }
       if (!results[r - 1].ok) { res.msg = { key: 'refBad', vars: { n: r } }; res.lean = `${head} sorry`; return; }
     }
+    // A given stated in words ("AD bisects ∠BAC") may also be cited through its definition.
+    const gi = problem.givens.findIndex((g, j) => (g.also || []).includes(rid) && claimKey(problem.givensParsed[j]) === key);
+    if (gi >= 0) { res.ok = true; res.lean = `${head} ${REASONS[rid].lean} g${gi + 1}`; return; }
     const refRows = refs.map((r) => ({ n: r, claim: results[r - 1].parsed.claim }));
-    const out = CHECKS[row.reason](claim, refRows, problem);
+    const check = CHECKS[rid];
+    const out = check
+      ? check(claim, refRows, problem)
+      : { ok: false, msg: { key: 'reasonNoFit', vars: { rid } }, proof: `${REASONS[rid].lean} ${refNames(refRows)}`.trim() };
     res.ok = out.ok;
     res.msg = out.msg || null;
     res.lean = `${head} ${out.proof}`;
@@ -354,6 +521,28 @@ export function checkProof(problem, rows) {
     else blocked = true;
   }
   return { results, solvedAt, blocked };
+}
+
+// If a claim is pure calculation from earlier correct rows (or an identity),
+// return the reason and the fewest rows that give it; otherwise null.
+export function autoReason(results, claim, upto) {
+  if (!claim || claim.type !== 'eq') return null;
+  const target = eqVec(claim);
+  if (!target.size) {
+    if (isEqOf(claim, 'seg')) return { reason: 'common_side', refs: [] };
+    if (isEqOf(claim, 'ang')) return { reason: 'common_angle', refs: [] };
+    return { reason: 'algebra', refs: [] };
+  }
+  const pool = results.slice(0, upto).filter((r) => r.ok && r.parsed.ok && r.parsed.claim.type === 'eq');
+  if (!pool.length) return null;
+  const vecs = pool.map((r) => eqVec(r.parsed.claim));
+  if (!inSpan(vecs, target)) return null;
+  let keep = pool.map((_, i) => i);
+  for (const i of [...keep].reverse()) {
+    const trial = keep.filter((x) => x !== i);
+    if (inSpan(trial.map((x) => vecs[x]), target)) keep = trial;
+  }
+  return { reason: 'algebra', refs: keep.map((x) => pool[x].n) };
 }
 
 // The problem statement as a Lean theorem, with the student's rows if given.
