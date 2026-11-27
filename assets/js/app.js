@@ -9,9 +9,10 @@ import { icon, glyph, LOGO } from './icons.js';
 import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin,
   onToolsChange, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
-import { syncProgress } from './auth.js';
+import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
 import { mountConstructions } from './constructions-ui.js';
+import { PX, DEV_SKIP, insertPick, newReasons, findSkip } from './play-extras.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -52,10 +53,12 @@ function renderChrome() {
       <nav class="mainnav" aria-label="${t('nav.home')}">
         <a href="#/" ${route.name === 'home' ? 'aria-current="page"' : ''}>${t('nav.home')}</a>
         <a href="#/hs/geometry" ${route.name === 'topic' || route.name === 'problem' ? 'aria-current="page"' : ''}>${t('nav.geometry')}</a>
+        <a href="#/bank" ${route.name === 'author' || route.name === 'tq' ? 'aria-current="page"' : ''}>${t('nav.bank')}</a>
         <button type="button" class="navlink" data-scroll="topics">${t('nav.topics')}</button>
         <button type="button" class="navlink" data-scroll="how">${t('nav.how')}</button>
       </nav>
       <div class="tools">
+        <span class="addq-slot" id="addQSlot">${addQuestionLink()}</span>
         ${accountSlot()}
         <button type="button" class="tool lang" id="langBtn" aria-label="${t('nav.langLabel')}" title="${t('nav.langLabel')}">${icon('globe')}<span>${t('nav.langShort')}</span></button>
         <button type="button" class="tool" id="themeBtn" aria-label="${t('nav.theme')}" title="${t('nav.theme')}">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button>
@@ -72,6 +75,7 @@ function renderChrome() {
         <a href="#/hs/geometry">${t('footer.map')}</a>
         <a href="#/hs/geometry/L01/1">${t('footer.first')}</a>
         <a href="#/hs/geometry" data-scroll="toolbox">${t('footer.toolbox')}</a>
+        <a href="#/bank">${t('nav.bank')}</a>
         ${appFootLink()}
       </div>
       <div class="foot-col">
@@ -100,6 +104,14 @@ function renderChrome() {
     location.hash = id === 'toolbox' ? '#/hs/geometry' : '#/';
   }));
 }
+
+// Teachers and admins get an "add a question" button in the top bar, at every screen width, so the
+// question bank's editor (#/author) is one tap away. Students see the bank in the menu and the footer.
+function addQuestionLink() {
+  if (!isStaffUser()) return '';
+  return `<a class="tool addq" href="#/author" title="${esc(t('nav.addQTitle'))}" aria-label="${esc(t('nav.addQTitle'))}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></span><span class="addq-t">${t('nav.addQ')}</span></a>`;
+}
+onAuthChange(() => { const el = document.getElementById('addQSlot'); if (el) el.innerHTML = addQuestionLink(); });
 
 // ---------------------------------------------------------------- router
 
@@ -605,7 +617,10 @@ function viewProblem({ stage, n, problem: p, bank }) {
             <h1>${L(p.title)}</h1>
             <p class="intro">${rich(L(p.intro))}</p>
           </header>
-          <div class="diagram-card paper" id="diagram"></div>
+          <div class="diagram-card paper" id="diagram">
+            <button type="button" class="dg-pin" id="dgPin" aria-pressed="true" title="${esc(PX('pin'))}" aria-label="${esc(PX('pin'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/></svg></button>
+          </div>
+          <p class="dg-tip">${esc(PX('tip'))}</p>
           <dl class="facts">
             <div class="fact-group">
               <dt>${t('pp.given')}</dt>
@@ -660,7 +675,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
@@ -758,6 +773,37 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   // the construction tool (constructions-ui.js) adds its row at the end of the proof
   mountConstructions({ root, p, dg, addRow: (row) => { state.rows.push(row); renderRows(); } });
 
+  // Tap or click a point, segment or angle in the diagram: it goes into the claim (play-extras.js).
+  // With a finger the claim field is not focused, so the phone keyboard stays closed.
+  const ppEl = $('.pp', root);
+  let lastPointer = 'mouse';
+  ppEl.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType || 'mouse'; }, true);
+  dg.el.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') dg.markPick(dg.pick(e.clientX, e.clientY)); });
+  dg.el.addEventListener('pointerleave', () => dg.markPick(null));
+  dg.el.addEventListener('click', (e) => {
+    const touch = lastPointer !== 'mouse';
+    const hit = dg.pick(e.clientX, e.clientY, touch);
+    if (!hit) return;
+    const r = insertPick(input.value, input.selectionStart ?? input.value.length, hit);
+    input.value = liveFormat(r.value);
+    showMsg('');
+    updatePreview();
+    dg.markPick(hit, true);
+    if (!touch) input.focus();
+    try { input.setSelectionRange(r.caret, r.caret); } catch { /* ignore */ }
+  });
+  // On a phone the diagram stays on top of the screen while the student writes, unless they let it go.
+  const pinBtn = $('#dgPin', root);
+  const setPin = (on) => {
+    ppEl.classList.toggle('dg-free', !on);
+    pinBtn.setAttribute('aria-pressed', String(on));
+    pinBtn.title = PX(on ? 'pin' : 'unpin');
+    pinBtn.setAttribute('aria-label', pinBtn.title);
+    store.set('dgPin', on);
+  };
+  setPin(store.get('dgPin', true));
+  pinBtn.addEventListener('click', () => setPin(pinBtn.getAttribute('aria-pressed') !== 'true'));
+
   const rowsEl = $('#rows', root);
   const input = $('#claimInput', root);
   const preview = $('#preview', root);
@@ -831,7 +877,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       return `<li class="prow ${cls}${r.goal && r.ok ? ' is-goal' : ''}${r.byLean ? ' by-lean' : ''}${state.editing === i ? ' is-editing' : ''}" data-i="${i}" tabindex="0">
         <span class="pnum">${i + 1}</span>
         <span class="pclaim">${claimHTML}${r.goal && r.ok ? `<span class="goal-tag">${t('pp.goalRow')}</span>` : ''}</span>
-        <span class="preason">${row.reason ? reasonShort(row.reason) : '—'}${refsText(row.refs)}${row.auto ? `<span class="auto-tag" title="${t('pp.autoTitle')}">${icon('spark')}${t('pp.autoTag')}</span>` : ''}</span>
+        <span class="preason">${row.reason ? reasonShort(row.reason) : '—'}${refsText(row.refs)}${row.auto ? `<span class="auto-tag" title="${t('pp.autoTitle')}">${icon('spark')}${t('pp.autoTag')}</span>` : ''}${row.skip ? `<span class="auto-tag skip-tag" title="${esc(PX('skipTagTitle'))}">${icon('spark')}${esc(PX('skipTag'))}</span>` : ''}</span>
         <span class="pstat" title="${r.byLean ? t('lean.checked') + ' · ' : ''}${r.ok ? t('pp.ok') : t('pp.bad')}">${icon(r.ok ? 'check' : 'x')}<span class="sr">${r.ok ? t('pp.ok') : t('pp.bad')}</span></span>
         <span class="pactions">
           <button type="button" class="mini" data-act="edit" aria-label="${t('pp.edit', { n: i + 1 })}">${icon('edit')}</button>
@@ -952,6 +998,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
 
   function showMsg(html) {
     const m = $('#cmpMsg', root);
+    m.classList.remove('is-skip');
     m.hidden = !html;
     m.innerHTML = html || '';
   }
@@ -974,17 +1021,57 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   let active = -1;
   let options = [];
 
+  // "given", "algebra", and the theorems the student has not used yet in a solved problem (play-extras.js)
+  const quickWrap = $('.quick-reasons', root);
+  let quickIds = ['given', 'algebra'];
+  function renderQuick() {
+    const fresh = newReasons(p, stage, progress(), pk);
+    quickIds = ['given', 'algebra', ...fresh];
+    quickWrap.classList.toggle('has-new', fresh.length > 0);
+    quickWrap.innerHTML = quickIds.map((id) => {
+      const isNew = fresh.includes(id);
+      return `<button type="button" class="qchip${isNew ? ' is-new' : ''}" data-r="${id}" aria-pressed="${state.reason === id}"${isNew ? ` title="${esc(PX('newTitle'))}"` : ''}>${reasonShort(id)}${isNew ? `<span class="qnew">${esc(PX('newTag'))}</span>` : ''}</button>`;
+    }).join('');
+  }
+
+  // Skip steps (a tool the admin opens): the rows the game would add for the claim being written.
+  const skipOn = () => DEV_SKIP || toolOpen('skipSteps', solvedNow);
+  let skipMemo = { key: null, val: null };
+  function currentSkip() {
+    if (!skipOn() || state.reason || reasonInput.value.trim()) return null;
+    const v = input.value.trim();
+    if (!v || currentAuto()) return null;
+    const key = `${v}|${upto()}|${rowsKey()}|${p.allowed.join()}`;
+    if (skipMemo.key !== key) {
+      let val = null;
+      try { val = findSkip(p, state.rows, upto(), v); } catch (e) { console.warn('[skip]', e); }
+      skipMemo = { key, val };
+    }
+    return skipMemo.val;
+  }
+  // "row 2: ∢AOC + ∢COB = 180° (adjacent angles), then row 3: algebra (1, 2)"
+  function skipStepsHTML(sk, first) {
+    return sk.rows.map((r, i) => {
+      const c = parseClaim(r.text, p);
+      const last = i === sk.rows.length - 1;
+      return `${last && i ? PX('then') : i ? ', ' : ''}${PX('rowN', { n: first + i })} ${last ? PX('yours') : mathSpan(c.ok ? fmtClaim(c.claim) : r.text)} (<b>${reasonShort(r.reason)}</b>${refsText(r.refs)})`;
+    }).join('');
+  }
+
   function renderReasonField() {
     const rid = state.reason;
-    const quick = rid === 'given' || rid === 'algebra';
+    const quick = quickIds.includes(rid);
     $$('.qchip', root).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.r === rid)));
     chosen.hidden = !rid || quick;
     reasonInput.hidden = !!rid && !quick;
     if (rid && !quick) chosen.innerHTML = `<b>${reasonShort(rid)}</b><button type="button" class="mini" data-clear aria-label="${t('pp.reasonClear')}">${icon('x')}</button>`;
     const auto = currentAuto();
     const line = $('#autoLine', root);
-    line.hidden = !auto || !!reasonInput.value.trim();
+    const sk = auto ? null : currentSkip();
+    line.hidden = (!auto && !sk) || !!reasonInput.value.trim();
+    line.classList.toggle('is-skip', !!sk);
     if (auto) line.innerHTML = `${icon('spark')} ${t('pp.autoNote', { r: `<b>${reasonShort(auto.reason)}</b>${refsText(auto.refs)}` })}`;
+    else if (sk) line.innerHTML = `${icon('spark')} <span>${PX('skipLine', { steps: skipStepsHTML(sk, upto() + 1) })}</span>`;
   }
 
   function openSugg() {
@@ -1035,10 +1122,13 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     return a && a.reason === rid ? a : null;
   }
 
-  $$('.qchip', root).forEach((b) => b.addEventListener('click', () => {
+  quickWrap.addEventListener('click', (e) => {
+    const b = e.target.closest('.qchip');
+    if (!b) return;
     if (state.reason === b.dataset.r) { state.reason = null; state.refs = new Set(); renderComposerMeta(); updatePreview(); return; }
     pickReason(b.dataset.r);
-  }));
+  });
+  renderQuick();
   chosen.addEventListener('click', (e) => {
     if (!e.target.closest('[data-clear]')) return;
     state.reason = null;
@@ -1079,9 +1169,10 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     const s = b.dataset.sym;
     const a = input.selectionStart ?? input.value.length;
     const e = input.selectionEnd ?? input.value.length;
-    const ins = ['=', '≅', '∼', '⊥', '∥', '<', '>'].includes(s) ? ` ${s} ` : s;
+    const ins = ['=', '≅', '∼', '⊥', '∥', '<', '>', '+', '−'].includes(s) ? ` ${s} ` : s;
     input.value = input.value.slice(0, a) + ins + input.value.slice(e);
-    input.focus();
+    // On a phone, keep the keyboard closed while the student builds the claim from keys and taps.
+    if (lastPointer === 'mouse' || document.activeElement === input) input.focus();
     input.setSelectionRange(a + ins.length, a + ins.length);
     updatePreview();
   }));
@@ -1107,6 +1198,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       row = { text, reason: state.reason, refs: [...state.refs].sort((a, b) => a - b) };
     } else {
       const auto = currentAuto();
+      const sk = auto ? null : currentSkip();
+      if (sk) { applySkip(sk); return; }
       if (!auto) { showMsg(`${icon('info')} ${t('pp.needReason')}`); reasonInput.focus(); return; }
       row = { text, reason: auto.reason, refs: auto.refs, auto: true };
     }
@@ -1116,6 +1209,22 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     input.focus();
   });
   $('#cancelEdit', root).addEventListener('click', () => { resetComposer(); renderRows(); });
+
+  // Skip steps: the rows go in where the claim was going; later rows move down, and their references
+  // to the edited row or after it move with them. The student is told which rows the game wrote.
+  function applySkip(sk) {
+    const at = upto();
+    const editing = state.editing != null;
+    const extra = sk.rows.length - (editing ? 1 : 0);
+    const later = state.rows.slice(editing ? at + 1 : at).map((r) => ({ ...r, refs: (r.refs || []).map((k) => (k > at ? k + extra : k)) }));
+    state.rows = [...state.rows.slice(0, at), ...sk.rows.map((r) => ({ ...r })), ...later];
+    const note = `${icon('spark')} <span>${PX('skipDone', { steps: skipStepsHTML(sk, at + 1) })}</span>`;
+    resetComposer();
+    renderRows();
+    showMsg(note);
+    $('#cmpMsg', root).classList.add('is-skip');
+    if (lastPointer === 'mouse') input.focus();
+  }
 
   rowsEl.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
@@ -1298,7 +1407,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   viewAsSel.addEventListener('change', () => setViewAs(viewAsSel.value));
   // Settings, the user, or the admin's student view changed: redraw everything the tools touch.
   // (renderRows re-checks the proof, since an admin's view can change which theorems are earned.)
-  const offTools = onToolsChange(() => { earnReasons(); syncTools(); renderHints(); renderRows(); });
+  const offTools = onToolsChange(() => { earnReasons(); renderQuick(); syncTools(); renderHints(); renderRows(); });
 
   syncTools();
   renderHints();

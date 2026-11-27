@@ -27,6 +27,9 @@ export const TOOLS = {
   cpctList: { open: 'start', icon: 'spark' },
   clickFacts: { open: 'start', icon: 'enter' },
   hint: { open: 'start', icon: 'bulb' },
+  // Skip steps (play-extras.js findSkip): a feature, closed unless the admin opens it for a track
+  // (the admin page's table) or for one student ('open:skipSteps' in their features).
+  skipSteps: { open: 'never', icon: 'spark' },
 };
 const SETTABLE = Object.keys(TOOLS);
 const DEFAULTS = { ...Object.fromEntries(SETTABLE.map((id) => [id, TOOLS[id].open])), hintWait: [10, 30, 60], tryFirst: 120 };

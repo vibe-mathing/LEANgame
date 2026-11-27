@@ -135,8 +135,89 @@ function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
     P,
     angleRadius,
     html: `<g class="dg-hl"></g><g class="dg-marks">${marks}</g><g class="dg-lines">${lines}</g>
-    <g class="dg-points">${points}</g><g class="dg-labels">${labels}</g>`,
+    <g class="dg-points">${points}</g><g class="dg-labels">${labels}</g><g class="dg-pick"></g>`,
   };
+}
+
+// ---- picking: the point, segment or angle under a click or tap (app.js inserts it into the claim)
+// Segments are cut at every point lying on them, so a tap between B and D on BC gives BD. An angle
+// is the sector between two neighbouring arms at a vertex; each arm is named by the far end of its
+// drawn segment (∢ABC rather than ∢ABD when D lies on BC). Sectors of 180° or more are not angles.
+
+function pickModel(problem, P) {
+  const raw = problem.points;
+  const names = Object.keys(raw);
+  // t in (0, 1) when X lies strictly inside segment AB (math coordinates), else null
+  const along = (a, b, x) => {
+    const A = raw[a]; const B = raw[b]; const X = raw[x];
+    const ux = B[0] - A[0]; const uy = B[1] - A[1];
+    const L2 = ux * ux + uy * uy;
+    if (!L2) return null;
+    const t = ((X[0] - A[0]) * ux + (X[1] - A[1]) * uy) / L2;
+    const cross = (X[0] - A[0]) * uy - (X[1] - A[1]) * ux;
+    return Math.abs(cross) <= 1e-6 * L2 && t > 1e-9 && t < 1 - 1e-9 ? t : null;
+  };
+  const pieces = [];
+  const arms = {};
+  const addArm = (V, X) => {
+    const a = Math.atan2(P[X][1] - P[V][1], P[X][0] - P[V][0]);
+    const list = arms[V] || (arms[V] = []);
+    const same = list.find((m) => Math.abs(Math.atan2(Math.sin(m.a - a), Math.cos(m.a - a))) < 1e-3);
+    if (!same) list.push({ a, to: X, len: dist(P[V], P[X]) });
+    else if (dist(P[V], P[X]) > same.len) Object.assign(same, { to: X, len: dist(P[V], P[X]) });
+  };
+  for (const sg of problem.segments || []) {
+    const [a, b] = sg.split('');
+    if (!P[a] || !P[b]) continue;
+    const inner = names.filter((x) => x !== a && x !== b)
+      .map((x) => [x, along(a, b, x)]).filter(([, t]) => t != null)
+      .sort((p, q) => p[1] - q[1]).map(([x]) => x);
+    const chain = [a, ...inner, b];
+    for (let i = 0; i + 1 < chain.length; i++) pieces.push([chain[i], chain[i + 1]]);
+    chain.forEach((V, i) => { if (i > 0) addArm(V, a); if (i < chain.length - 1) addArm(V, b); });
+  }
+  for (const V of Object.keys(arms)) arms[V].sort((m, n) => m.a - n.a);
+  return { names, pieces, arms };
+}
+
+function pickAt(model, P, T, tol) {
+  const near = (X) => dist(P[X], T);
+  // a point
+  let best = null;
+  for (const X of model.names) { const d = near(X); if (d <= tol.pt && (!best || d < best.d)) best = { d, X }; }
+  if (best) return { kind: 'pt', p: [best.X], text: best.X };
+  // a segment (the piece between two neighbouring points)
+  let seg = null;
+  for (const [a, b] of model.pieces) {
+    const A = P[a]; const B = P[b];
+    const ux = B[0] - A[0]; const uy = B[1] - A[1];
+    const L2 = ux * ux + uy * uy;
+    const t = L2 ? ((T[0] - A[0]) * ux + (T[1] - A[1]) * uy) / L2 : -1;
+    if (t <= 0 || t >= 1) continue;
+    const d = Math.abs((T[0] - A[0]) * uy - (T[1] - A[1]) * ux) / Math.sqrt(L2);
+    if (d <= tol.seg && (!seg || d < seg.d)) seg = { d, a, b };
+  }
+  if (seg) return { kind: 'seg', p: [seg.a, seg.b], text: seg.a + seg.b };
+  // an angle: the sector at the nearest vertex that contains the tap
+  let ang = null;
+  for (const V of Object.keys(model.arms)) {
+    const list = model.arms[V];
+    if (list.length < 2) continue;
+    const d = near(V);
+    if (d > tol.ang) continue;
+    const th = Math.atan2(T[1] - P[V][1], T[0] - P[V][0]);
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]; const n = list[(i + 1) % list.length];
+      const span = (n.a - m.a + 4 * Math.PI) % (2 * Math.PI);
+      const off = (th - m.a + 4 * Math.PI) % (2 * Math.PI);
+      if (off > span) continue;
+      if (span >= Math.PI - 1e-6 || d > 0.8 * Math.min(m.len, n.len)) break;
+      if (!ang || d < ang.d) ang = { d, p: [m.to, V, n.to] };
+      break;
+    }
+  }
+  if (ang) return { kind: 'ang', p: ang.p, text: '∢' + ang.p.join('') };
+  return null;
 }
 
 export function renderDiagram(problem, { width = 420, height = 320, pad = 50, animate = true, label = '' } = {}) {
@@ -145,12 +226,47 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
   const svg = wrap.firstElementChild;
   let cur;
   let sig;
+  let model = null; // pickModel, built on the first pick after each paint
+  let shown = null;
   const paint = (p) => {
     cur = draw(p, { width, height, pad });
     svg.innerHTML = cur.html;
     sig = p.consSig || '';
+    cur.problem = p;
+    model = null;
+    shown = null;
   };
   paint(problem);
+
+  // What is under the pointer: { kind: 'pt' | 'seg' | 'ang', p, text } or null. Tolerances are in
+  // screen pixels (wider for a finger), so the diagram picks the same way at any size.
+  function pick(clientX, clientY, touch = false) {
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const T = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    const k = 1 / (Math.hypot(ctm.a, ctm.b) || 1);
+    model = model || pickModel(cur.problem, cur.P);
+    return pickAt(model, cur.P, [T.x, T.y], { pt: (touch ? 17 : 11) * k, seg: (touch ? 15 : 9) * k, ang: (touch ? 80 : 66) * k });
+  }
+  // Outline what a click would insert (null clears it); flash: briefly mark what was inserted.
+  function markPick(hit, flash = false) {
+    const g = svg.querySelector('.dg-pick');
+    if (!g) return;
+    const key = hit ? hit.kind + hit.p.join('') : '';
+    if (!flash && key === shown) return;
+    shown = flash ? null : key;
+    svg.classList.toggle('is-picking', !!hit && !flash);
+    if (!hit) { g.innerHTML = ''; return; }
+    const { P, angleRadius } = cur;
+    const cls = flash ? ' pk-flash' : '';
+    if (hit.kind === 'pt') g.innerHTML = `<circle class="pk-pt${cls}" cx="${f(P[hit.p[0]][0])}" cy="${f(P[hit.p[0]][1])}" r="9"/>`;
+    else if (hit.kind === 'seg') g.innerHTML = `<path class="pk-seg${cls}" d="M${pt(P[hit.p[0]])}L${pt(P[hit.p[1]])}"/>`;
+    else {
+      const [X, V, Y] = hit.p;
+      g.innerHTML = `<path class="pk-ang${cls}" d="${arcGeom(P[V], P[X], P[Y], angleRadius(X, V, Y, 40)).wedge}"/>`;
+    }
+    if (flash) setTimeout(() => { if (g.isConnected && shown === null) g.innerHTML = ''; }, 650);
+  }
 
   function highlight(items) {
     const { P, angleRadius } = cur;
@@ -176,7 +292,7 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     return true;
   }
 
-  return { el: svg, highlight, clear: () => highlight([]), sync };
+  return { el: svg, highlight, clear: () => highlight([]), sync, pick, markPick };
 }
 
 // What a claim talks about, as highlight items: left side in one highlighter

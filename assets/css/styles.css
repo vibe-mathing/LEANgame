@@ -963,3 +963,75 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .rc-proved { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .rc-proved.is-done { color: var(--ok); background: var(--ok-soft); }
 .rc-proved .ic { width: 14px; height: 14px; }
+
+/* ---------------------------------------------------------------- proof screen: tap the diagram, new theorems, skip steps
+   (app.js with play-extras.js; diagram.js draws .dg-pick) */
+.diagram-card { position: relative; }
+.dg-pick { pointer-events: none; }
+.dg.is-picking { cursor: pointer; }
+.pk-seg { stroke: var(--pen); stroke-width: 7; stroke-linecap: round; fill: none; opacity: .38; }
+.pk-ang { fill: var(--pen); opacity: .2; }
+.pk-pt { fill: none; stroke: var(--pen); stroke-width: 2.5; opacity: .6; }
+.pk-flash { animation: pkflash .65s ease forwards; }
+@keyframes pkflash { 0% { opacity: .75; } 100% { opacity: 0; } }
+.dg-tip { margin: -8px 4px 0; font-size: .84rem; color: var(--muted); }
+.dg-pin { display: none; }
+.dg-pin svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.quick-reasons { flex-wrap: wrap; }
+.qchip.is-new { position: relative; border-style: dashed; border-color: color-mix(in srgb, var(--pen) 55%, var(--line-2)); background: color-mix(in srgb, var(--pen-soft) 55%, var(--card)); }
+.qchip.is-new[aria-pressed="true"] { border-style: solid; background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.qnew { position: absolute; top: -8px; inset-inline-end: 6px; padding: 0 6px; border-radius: 999px; font-size: .66rem; font-weight: 700; line-height: 1.5; background: var(--pen); color: var(--pen-ink); }
+.auto-line.is-skip, .cmp-msg.is-skip { color: var(--pen); }
+.cmp-msg.is-skip { background: var(--pen-soft); display: block; line-height: 1.6; }
+.cmp-msg.is-skip .ic { vertical-align: -3px; }
+.skip-tag { color: var(--pen); }
+.addq { width: auto; gap: 6px; padding: 0 12px; text-decoration: none; font-weight: 600; font-size: .86rem; }
+.addq .ic svg { width: 17px; height: 17px; }
+
+@media (max-width: 1040px) {
+  /* one column: the diagram stays pinned under the top bar while the student scrolls to the proof */
+  .pp-problem { display: contents; }
+  .pp-grid { gap: 14px; }
+  .pp-problem > .diagram-card { position: sticky; top: 72px; z-index: 6; box-shadow: var(--shadow); }
+  .pp.dg-free .pp-problem > .diagram-card { position: relative; box-shadow: none; }
+  .diagram-card .dg { display: block; max-height: min(34vh, 300px); margin-inline: auto; }
+  .dg-pin {
+    display: grid; place-items: center; position: absolute; top: 6px; inset-inline-end: 6px; z-index: 2;
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--card); color: var(--muted); cursor: pointer;
+  }
+  .dg-pin[aria-pressed="true"] { color: var(--pen); border-color: var(--pen); background: var(--pen-soft); }
+}
+@media (max-width: 1040px) and (max-height: 560px) {
+  /* a short screen (the phone keyboard is open): let the diagram scroll away */
+  .pp-problem > .diagram-card { position: relative; }
+}
+@media (max-width: 600px) {
+  .pp { padding-top: 12px; }
+  .pp-bar { gap: 8px 12px; margin-bottom: 12px; font-size: .9rem; }
+  .proto-badge { display: none; }
+  .pp-head h1 { font-size: 1.5rem; }
+  .intro { font-size: .98rem; margin-top: 4px; }
+  .pp-problem > .diagram-card { top: 70px; padding: 2px; }
+  .diagram-card .dg { max-height: min(30vh, 250px); }
+  .facts { gap: 6px; }
+  .fact-group { padding: 8px 12px; }
+  .notebook { border-radius: 16px; }
+  .nb-head h2 { font-size: 1.3rem; }
+  .composer { padding: 12px; gap: 6px; }
+  .nb-head { margin-bottom: 6px; gap: 8px; }
+  .nb-tools { gap: 4px; }
+  .nb-tools .tool-btn, .nb-tools .switch, .nb-tools .lean-status { height: 32px; padding: 0 10px; font-size: .8rem; gap: 5px; }
+  .symkey { min-width: 30px; height: 40px; font-size: 1.05rem; }
+  .qchip { height: 42px; padding: 0 12px; flex: 1 1 auto; }
+  .qchip.is-new { height: 38px; padding: 0 10px; font-size: .88rem; }
+  .addq .addq-t { display: none; }
+  .addq { padding: 0; width: 40px; justify-content: center; }
+}
+@media (max-width: 400px) {
+  /* small phones: the top bar fits without scrolling sideways */
+  .topbar-in { gap: 10px; }
+  .wordmark { display: none; }
+  .tools { gap: 4px; }
+  .tool.lang > span, .acct-login > span { display: none; }
+}
