@@ -599,11 +599,87 @@ export function autoReason(problem, results, claim, upto) {
   return { reason: 'algebra', refs: keep.map((x) => pool[x].n) };
 }
 
+// ---------- one angle or segment, many names ----------
+
+const angTerm = (p, rays) => ({ kind: 'ang', p, key: angKey(p[0], p[1], p[2], rays) });
+const segTerm = (p) => ({ kind: 'seg', p, key: segKey(p[0], p[1]) });
+const sameClaim = (a, b, of) => ({
+  type: 'eq', of, left: a, right: b,
+  L: { terms: [{ c: 1, t: a }], k: 0, deg: false },
+  R: { terms: [{ c: 1, t: b }], k: 0, deg: false },
+});
+
+// Every name of the same angle (any point of each arm's ray, in either order) and of the
+// same segment (either order), as equalities. Lean receives them as facts from the
+// diagram, matching how the browser checker treats each angle and segment as one object.
+export function sameNameFacts(problem) {
+  const { pointNames: pts, rays } = problem;
+  const facts = [];
+  for (const V of pts) {
+    const groups = new Map();
+    for (const X of pts) {
+      for (const Y of pts) {
+        if (X === V || Y === V || X === Y || rays[V][X] === rays[V][Y]) continue;
+        const key = angKey(X, V, Y, rays);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push([X, V, Y]);
+      }
+    }
+    for (const names of groups.values()) {
+      for (const n of names.slice(1)) facts.push(sameClaim(angTerm(names[0], rays), angTerm(n, rays), 'ang'));
+    }
+  }
+  for (const P of pts) for (const Q of pts) if (P < Q) facts.push(sameClaim(segTerm([P, Q]), segTerm([Q, P]), 'len'));
+  return facts;
+}
+
+const strictlyBetween = (pts, P, V, Q) => {
+  const a = [pts[P][0] - pts[V][0], pts[P][1] - pts[V][1]];
+  const b = [pts[Q][0] - pts[V][0], pts[Q][1] - pts[V][1]];
+  const cross = a[0] * b[1] - a[1] * b[0];
+  return Math.abs(cross) < 1e-6 * Math.hypot(...a) * Math.hypot(...b) && a[0] * b[0] + a[1] * b[1] < 0;
+};
+
+// Angles that really have more than one name in the drawing (beyond reversing the
+// letters), using only arms that lie along drawn segments: [[X, V, Y], [X2, V, Y2], ...].
+export function renamedAngles(problem) {
+  const { pointNames: pts, rays, points } = problem;
+  const drawn = {};
+  for (const V of pts) drawn[V] = new Set();
+  for (const sg of problem.segments || []) {
+    const [P, Q] = sg.split('');
+    for (const V of pts) {
+      if (V === P) drawn[V].add(rays[V][Q]);
+      else if (V === Q) drawn[V].add(rays[V][P]);
+      else if (strictlyBetween(points, P, V, Q)) { drawn[V].add(rays[V][P]); drawn[V].add(rays[V][Q]); }
+    }
+  }
+  const out = [];
+  for (const V of pts) {
+    const groups = new Map();
+    for (const X of pts) {
+      for (const Y of pts) {
+        if (X === V || Y === V || X >= Y || rays[V][X] === rays[V][Y]) continue;
+        if (!drawn[V].has(rays[V][X]) || !drawn[V].has(rays[V][Y])) continue;
+        const key = angKey(X, V, Y, rays);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push([X, V, Y]);
+      }
+    }
+    for (const names of groups.values()) if (names.length > 1) out.push(names);
+  }
+  return out;
+}
+
 // The problem statement as a Lean theorem, with the student's rows if given.
+// Other names of the same angle enter as facts from the diagram (n1, n2, ...); reversed
+// names (∢ABC = ∢CBA, AB = BA) are sent to the checker too but not listed here.
 export function leanTheorem(problem, results, upto) {
   const name = `geo_${problem.stage}_${String(problem.n).padStart(4, '0')}`;
+  const renamed = renamedAngles(problem).flatMap((names) => names.slice(1).map((n) => `ang ${names[0].join(' ')} = ang ${n.join(' ')}`));
   const hyps = [
     ...problem.config.map((c, i) => `(cfg${i + 1} : ${c.lean})`),
+    ...renamed.map((s, i) => `(n${i + 1} : ${s})`),
     ...problem.givensParsed.map((g, i) => `(g${i + 1} : ${leanClaim(g)})`),
   ];
   const lines = [`theorem ${name} (${problem.pointNames.join(' ')} : Point)`];

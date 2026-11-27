@@ -6,8 +6,8 @@
 // (localhost), or after `localStorage['lg.leanService']` is set to the service's address,
 // because browsers ask a visitor's permission before a public site may reach localhost.
 
-import { t } from './i18n.js';
-import { fmtClaim } from './geo.js';
+import { t, esc } from './i18n.js';
+import { fmtClaim, claimKey, sameNameFacts } from './geo.js';
 
 const DEFAULT_URL = 'http://localhost:8790';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -38,17 +38,29 @@ async function probe(url) {
   return state === 'online';
 }
 
+// A row that restates a given under a reason the given allows (`also`, e.g. the definition of
+// an angle bisector) is, for Lean, the given itself.
+function reasonFor(p, row, r) {
+  if (!row.reason || !r || !r.parsed.ok) return row.reason || null;
+  const key = claimKey(r.parsed.claim);
+  const restated = (p.givens || []).some((g, i) =>
+    (g.also || []).includes(row.reason) && p.givensParsed[i] && claimKey(p.givensParsed[i]) === key);
+  return restated ? 'given' : row.reason;
+}
+
 // The request: the question and the rows, as structures (never Lean text).
 function request(p, rows, results) {
   return {
     points: p.points,
     config: p.config.map(({ type, a, o, b }) => ({ type, a, o, b })),
     givens: p.givensParsed,
+    // Every name of the same angle or segment, as equalities: facts from the diagram.
+    nameFacts: sameNameFacts(p),
     goal: p.goalParsed,
     allowed: p.allowed,
     rows: rows.map((row, i) => ({
       claim: results[i] && results[i].parsed.ok ? results[i].parsed.claim : null,
-      reason: row.reason || null,
+      reason: reasonFor(p, row, results[i]),
       refs: row.refs || [],
     })),
   };
@@ -102,7 +114,7 @@ function message(e, row, r) {
     case 'refFuture': case 'needRefs': case 'noReason':
       return { key: e.key, vars: e.vars || {} };
     default:
-      return { key: 'leanRaw', vars: { text: e.text || e.key } };
+      return { key: 'leanRaw', vars: { text: esc(e.text || e.key) } };
   }
 }
 
@@ -111,6 +123,8 @@ export function applyLean(local, res, rows) {
   local.results.forEach((r, i) => {
     const l = res.rows[i];
     if (!l) return;
+    // Reasons Lean doesn't have yet, and claim shapes it can't read yet: the browser's verdict stands.
+    if (!l.ok && l.error && ['unknownReason', 'badClaim'].includes(l.error.key)) return;
     r.byLean = true;
     // A claim the browser could not read keeps the browser's message, which says why.
     if (!r.parsed.ok) return;

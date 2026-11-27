@@ -2,7 +2,7 @@
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
 import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList } from './data.js';
-import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat } from './geo.js';
+import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles } from './geo.js';
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
@@ -132,6 +132,8 @@ window.addEventListener('hashchange', render);
 
 const reasonShort = (id) => esc(L(REASONS[id]?.short));
 const reasonsOfStage = (stageId) => Object.entries(REASONS).filter(([, r]) => r.stage === stageId);
+// "a, b and c" / "a, b ו-c"
+const joinList = (items) => (items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + t('pp.and') + items[items.length - 1]);
 const refsText = (refs) => (refs && refs.length ? ` <span class="refs" dir="ltr">(${[...refs].sort((a, b) => a - b).join(', ')})</span>` : '');
 
 function msgHTML(msg) {
@@ -509,6 +511,7 @@ function viewProblem({ stage, n, problem: p }) {
   const st = STAGES.find((s) => s.id === stage);
   const prev = list.find((x) => x.n === n - 1);
   const next = list.find((x) => x.n === n + 1);
+  const renamed = renamedAngles(p);
 
   return `
   <div class="pp">
@@ -536,9 +539,9 @@ function viewProblem({ stage, n, problem: p }) {
               <dt>${t('pp.given')}</dt>
               <dd><ul>${p.givens.map((g, i) => `<li data-claim="${esc(g.claim)}" tabindex="0">${g.text ? `${rich(L(g.text))} <small>${t('pp.meaning')} ${mathSpan(fmtClaim(p.givensParsed[i]))}</small>` : mathSpan(fmtClaim(p.givensParsed[i]))}</li>`).join('')}</ul></dd>
             </div>
-            ${p.config.length ? `<div class="fact-group diag">
+            ${p.config.length || renamed.length ? `<div class="fact-group diag">
               <dt>${t('pp.fromDiagram')}</dt>
-              <dd><ul>${p.config.map((c) => `<li>${rich(L(c.text))}</li>`).join('')}</ul><p class="fact-note">${t('pp.fromDiagramNote')}</p></dd>
+              <dd><ul>${p.config.map((c) => `<li>${rich(L(c.text))}</li>`).join('')}${renamed.map((names) => `<li data-claim="${esc(`∢${names[0].join('')} = ∢${names[1].join('')}`)}" tabindex="0">${t('pp.sameAngle', { names: joinList(names.map((x) => mathSpan('∢' + x.join('')))) })}</li>`).join('')}</ul><p class="fact-note">${t('pp.fromDiagramNote')}</p></dd>
             </div>` : ''}
             <div class="fact-group goal">
               <dt title="${t('pp.goalLong')}">${t('pp.goal')}</dt>
