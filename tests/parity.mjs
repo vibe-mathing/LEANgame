@@ -67,6 +67,18 @@ const CASES = [
     R('∢ABD=∢ACD', 'cpct_angle', [4]), R('∢ABC=∢ACB', 'cpct_angle', [4]), R('∢CBA=∢BCA', 'cpct_angle', [4]), R('∢ABC=∢ACB', 'algebra', [5])]],
   ['names: goal', T2, [R('AB=AC', 'given'), R('∢BAD=∢CAD', 'given'), R('AD=AD', 'common_side'), R('ABD≅ACD', 'SAS', [1, 2, 3]), R('∢ABC=∢ACB', 'cpct_angle', [4])]],
 
+  // stage 3: perpendicular lines (any two points name a line) and the isosceles triangle
+  ['L03-1 by the theorem', PROBLEMS.L03[0], [R('AB=AC', 'given'), R('BD=DC', 'given'), R('AD ⊥ BC', 'iso_median', [1, 2])]],
+  ['L03-1 by congruence', PROBLEMS.L03[0], [R('AB=AC', 'given'), R('BD=DC', 'midpoint_def'), R('AD=AD', 'common_side'), R('ABD≅ACD', 'SSS', [1, 2, 3]),
+    R('∢ADB=∢ADC', 'cpct_angle', [4]), R('∢ADB+∢ADC=180', 'adj_angles'), R('∢ADB = 90', 'algebra', [5, 6]), R('DA ⊥ DC', 'perp_def', [7])]],
+  ['L03-1 other properties', PROBLEMS.L03[0], [R('AB=AC', 'given'), R('BD=DC', 'given'), R('∢BAD = ∢CAD', 'iso_median', [1, 2]), R('∢ADB = 90', 'iso_median', [1, 2]),
+    R('AD ⊥ BD', 'perp_def', [4]), R('AD ⊥ BC', 'iso_median', [1])]],
+  ['L03-2', PROBLEMS.L03[1], [R('AB=AC', 'given'), R('∢ABD=∢ACE', 'iso_base', [1]), R('BD=CE', 'given'), R('ABD≅ACE', 'SAS', [1, 2, 3]), R('AD=AE', 'cpct_side', [4])]],
+  ['L03-3', PROBLEMS.L03[2], [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('∢ADB+∢ADE=180', 'adj_angles'), R('∢AEC+∢AED=180', 'adj_angles'),
+    R('∢ADB=∢AEC', 'algebra', [2, 3, 4]), R('BD=CE', 'given'), R('ADB≅AEC', 'SAS', [1, 5, 6]), R('AB=AC', 'cpct_side', [7])]],
+  ['L03 converse and wrong rows', PROBLEMS.L03[2], [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('AD=AE', 'iso_converse', [2]),
+    R('AB=AE', 'iso_converse', [2]), R('∢ADB=∢AEC', 'iso_base', [1])]],
+
   // rows that must be rejected by both
   ['wrong rows', P1, [R('AB=AC', 'given'), R('∢BAD=∢CAD', 'given'), R('AD=AD', 'common_side'), R('ABD≅ADC', 'SAS', [1, 2, 3]),
     R('ABD≅ACD', 'SSS', [1, 2, 3]), R('ABD≅ACD', 'SSA', [1, 2, 3]), R('BD=CD', 'midpoint_def'), R('∢BAD=∢BAC', 'common_angle'), R('2∢BAD = ∢BAC', 'given')]],
