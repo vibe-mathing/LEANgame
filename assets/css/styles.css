@@ -865,3 +865,96 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .lean-status .ic { width: 15px; height: 15px; }
 .lean-status.is-online { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
 .prow.by-lean .pstat { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 35%, transparent); }
+/* Proof tools that open with progress (tools.js): locked tool button, tool chips,
+   the "new tool" note, and the black screen before a hint */
+.tool-btn.is-locked { opacity: .55; cursor: not-allowed; }
+.tool-btn.is-locked:hover { border-color: var(--line-2); color: var(--ink-2); }
+.chip-tool { gap: 6px; background: color-mix(in srgb, var(--hl) 28%, var(--card)); color: var(--ink); }
+.chip-tool .ic { width: 15px; height: 15px; }
+.solved .tool-news {
+  display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 10px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--hl) 24%, var(--card)); border: 1px solid color-mix(in srgb, var(--hl) 60%, transparent); color: var(--ink);
+}
+.tool-news .ic { margin-top: .2em; }
+
+.hint-wait {
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px 16px;
+  background: #000; color: #A9AEA8; animation: hw-fade .6s ease both;
+}
+@keyframes hw-fade { from { opacity: 0; } to { opacity: 1; } }
+.hw-in { display: grid; justify-items: center; gap: 12px; max-width: 30rem; text-align: center; }
+.hw-in p { margin: 0; }
+.hw-clock { position: relative; width: 136px; height: 136px; margin-bottom: 10px; }
+.hw-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.hw-ring circle { fill: none; stroke-width: 3; }
+.hw-bg { stroke: rgba(255, 255, 255, .08); }
+.hw-fg { stroke: rgba(255, 255, 255, .5); stroke-linecap: round; transition: stroke-dashoffset .1s linear; }
+.hw-num { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 2.6rem; font-weight: 700; color: #F1F1EC; font-variant-numeric: tabular-nums; }
+.hw-title { font-size: 1.12rem; font-weight: 600; color: #E6E7E2; }
+.hw-text { font-size: .98rem; color: #8E948D; }
+.hw-cancel {
+  margin-top: 14px; height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .2);
+  background: none; color: #A9AEA8; font: inherit; font-size: .88rem; cursor: pointer;
+}
+.hw-cancel:hover { border-color: rgba(255, 255, 255, .55); color: #fff; }
+.hw-cancel:focus-visible { outline: 2px solid rgba(255, 255, 255, .7); outline-offset: 3px; color: #fff; }
+
+/* Tools that open after stage 2 (tools.js): "mark for me" in the references field,
+   and the list of conclusions under a congruence */
+.mini-tool {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; margin-inline-start: 8px; vertical-align: middle;
+  border-radius: 999px; border: 1px solid var(--line-2); background: var(--card); color: var(--pen);
+  font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+.mini-tool[hidden] { display: none; }
+.mini-tool:hover, .mini-tool:focus-visible { border-color: var(--pen); }
+.mini-tool .ic { width: 14px; height: 14px; }
+.cpct-panel {
+  display: grid; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--pen) 45%, transparent); background: var(--pen-soft);
+}
+.cpct-panel[hidden] { display: none; }
+.cpct-group { display: grid; gap: 8px; }
+.cpct-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: .88rem; font-weight: 600; color: var(--ink-2); }
+.cpct-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cpct-chip {
+  height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card);
+  color: var(--ink); font: inherit; cursor: pointer; transition: border-color .2s, color .2s;
+}
+.cpct-chip:hover, .cpct-chip:focus-visible { border-color: var(--pen); color: var(--pen); }
+
+/* Admin: "view as student" above the proof, the tool settings table on the admin page,
+   and the special "click a fact" feature (tools.js) */
+.view-as { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 4px 0 12px; border-radius: 999px; border: 1px dashed var(--amber); color: var(--amber); font-size: .82rem; font-weight: 600; }
+[dir="rtl"] .view-as { padding: 0 12px 0 4px; }
+.view-as[hidden] { display: none; }
+.view-as-sel { height: 28px; border: 0; border-radius: 999px; background: var(--paper-2); color: var(--ink); font: inherit; font-size: .82rem; padding: 0 8px; cursor: pointer; }
+
+.facts-click .fact-group:not(.diag) li[data-claim] { cursor: pointer; border-radius: 6px; transition: background-color .15s; }
+.facts-click .fact-group:not(.diag) li[data-claim]:hover,
+.facts-click .fact-group:not(.diag) li[data-claim]:focus-visible { background: var(--pen-soft); }
+
+.tset-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); }
+.tset { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 760px; }
+.tset th, .tset td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: middle; }
+.tset tbody tr:last-child th, .tset tbody tr:last-child td { border-bottom: 0; }
+.tset thead th { font-weight: 600; color: var(--ink-2); background: var(--paper-2); white-space: nowrap; }
+.tset tbody th { font-weight: 600; color: var(--ink); min-width: 11rem; }
+.tset tbody th small { display: block; font-weight: 400; color: var(--muted); font-size: .78rem; line-height: 1.4; margin-top: 2px; }
+.tset .adm-select { width: 100%; min-width: 8.5rem; }
+.tset-in { width: 100%; min-width: 7rem; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font: inherit; font-family: var(--font-mono); font-size: .85rem; }
+.tset-in::placeholder { color: var(--muted); font-family: var(--font-ui); }
+.tset-in[aria-invalid="true"] { border-color: var(--err); background: var(--err-soft); }
+.tset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.tset-view { display: grid; gap: 6px; margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-2); max-width: 40rem; }
+.tset-view-l { font-weight: 600; }
+.tset-view .adm-select { max-width: 18rem; }
+
+/* Admin: one student's tools, inside the expanded row of the students table (tools.js) */
+.stools { display: grid; gap: 10px; margin-top: 12px; padding: 12px 14px; border-radius: 12px; border: 1px dashed var(--line-2); background: var(--paper); }
+.stools-h { margin: 0; font-weight: 600; }
+.stools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; }
+.stools-item { display: grid; gap: 4px; align-content: start; font-size: .86rem; }
+.stools-item .adm-select { width: 100%; }
+.stools-check { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; cursor: pointer; }
+.stools-check small { grid-column: 2; color: var(--muted); font-size: .76rem; line-height: 1.4; }

@@ -6,6 +6,8 @@ import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClai
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
+import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin,
+  onToolsChange, specialOn, realAdmin, viewAs, setViewAs, toolSettings, durationText } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress } from './auth.js';
 
@@ -134,6 +136,12 @@ function render() {
 }
 
 window.addEventListener('hashchange', render);
+
+// The level map shows which tools each stage opens; redraw it when that changes
+// (tool settings arriving, logging in, an admin viewing as a student).
+const toolSig = () => STAGES.map((s) => toolsAfter(s.id).map((id) => id + (toolOpen(id, isSolved) ? 1 : 0)).join(',')).join('|');
+let lastToolSig = '';
+onToolsChange(() => { if (currentRoute().name === 'topic' && toolSig() !== lastToolSig) render(); });
 
 // ---------------------------------------------------------------- helpers
 
@@ -421,6 +429,7 @@ function runHeroDemo(root) {
 // ---------------------------------------------------------------- topic
 
 function viewTopic() {
+  lastToolSig = toolSig();
   const all = problemList();
   const solved = all.filter((x) => isSolved(x.stage, x.n)).length;
   const pct = all.length ? solved / all.length : 0;
@@ -442,6 +451,7 @@ function viewTopic() {
           <h3>${L(s.name)}</h3>
           <p class="stage-blurb">${rich(L(s.blurb))}</p>
           <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([, r]) => `<span class="chip">${esc(L(r.short))}</span>`).join('')}</div>
+          ${toolsAfter(s.id).length ? `<div class="unlocks"><span class="unlocks-label">${t('tool.onFinish')}</span>${toolsAfter(s.id).map((id) => `<span class="chip chip-tool" title="${esc(t('tool.' + id + '.title'))}">${icon(toolOpen(id, isSolved) ? TOOLS[id].icon : 'lock')}${esc(t('tool.' + id))}</span>`).join('')}</div>` : ''}
           ${open ? `<div class="stage-foot">
             <div class="pips" aria-label="${probs.length === 1 ? t('tp.problem1') : t('tp.problems', { n: probs.length })}">
               ${probs.map((p) => `<a class="pip${isSolved(s.id, p.n) ? ' done' : ''}" href="#/hs/geometry/${s.id}/${p.n}" title="${esc(L(p.title))}${isSolved(s.id, p.n) ? ' · ' + t('tp.solved') : ''}">${isSolved(s.id, p.n) ? icon('check') : p.n}</a>`).join('')}
@@ -566,8 +576,13 @@ function viewProblem({ stage, n, problem: p }) {
             <div class="nb-head">
               <h2 id="proofTitle">${t('pp.proof')}</h2>
               <div class="nb-tools">
+                <label class="view-as" id="viewAsWrap" hidden><span>${t('tool.viewAs')}</span><select id="viewAs" class="view-as-sel">
+                  <option value="">${t('tool.viewAs.admin')}</option>
+                  ${['default', '3', '4', '5', 'uni'].map((tr) => `<option value="${tr}">${esc(t('tool.viewAs.as', { track: t('tool.set.track.' + tr) }))}</option>`).join('')}
+                </select></label>
                 <span class="lean-status" id="leanStatus" role="status" hidden></span>
                 <label class="switch" title="${t('pp.showLeanLabel')}"><input type="checkbox" id="leanToggle"><span class="switch-ui" aria-hidden="true"></span><span>${icon('code')} ${t('pp.showLean')}</span></label>
+                <button type="button" class="tool-btn" id="givensBtn"></button>
                 <button type="button" class="tool-btn" id="hintBtn">${icon('bulb')} <span>${t('pp.hint')}</span></button>
                 <button type="button" class="tool-btn" id="resetBtn">${icon('reset')} <span>${t('pp.reset')}</span></button>
               </div>
@@ -581,6 +596,7 @@ function viewProblem({ stage, n, problem: p }) {
                 <ol>${[1, 2, 3].map((i) => `<li>${rich(t('pp.empty.' + i))}</li>`).join('')}</ol>
               </div>
             </div>
+            <div class="cpct-panel" id="cpctPanel" hidden></div>
             <div class="blocked" id="blocked" hidden>${icon('info')} ${t('pp.blocked')}</div>
             <div class="solved" id="solved" hidden></div>
             <form class="composer" id="composer" autocomplete="off" novalidate>
@@ -610,7 +626,7 @@ function viewProblem({ stage, n, problem: p }) {
               </div>
               <p class="rinfo" id="rinfo"></p>
               <div class="refs-field" id="refsField" hidden>
-                <span class="cmp-label">${t('pp.refs')} <small id="refsHint"></small></span>
+                <span class="cmp-label">${t('pp.refs')} <small id="refsHint"></small><button type="button" class="mini-tool" id="autoRefsBtn" hidden>${icon(TOOLS.autoRefs.icon)} ${t('tool.autoRefs.btn')}</button></span>
                 <div class="ref-chips" id="refChips"></div>
               </div>
               <p class="cmp-msg" id="cmpMsg" role="alert" hidden></p>
@@ -663,7 +679,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     refs: new Set(),
     editing: null,
     showLean: store.get('showLean', false),
-    hints: 0,
+    hints: Math.min((saved && saved.hints) || 0, p.hints.length), // hints already waited for stay open
   };
 
   const dg = renderDiagram(p, { animate: true, label: t('pp.diagramAria') });
@@ -755,6 +771,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     renderSolved();
     renderComposerMeta();
     persist();
+    toolsAfterRows(); // the hint lock and the conclusions list follow the rows (tools.js)
   }
 
   function renderSolved() {
@@ -763,6 +780,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     box.hidden = !solved;
     $('#composer', root).classList.toggle('is-dim', solved);
     if (!solved) { box.innerHTML = ''; wasSolved = false; return; }
+    if (!wasSolved) { toolNews = toolsOpenedNow(); syncTools(); }
     const all = problemList();
     const idx = all.findIndex((x) => x.stage === stage && x.n === n);
     const nxt = all[idx + 1];
@@ -772,6 +790,7 @@ function bindProblem(root, { stage, n, problem: p }) {
         <h3>${t('pp.solved.t')}</h3>
         <p>${t('pp.solved.p')}</p>
         ${nxt ? '' : `<p class="muted">${t('pp.solved.last')}</p>`}
+        ${toolNews.map((id) => `<p class="tool-news">${icon(TOOLS[id].icon)}<span><b>${t('tool.new', { name: t('tool.' + id) })}</b> ${t('tool.' + id + '.new')}</span></p>`).join('')}
         <div class="cta-row">
           ${nxt ? `<a class="btn btn-primary" href="#/hs/geometry/${nxt.stage}/${nxt.n}">${t('pp.solved.next')} ${icon('arrow', 'dir')}</a>` : ''}
           <a class="btn btn-ghost" href="#/hs/geometry">${icon('map')} ${t('pp.solved.map')}</a>
@@ -1055,13 +1074,156 @@ function bindProblem(root, { stage, n, problem: p }) {
 
   leanToggle.addEventListener('change', () => { state.showLean = leanToggle.checked; store.set('showLean', state.showLean); renderRows(); });
 
-  $('#hintBtn', root).addEventListener('click', () => {
-    state.hints = Math.min(state.hints + 1, p.hints.length);
-    const box = $('#hintBox', root);
-    box.hidden = false;
-    box.innerHTML = p.hints.slice(0, state.hints).map((h, i) => `<p><span class="hint-n">${t('pp.hintN', { n: i + 1, m: p.hints.length })}</span>${rich(L(h))}</p>`).join('');
-    if (state.hints >= p.hints.length) $('#hintBtn', root).disabled = true;
+  // --- tools that open with progress (tools.js)
+  const hintBtn = $('#hintBtn', root);
+  const givensBtn = $('#givensBtn', root);
+  const autoRefsBtn = $('#autoRefsBtn', root);
+  const cpctPanel = $('#cpctPanel', root);
+  const toolsAbort = new AbortController(); // ends a hint wait when the student leaves the page
+  let hintWaiting = false;
+  let toolNews = []; // tools this solve opened, announced in the "solved" box
+  const openedAt = Date.now();
+  let tryTimer = 0; // re-checks the hint when its "try first" time runs out
+  const factsEl = $('.facts', root);
+  const viewAsWrap = $('#viewAsWrap', root);
+  const viewAsSel = $('#viewAs', root);
+
+  // This problem counts as solved as soon as the proof is complete, even before persist() saves it.
+  const solvedNow = (s, k) => (s === stage && k === n && result.solvedAt >= 0) || isSolved(s, k);
+  const toolsOpenedNow = () => (isAdmin() ? [] : Object.keys(TOOLS).filter((id) => toolOpen(id, solvedNow) && !toolOpen(id, isSolved)));
+
+  function syncTools() {
+    const open = toolOpen('fillGivens', solvedNow);
+    givensBtn.classList.toggle('is-locked', !open);
+    givensBtn.setAttribute('aria-disabled', String(!open));
+    givensBtn.title = open ? t('tool.fillGivens.title') : toolLockText('fillGivens');
+    givensBtn.innerHTML = `${icon(open ? TOOLS.fillGivens.icon : 'lock')} <span>${t('tool.fillGivens')}</span>`;
+    autoRefsBtn.hidden = !toolOpen('autoRefs', solvedNow);
+    autoRefsBtn.title = t('tool.autoRefs.title');
+    // A special feature: clicking a given or the goal copies it into the claim field.
+    const click = specialOn('clickFacts');
+    factsEl.classList.toggle('facts-click', click);
+    $$('.fact-group:not(.diag) li[data-claim]', factsEl).forEach((li) => { li.title = click ? t('tool.clickFacts.title') : ''; });
+    viewAsWrap.hidden = !realAdmin();
+    viewAsSel.value = viewAs() || '';
+    syncHint();
+  }
+
+  function toolsAfterRows() {
+    syncHint();
+    renderConclusions();
+  }
+
+  // Under the proof: the corresponding sides and angles of each congruence row, ready to add.
+  let conclusions = [];
+  function renderConclusions() {
+    conclusions = toolOpen('cpctList', solvedNow) && result.solvedAt < 0 ? congConclusions(p, result.results) : [];
+    cpctPanel.hidden = !conclusions.length;
+    cpctPanel.innerHTML = conclusions.map((g, gi) => `
+      <div class="cpct-group">
+        <p class="cpct-head">${icon(TOOLS.cpctList.icon)} <span>${t('tool.cpctList.head', { n: g.n })}</span> ${mathSpan(fmtClaim(g.claim))}</p>
+        <div class="cpct-chips">${g.items.map((it, ii) => `<button type="button" class="cpct-chip" data-g="${gi}" data-i="${ii}" title="${esc(t('tool.cpctList.hint'))}">${mathSpan(it.text)}</button>`).join('')}</div>
+      </div>`).join('');
+  }
+
+  // Seconds until the hint opens: first the student tries, then each hint costs a longer wait.
+  const hintLeft = () => hintTryLeft({
+    ownRows: state.rows.filter((r) => !r.filled).length,
+    earned: state.hints > 0 || isSolved(stage, n),
+    since: openedAt,
   });
+
+  function syncHint() {
+    const done = state.hints >= p.hints.length;
+    const closed = !toolOpen('hint', solvedNow); // the settings can close hints for a track
+    const left = closed ? 0 : hintLeft();
+    const locked = !done && (closed || left > 0);
+    hintBtn.classList.toggle('is-locked', locked);
+    hintBtn.setAttribute('aria-disabled', String(locked));
+    hintBtn.innerHTML = `${icon(locked ? 'lock' : TOOLS.hint.icon)} <span>${t('pp.hint')}</span>`;
+    hintBtn.title = closed ? toolLockText('hint')
+      : left > 0 ? t('tool.hint.tryFirstTitle', { time: durationText(toolSettings().tryFirst) })
+        : isAdmin() || done ? '' : t('tool.hint.title', { s: hintSeconds(state.hints) });
+    clearTimeout(tryTimer);
+    if (!done && !closed && left > 0) tryTimer = setTimeout(syncHint, left * 1000 + 100);
+  }
+
+  function renderHints() {
+    const box = $('#hintBox', root);
+    box.hidden = !state.hints;
+    box.innerHTML = p.hints.slice(0, state.hints).map((h, i) => `<p><span class="hint-n">${t('pp.hintN', { n: i + 1, m: p.hints.length })}</span>${rich(L(h))}</p>`).join('');
+    hintBtn.disabled = state.hints >= p.hints.length;
+  }
+
+  hintBtn.addEventListener('click', async () => {
+    if (hintWaiting || state.hints >= p.hints.length) return;
+    if (!toolOpen('hint', solvedNow)) { showMsg(`${icon('lock')} ${toolLockText('hint')}`); return; }
+    const left = hintLeft();
+    if (left > 0) { showMsg(`${icon('lock')} ${t('tool.hint.tryFirst', { s: left })}`); return; }
+    hintWaiting = true;
+    const ok = await hintWait({ seconds: hintSeconds(state.hints), signal: toolsAbort.signal });
+    hintWaiting = false;
+    if (!ok) return;
+    state.hints = Math.min(state.hints + 1, p.hints.length);
+    saveProgress(stage, n, { hints: state.hints });
+    renderHints();
+    syncHint();
+  });
+
+  givensBtn.addEventListener('click', () => {
+    if (!toolOpen('fillGivens', solvedNow)) { showMsg(`${icon('lock')} ${toolLockText('fillGivens')}`); return; }
+    const filled = fillGivens(p, state.rows);
+    if (!filled) { showMsg(`${icon('info')} ${t('tool.fillGivens.none')}`); return; }
+    // The rows move down, so a row being edited and the rows picked as references move with them.
+    state.rows = filled.rows;
+    if (state.editing != null) state.editing += filled.add;
+    state.refs = new Set([...state.refs].map((k) => k + filled.add));
+    showMsg('');
+    renderRows();
+  });
+
+  autoRefsBtn.addEventListener('click', () => {
+    if (!toolOpen('autoRefs', solvedNow) || !state.reason) return;
+    const found = findRefs(p, state.rows, upto(), input.value, state.reason);
+    if (!found || found.error) {
+      showMsg(`${icon('info')} ${t(found ? 'tool.autoRefs.noClaim' : 'tool.autoRefs.none')}`);
+      if (found) input.focus();
+      return;
+    }
+    state.refs = new Set(found.refs);
+    showMsg('');
+    renderComposerMeta();
+  });
+
+  cpctPanel.addEventListener('click', (e) => {
+    const b = e.target.closest('.cpct-chip');
+    if (!b) return;
+    const it = conclusions[+b.dataset.g] && conclusions[+b.dataset.g].items[+b.dataset.i];
+    if (!it) return;
+    state.rows.push({ text: it.text, reason: it.reason, refs: it.refs, filled: true });
+    renderRows();
+  });
+
+  function copyFact(li) {
+    const r = parseClaim(li.dataset.claim, p);
+    input.value = r.ok ? fmtClaim(r.claim) : li.dataset.claim;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+  const factOf = (e) => (specialOn('clickFacts') ? e.target.closest('.fact-group:not(.diag) li[data-claim]') : null);
+  factsEl.addEventListener('click', (e) => { const li = factOf(e); if (li) copyFact(li); });
+  factsEl.addEventListener('keydown', (e) => {
+    const li = e.key === 'Enter' ? factOf(e) : null;
+    if (li) { e.preventDefault(); copyFact(li); }
+  });
+
+  viewAsSel.addEventListener('change', () => setViewAs(viewAsSel.value));
+  // Settings, the user, or the admin's student view changed: redraw everything the tools touch.
+  const offTools = onToolsChange(() => { syncTools(); renderHints(); toolsAfterRows(); });
+
+  syncTools();
+  renderHints();
 
   let resetArmed = null;
   $('#resetBtn', root).addEventListener('click', (e) => {
@@ -1086,6 +1248,9 @@ function bindProblem(root, { stage, n, problem: p }) {
   return () => {
     if (resetArmed) clearTimeout(resetArmed);
     document.removeEventListener('pointerdown', outside);
+    toolsAbort.abort();
+    clearTimeout(tryTimer);
+    offTools();
   };
 }
 
