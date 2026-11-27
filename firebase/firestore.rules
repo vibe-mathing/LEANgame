@@ -8,8 +8,11 @@ rules_version = '2';
 // whose Auth address is ownerEmail() below. On first login the owner pins their uid in config/owner;
 // from then on the owner is that uid, even after the owner switches to a real recovery e-mail.
 //
-// Accounts log in with a username or an e-mail. Firebase Auth knows each one by an address:
-// the e-mail itself, or a made-up "…@leangame.example" address (see loginEmail() in auth.js).
+// Accounts log in with the username or the e-mail. Firebase Auth knows each one by an address: the e-mail,
+// or (without one) a made-up "…@leangame.example" address (see loginEmail() in auth.js).
+// usernames/{sha256('leangame-username:' + username)} holds { uid, username }, so each username is taken once.
+// logins/{PBKDF2(username + password)} holds { uid, email }, so an account with an e-mail can log in with its
+// username without the e-mail ever being public: only someone who knows the password can find the document.
 //
 // Roles (users/{uid}.role):
 //   student, student_plus, student_premium   tiers; only an admin changes them
@@ -18,7 +21,9 @@ rules_version = '2';
 //
 // Data:
 //   users/{uid}   { login (the Auth address), username, name, track: '3'|'4'|'5'|'uni'|'staff', role, blocked,
-//                   progress (JSON string), createdAt, lastSeen, features?: [string] }
+//                   progress (JSON string), createdAt, lastSeen, features?: [string], loginKey? }
+//   usernames/{id}  { uid, username }
+//   logins/{key}    { uid, email }
 //   config/owner  { uid }   written once by the owner
 //   config/site   { signupOpen: { '3': bool, …, staff: bool } }  a student track missing from the map is open;
 //                                                                 the staff link is closed unless set to true
@@ -60,6 +65,9 @@ service cloud.firestore {
     function validUsername(u) { return u is string && u.size() > 0 && u.size() <= 64; }
     function validProgress(p) { return p is string && p.size() <= 200000; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function uhash(u) { return hashing.sha256('leangame-username:' + u).toHexString().lower(); }
+    function usernameDoc(u) { return /databases/$(database)/documents/usernames/$(uhash(u)); }
+    function claimedByMe(u) { return exists(usernameDoc(u)) && get(usernameDoc(u)).data.uid == request.auth.uid; }
 
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isStaff();
@@ -71,6 +79,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['login', 'username', 'name', 'track', 'role', 'blocked', 'progress', 'createdAt', 'lastSeen'])
         && request.resource.data.login == request.auth.token.email
         && validUsername(request.resource.data.username)
+        && claimedByMe(request.resource.data.username)
         && validName(request.resource.data.name)
         && request.resource.data.blocked == false
         && validProgress(request.resource.data.progress)
@@ -95,17 +104,45 @@ service cloud.firestore {
             && changed().hasOnly(['track', 'blocked'])
             && request.resource.data.track in tracks()
             && request.resource.data.blocked is bool)
-        // Users change their own name, progress, last-seen time and login address (after a confirmed
-        // e-mail change), and not while blocked.
+        // Users change their own name, progress, last-seen time, login address (after a confirmed e-mail
+        // change) and login key, set a username once on an older profile that has none, and not while blocked.
         || (signedIn() && request.auth.uid == uid
             && resource.data.blocked != true
-            && changed().hasOnly(['name', 'progress', 'lastSeen', 'login'])
+            && changed().hasOnly(['name', 'progress', 'lastSeen', 'login', 'loginKey', 'username'])
             && validName(request.resource.data.name)
             && validProgress(request.resource.data.progress)
             && (!('lastSeen' in changed()) || request.resource.data.lastSeen == request.time)
-            && (!('login' in changed()) || request.resource.data.login == request.auth.token.email));
+            && (!('login' in changed()) || request.resource.data.login == request.auth.token.email)
+            && (!('loginKey' in changed()) || request.resource.data.loginKey is string)
+            && (!('username' in changed())
+                || (!('username' in resource.data) && claimedByMe(request.resource.data.username))));
 
       allow delete: if isOwner() || (isAdmin() && resource.data.get('role', 'student') != 'admin');
+    }
+
+    // Each username once. Anyone may check whether a username is taken; nobody may list them.
+    match /usernames/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username'])
+        && request.resource.data.uid == request.auth.uid
+        && validUsername(request.resource.data.username)
+        && id == uhash(request.resource.data.username)
+        && (request.resource.data.username != ownerUsername() || isOwner());
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Username login for accounts with an e-mail. The id is derived from the username and the password,
+    // so the document (and the e-mail in it) can only be found by someone who knows the password.
+    match /logins/{key} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'email'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // Written once, by the owner, on their first login.

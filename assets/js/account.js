@@ -41,13 +41,15 @@ const S = {
     'role.teacher': 'מורה',
     'role.admin': 'מנהל',
 
-    'f.username': 'שם משתמש או אימייל',
+    'f.username': 'שם משתמש',
     'f.login': 'שם משתמש או אימייל',
     'f.password': 'סיסמה',
     'f.password2': 'סיסמה שוב',
     'f.name': 'שם מלא',
-    'f.usernameHint': 'כל שם שתרצו, בכל שפה. נרשמים עם אימייל? אז אפשר יהיה לשחזר דרכו את הסיסמה.',
+    'f.usernameHint': 'כל שם שתרצו, בכל שפה.',
     'f.passwordHint': 'לפחות {n} תווים.',
+    'f.email': 'אימייל (לא חובה)',
+    'f.emailHint': 'לשחזור סיסמה, ואפשר גם להיכנס איתו. פרטי: רק אתם וצוות האתר רואים אותו.',
     'f.nameHint': 'כך המורה יזהה אתכם.',
     'f.show': 'הצגת הסיסמה',
 
@@ -64,7 +66,7 @@ const S = {
     'reset.lead': 'כתבו את האימייל של החשבון, ונשלח אליו קישור לבחירת סיסמה חדשה.',
     'reset.email': 'אימייל',
     'reset.submit': 'שליחת קישור',
-    'reset.sent': 'אם יש חשבון עם האימייל הזה, שלחנו אליו קישור. בדקו גם בספאם.',
+    'reset.sent': 'אם יש חשבון עם האימייל הזה, שלחנו אליו קישור. בדקו גם בספאם. אחרי שתבחרו סיסמה חדשה, היכנסו פעם אחת עם האימייל, ומאז גם שם המשתמש יעבוד עם הסיסמה החדשה.',
     'reset.sentLocal': 'במצב בדיקה מקומי לא נשלח מייל.',
     'reset.noEmail': 'נרשמתם עם שם משתמש בלי אימייל? אי אפשר לשחזר את הסיסמה במייל. פנו למורה.',
     'reset.back': 'חזרה לכניסה',
@@ -107,15 +109,15 @@ const S = {
     'me.pwNew': 'סיסמה חדשה',
     'me.pwSubmit': 'החלפת סיסמה',
     'me.pwDone': 'הסיסמה הוחלפה.',
-    'me.recTitle': 'מייל לשחזור סיסמה',
-    'me.recLead': 'אימייל נפרד למנהל. אחרי שתאשרו אותו בקישור שיישלח אליו, תיכנסו איתו (במקום שם המשתמש), וקישורי איפוס סיסמה יישלחו אליו.',
-    'me.recEmail': 'אימייל לשחזור',
+    'me.recTitle': 'אימייל',
+    'me.recLead': 'הוסיפו אימייל כדי לשחזר את הסיסמה אם תשכחו אותה. אחרי שתוסיפו אותו, נכנסים עם שם המשתמש או עם האימייל. האימייל פרטי: רק אתם וצוות האתר רואים אותו.',
+    'me.recEmail': 'אימייל',
     'me.recPw': 'הסיסמה הנוכחית',
-    'me.recSubmit': 'שליחת אישור',
-    'me.recSent': 'שלחנו קישור אישור אל {email}. אחרי שתאשרו, היכנסו עם האימייל הזה.',
-    'me.recLocal': 'במצב בדיקה מקומי האימייל נשמר מיד. מעכשיו נכנסים איתו.',
-    'me.recNow': 'האימייל של החשבון: {email}. נכנסים איתו, וקישורי איפוס סיסמה נשלחים אליו.',
-    'me.emailNote': 'אם תשכחו את הסיסמה, אפשר לשחזר אותה דרך {email}.',
+    'me.recSubmit': 'שמירה ושליחת אישור',
+    'me.recSent': 'שלחנו קישור אישור אל {email}. אחרי שתאשרו, היכנסו פעם אחת עם האימייל והסיסמה. מאז אפשר להיכנס גם עם שם המשתמש.',
+    'me.recLocal': 'במצב בדיקה מקומי האימייל נשמר מיד. היכנסו פעם אחת עם האימייל, ומאז גם שם המשתמש יעבוד.',
+    'me.recNow': 'האימייל שלכם: {email}. נכנסים עם שם המשתמש או עם האימייל, וקישורי איפוס סיסמה נשלחים אליו. האימייל פרטי: רק אתם וצוות האתר רואים אותו.',
+    'me.emailNote': '',
     'me.adminTitle': 'ניהול האתר',
     'me.adminText': 'קישורי הרשמה, רשימת התלמידים וההתקדמות שלהם.',
     'me.toAdmin': 'למסך הניהול',
@@ -174,6 +176,7 @@ const S = {
     'err.wrong-login': 'שם המשתמש או הסיסמה לא נכונים.',
     'err.bad-username': 'כתבו שם משתמש, עד 64 תווים.',
     'err.bad-email': 'כתבו כתובת אימייל תקינה.',
+    'err.owner-email-later': 'בעל האתר נרשם בלי אימייל, ומוסיף אותו אחר כך בדף "החשבון שלי".',
     'err.email-taken': 'האימייל הזה כבר משמש חשבון אחר.',
     'err.staff-closed': 'הקישור הזה לבעל האתר ולצוות, והרשמת הצוות סגורה כרגע. בעל האתר: בדקו ששם המשתמש הוא בדיוק השם שהאתר הגדיר.',
     'err.rules-denied': 'השרת סירב לשמור את החשבון. כנראה כללי האבטחה ב-Firebase לא מעודכנים. פנו למנהל האתר.',
@@ -225,13 +228,15 @@ const S = {
     'role.teacher': 'Teacher',
     'role.admin': 'Admin',
 
-    'f.username': 'Username or e-mail',
+    'f.username': 'Username',
     'f.login': 'Username or e-mail',
     'f.password': 'Password',
     'f.password2': 'Password again',
     'f.name': 'Full name',
-    'f.usernameHint': 'Any name you like, in any language. Sign up with an e-mail and you can recover your password through it.',
+    'f.usernameHint': 'Any name you like, in any language.',
     'f.passwordHint': 'At least {n} characters.',
+    'f.email': 'E-mail (optional)',
+    'f.emailHint': 'For password recovery; you can log in with it too. Private: only you and the site staff see it.',
     'f.nameHint': 'So your teacher knows who you are.',
     'f.show': 'Show password',
 
@@ -248,7 +253,7 @@ const S = {
     'reset.lead': "Enter the account's e-mail and we'll send it a link to choose a new password.",
     'reset.email': 'E-mail',
     'reset.submit': 'Send link',
-    'reset.sent': 'If an account uses this e-mail, we sent it a link. Check your spam folder too.',
+    'reset.sent': 'If an account uses this e-mail, we sent it a link. Check your spam folder too. After you choose a new password, log in once with the e-mail, and after that the username works with the new password too.',
     'reset.sentLocal': 'In local test mode no e-mail is sent.',
     'reset.noEmail': 'Signed up with a username and no e-mail? The password cannot be recovered by e-mail. Ask your teacher.',
     'reset.back': 'Back to log in',
@@ -291,15 +296,15 @@ const S = {
     'me.pwNew': 'New password',
     'me.pwSubmit': 'Change password',
     'me.pwDone': 'Password changed.',
-    'me.recTitle': 'Password recovery e-mail',
-    'me.recLead': 'A separate e-mail for the admin. Once you confirm it through the link sent to it, you log in with it (instead of the username), and password reset links go to it.',
-    'me.recEmail': 'Recovery e-mail',
+    'me.recTitle': 'E-mail',
+    'me.recLead': 'Add an e-mail so you can recover your password if you forget it. Once added, you log in with the username or the e-mail. The e-mail is private: only you and the site staff see it.',
+    'me.recEmail': 'E-mail',
     'me.recPw': 'Current password',
-    'me.recSubmit': 'Send confirmation',
-    'me.recSent': 'We sent a confirmation link to {email}. Once you confirm, log in with that e-mail.',
-    'me.recLocal': 'In local test mode the e-mail is saved at once. From now on you log in with it.',
-    'me.recNow': "The account's e-mail: {email}. You log in with it, and password reset links go to it.",
-    'me.emailNote': 'If you forget your password, you can recover it through {email}.',
+    'me.recSubmit': 'Save and send confirmation',
+    'me.recSent': 'We sent a confirmation link to {email}. Once you confirm, log in once with the e-mail and password. After that the username works too.',
+    'me.recLocal': 'In local test mode the e-mail is saved at once. Log in once with the e-mail, and after that the username works too.',
+    'me.recNow': 'Your e-mail: {email}. You log in with the username or the e-mail, and password reset links go to it. The e-mail is private: only you and the site staff see it.',
+    'me.emailNote': '',
     'me.adminTitle': 'Site admin',
     'me.adminText': 'Sign-up links, the student list and their progress.',
     'me.toAdmin': 'Open admin',
@@ -358,6 +363,7 @@ const S = {
     'err.wrong-login': 'Wrong username or password.',
     'err.bad-username': 'Enter a username, up to 64 characters.',
     'err.bad-email': 'Enter a valid e-mail address.',
+    'err.owner-email-later': 'The site owner signs up without an e-mail and adds it later on the "My account" page.',
     'err.email-taken': 'That e-mail is already used by another account.',
     'err.staff-closed': 'This link is for the site owner and staff, and staff sign-up is closed right now. Site owner: check that the username is exactly the one the site set.',
     'err.rules-denied': 'The server refused to save the account. The Firebase security rules are probably out of date. Tell the site admin.',
@@ -505,7 +511,7 @@ function field(name, label, opts = {}) {
     <label for="${id}">${label}</label>
     <div class="acct-input-wrap">
       <input class="acct-input" id="${id}" name="${name}" type="${type}" autocomplete="${autocomplete}" value="${esc(value)}"
-        ${ltr ? `dir="${ltr}" autocapitalize="none" spellcheck="false"` : ''} ${hint ? `aria-describedby="${id}-hint"` : ''} required>
+        ${ltr ? `dir="${ltr}" autocapitalize="none" spellcheck="false"` : ''} ${hint ? `aria-describedby="${id}-hint"` : ''} ${opts.optional ? '' : 'required'}>
       ${reveal ? `<button type="button" class="acct-reveal" data-reveal="${id}" aria-label="${tt('f.show')}" title="${tt('f.show')}" aria-pressed="false">${ic('eye')}</button>` : ''}
     </div>
     ${hint ? `<p class="acct-hint" id="${id}-hint">${hint}</p>` : ''}
@@ -725,6 +731,7 @@ async function pageJoin(host, route) {
       <form class="acct-form" novalidate>
         ${field('name', tt('f.name'), { autocomplete: 'name', hint: tt('f.nameHint') })}
         ${field('username', tt('f.username'), { autocomplete: 'username', auto: true, hint: tt('f.usernameHint') })}
+        ${staff ? '' : field('email', tt('f.email'), { type: 'email', autocomplete: 'email', ltr: true, hint: tt('f.emailHint'), optional: true })}
         ${field('password', tt('f.password'), { type: 'password', autocomplete: 'new-password', ltr: true, reveal: true, hint: tt('f.passwordHint', { n: auth.MIN_PASSWORD }) })}
         ${field('password2', tt('f.password2'), { type: 'password', autocomplete: 'new-password', ltr: true })}
         <p class="acct-note">${ic('info')}<span>${tt('join.keep')}</span></p>
@@ -741,7 +748,7 @@ async function pageJoin(host, route) {
     run(form, async () => {
       if (form.password.value !== form.password2.value) throw new auth.AuthError('mismatch');
       const user = await quietly(() => auth.signUp({
-        name: form.name.value, username: form.username.value, password: form.password.value, track,
+        name: form.name.value, username: form.username.value, email: form.email ? form.email.value : '', password: form.password.value, track,
       }));
       sessionStorage.removeItem('lg.returnTo');
       location.hash = user.isStaff ? '#/admin' : '#/hs/geometry';
@@ -824,10 +831,9 @@ async function pageMe(host) {
             ${msgBox()}
             <button class="btn btn-ghost btn-small acct-submit" type="submit">${tt('me.pwSubmit')}</button>
           </form>
-          ${u.email && !u.isAdmin ? `<p class="acct-hint">${esc(tt('me.emailNote', { email: u.email }))}</p>` : ''}
         </section>
 
-        ${u.isAdmin ? `<section class="acct-card paper">
+        <section class="acct-card paper">
           <h2 class="acct-h2">${tt('me.recTitle')}</h2>
           ${u.email ? `<p class="acct-hint" id="recNow">${esc(tt('me.recNow', { email: u.email }))}</p>` : `<p class="acct-hint">${tt('me.recLead')}</p>`}
           <form class="acct-form" id="recForm" novalidate>
@@ -836,7 +842,7 @@ async function pageMe(host) {
             ${msgBox()}
             <button class="btn btn-ghost btn-small acct-submit" type="submit">${tt('me.recSubmit')}</button>
           </form>
-        </section>` : ''}
+        </section>
       </div>
     </div>`;
 
@@ -868,9 +874,9 @@ async function pageMe(host) {
       e.preventDefault();
       run(recForm, async () => {
         const email = recForm.recemail.value.trim().toLowerCase();
-        await quietly(() => auth.setRecoveryEmail(email, recForm.recpw.value));
+        const done = await quietly(() => auth.setEmail(email, recForm.recpw.value));
         recForm.recpw.value = '';
-        showMsg(recForm, auth.mode === 'local' ? tt('me.recLocal') : tt('me.recSent', { email }), 'ok');
+        showMsg(recForm, done ? tt('me.recLocal') : tt('me.recSent', { email }), 'ok');
       });
     });
   }
