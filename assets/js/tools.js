@@ -1,6 +1,6 @@
 // Proof tools that open as the student progresses, and the black screen before a hint.
 // The admin has every tool open and never waits, except while viewing the site as a
-// student. Who is playing comes from the account module (auth.js); until it loads,
+// student. Teachers get the same (fullAccess). Who is playing comes from the account module (auth.js); until it loads,
 // nobody is admin.
 //
 // Settings come in three layers, and each can leave a setting out: the defaults below,
@@ -74,6 +74,9 @@ export function setViewAs(track) {
   changed();
 }
 export const isAdmin = () => realAdmin() && !preview;
+// Admins and teachers can do everything: every theorem of every stage, every tool, no waiting.
+// While an admin views the site as a student, they get exactly what that student gets.
+export const fullAccess = () => isAdmin() || !!(auth && auth.isTeacher && auth.isTeacher());
 
 const currentUser = () => (auth && auth.currentUser ? auth.currentUser() : null);
 
@@ -111,7 +114,7 @@ const override = (id) => {
 };
 
 export function toolOpen(id, isSolved) {
-  if (isAdmin()) return true;
+  if (fullAccess()) return true;
   const o = override(id);
   if (o) return o === 'open';
   const open = current()[id];
@@ -139,15 +142,15 @@ export const toolsAfter = (stageId) => SETTABLE.filter((id) => stageOf(current()
 
 // ---------------------------------------------------------------- theorems the student proves
 // A problem with `proves: '<reason id>'` is where the student proves that theorem. Until
-// they solve it, the reason stays out of their toolbox, in every problem (the admin
-// always has it). PROVED_IN maps the reason to that problem.
+// they solve it, the reason stays out of their toolbox, in every problem (admins and teachers
+// always have it). PROVED_IN maps the reason to that problem.
 
 export const PROVED_IN = (() => {
   const m = {};
   for (const s of STAGES) for (const p of PROBLEMS[s.id] || []) if (p.proves) m[p.proves] = { stage: s.id, n: p.n };
   return m;
 })();
-export const reasonEarned = (id, isSolved) => isAdmin() || !PROVED_IN[id] || isSolved(PROVED_IN[id].stage, PROVED_IN[id].n);
+export const reasonEarned = (id, isSolved) => fullAccess() || !PROVED_IN[id] || isSolved(PROVED_IN[id].stage, PROVED_IN[id].n);
 // "2.4": the problem that proves the reason, as the site numbers problems.
 export const provedInLabel = (id) => (PROVED_IN[id] ? `${stageNumber(PROVED_IN[id].stage)}.${PROVED_IN[id].n}` : '');
 
@@ -161,7 +164,7 @@ export const hintSeconds = (k) => {
 // here or solved the problem before. `since`: when they opened the problem (ms).
 export function hintTryLeft({ ownRows, earned, since }) {
   const seconds = current().tryFirst;
-  if (isAdmin() || earned || !seconds || ownRows >= 1) return 0;
+  if (fullAccess() || earned || !seconds || ownRows >= 1) return 0;
   return Math.max(0, Math.ceil(seconds - (Date.now() - since) / 1000));
 }
 
@@ -253,7 +256,7 @@ export function congConclusions(p, results) {
 // is up and false on cancel (button, Escape, or `signal` aborting).
 
 export function hintWait({ seconds = hintSeconds(0), signal } = {}) {
-  if (isAdmin() || seconds <= 0) return Promise.resolve(true);
+  if (fullAccess() || seconds <= 0) return Promise.resolve(true);
   return new Promise((resolve) => {
     const R = 56;
     const C = 2 * Math.PI * R;

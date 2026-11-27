@@ -6,7 +6,7 @@ import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClai
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
-import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin,
+import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin, fullAccess,
   onToolsChange, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
@@ -742,8 +742,12 @@ function exactReason(query, allowed) {
 
 function bindProblem(root, { stage, n, problem: p, bank }) {
   // A theorem the student proves in its own problem stays out of their toolbox until then (tools.js).
+  // Admins and teachers (fullAccess) get every reason of every stage, not only this stage's.
   p.allowedAll = p.allowedAll || p.allowed;
-  const earnReasons = () => { p.allowed = p.allowedAll.filter((id) => reasonEarned(id, isSolved)); };
+  const earnReasons = () => {
+    const base = fullAccess() ? Object.keys(REASONS) : p.allowedAll;
+    p.allowed = base.filter((id) => reasonEarned(id, isSolved));
+  };
   earnReasons();
   // teacher question bank: progress under "tq-<id>"; the editor's preview saves nothing
   const pk = bank ? `tq-${bank.id}` : pkey(stage, n);
@@ -900,7 +904,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     box.hidden = !solved;
     $('#composer', root).classList.toggle('is-dim', solved);
     if (!solved) { box.innerHTML = ''; wasSolved = false; return; }
-    if (!wasSolved) { toolNews = toolsOpenedNow(); theoremNews = !!p.proves && !solvedHere() && !isAdmin(); syncTools(); }
+    if (!wasSolved) { toolNews = toolsOpenedNow(); theoremNews = !!p.proves && !solvedHere() && !fullAccess(); syncTools(); }
     const all = problemList();
     const idx = all.findIndex((x) => x.stage === stage && x.n === n);
     const nxt = bank ? null : all[idx + 1];
@@ -1275,7 +1279,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
 
   // This problem counts as solved as soon as the proof is complete, even before persist() saves it.
   const solvedNow = (s, k) => (s === stage && k === n && result.solvedAt >= 0) || isSolved(s, k);
-  const toolsOpenedNow = () => (isAdmin() ? [] : Object.keys(TOOLS).filter((id) => toolOpen(id, solvedNow) && !toolOpen(id, isSolved)));
+  const toolsOpenedNow = () => (fullAccess() ? [] : Object.keys(TOOLS).filter((id) => toolOpen(id, solvedNow) && !toolOpen(id, isSolved)));
 
   function syncTools() {
     const open = toolOpen('fillGivens', solvedNow);
@@ -1328,7 +1332,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     hintBtn.innerHTML = `${icon(locked ? 'lock' : TOOLS.hint.icon)} <span>${t('pp.hint')}</span>`;
     hintBtn.title = closed ? toolLockText('hint')
       : left > 0 ? t('tool.hint.tryFirstTitle', { time: durationText(toolSettings().tryFirst) })
-        : isAdmin() || done ? '' : t('tool.hint.title', { s: hintSeconds(state.hints) });
+        : fullAccess() || done ? '' : t('tool.hint.title', { s: hintSeconds(state.hints) });
     clearTimeout(tryTimer);
     if (!done && !closed && left > 0) tryTimer = setTimeout(syncHint, left * 1000 + 100);
   }
