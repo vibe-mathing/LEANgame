@@ -81,7 +81,7 @@ export const REASONS = {
   given: R(null, 'given', 0, 'g', ['נתון', 'נתון', 'הטענה מופיעה בנתוני השאלה.'], ['Given', 'Given', 'The claim is one of the givens.'], true),
   from_diagram: R(null, 'given', 0, 'cfg', ['מהשרטוט', 'מהשרטוט', 'עובדת מיקום שרואים בשרטוט, למשל ש-$D$ נמצאת על $BC$.'], ['From the diagram', 'From the diagram', 'A position fact read off the diagram, such as $D$ lying on $BC$.']),
   common_side: R(null, 'basic', 0, 'rfl', ['צלע משותפת', 'צלע משותפת', 'כל קטע שווה לעצמו.'], ['Common side', 'Common side', 'Every segment equals itself.'], true),
-  common_angle: R(null, 'basic', 0, 'rfl', ['זווית משותפת', 'זווית משותפת', 'כל זווית שווה לעצמה.'], ['Common angle', 'Common angle', 'Every angle equals itself.'], true),
+  common_angle: R(null, 'basic', 0, 'rfl', ['זווית משותפת', 'זווית משותפת', 'כל זווית שווה לעצמה, גם כשקוראים לה בשמות שונים, כמו $∢ABD$ ו-$∢ABC$ כש-$D$ על $BC$.'], ['Common angle', 'Common angle', 'Every angle equals itself, even under different names, like $∢ABD$ and $∢ABC$ when $D$ is on $BC$.'], true),
   algebra: R(null, 'algebra', 'many', 'by linarith', ['חשבון', 'חשבון: הצבה והעברת אגפים', 'הצבה, העברת אגפים וחישוב, על סמך השורות שציינתם בלבד. כשהמשחק מזהה חישוב, הוא משלים את הנימוק לבד.'], ['Algebra', 'Algebra and substitution', 'Substitution, rearranging and arithmetic, using only the rows you cite. When the game spots a calculation, it fills this in for you.'], true),
 
   // L01 angles
@@ -248,7 +248,7 @@ export const PROBLEMS = {
       ],
       hints: [
         { he: 'התחילו ממה שנתון: $∢AOC = 40°$. הנימוק: נתון.', en: 'Start from the given: $∢AOC = 40°$. Reason: given.' },
-        { he: '$∢AOC$ ו-$∢BOD$ הן זוויות קודקודיות. כתבו $∢AOC = ∢BOD$ ומצאו את הנימוק בארגז הכלים.', en: '$∢AOC$ and $∢BOD$ are vertical angles. Write $∢AOC = ∢BOD$ and find the reason in the toolbox.' },
+        { he: '$∢AOC$ ו-$∢BOD$ הן זוויות קודקודיות. כתבו $∢AOC = ∢BOD$ והקלידו את שם המשפט בשדה הנימוק.', en: '$∢AOC$ and $∢BOD$ are vertical angles. Write $∢AOC = ∢BOD$ and type the theorem name in the reason field.' },
         { he: 'עכשיו כתבו $∢BOD = 40°$. זה חישוב משתי השורות, והמשחק ישלים את הנימוק לבד.', en: 'Now write $∢BOD = 40°$. It is a calculation from the two rows, so the game fills in the reason.' },
       ],
     },

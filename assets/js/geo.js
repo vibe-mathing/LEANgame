@@ -13,16 +13,25 @@ const EPS = 1e-9;
 const ok = (claim) => ({ ok: true, claim });
 const fail = (key, vars) => ({ ok: false, error: { key, vars } });
 
+// While typing: < or > where a term starts (at the beginning, or after =, +, −, ≅)
+// means an angle, so it becomes ∢; Latin letters become capitals. Same length, so the
+// caret stays put.
+export function liveFormat(s) {
+  return String(s)
+    .replace(/(^|[=+\-−*≅]\s*|\d)[<>]/g, '$1∢')
+    .replace(/[a-z]/g, (c) => c.toUpperCase());
+}
+
 export function normalizeInput(s) {
   return String(s)
+    .replace(/\s+/g, '')
     .replace(/[∠∡]/g, '∢')
-    .replace(/</g, '∢')
+    .replace(/(^|[=+\-−*≅~\d])[<>]/g, '$1∢')
     .replace(/[Δ∆▵▲]/g, '△')
     .replace(/~=|=~|≡|≃|≌/g, '≅')
     .replace(/[º˚]/g, '°')
     .replace(/[−–]/g, '-')
     .replace(/[·×]/g, '*')
-    .replace(/\s+/g, '')
     .toUpperCase();
 }
 
@@ -31,24 +40,57 @@ const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=.,+\-*]/g, '');
 // ---------- keys ----------
 
 export const segKey = (a, b) => 's:' + [a, b].sort().join('');
-export const angKey = (a, v, b) => 'a:' + v + ':' + [a, b].sort().join('');
+
+// An angle is named by its vertex and one point on each arm. Points on the same ray
+// from the vertex name the same arm (∢ABD = ∢ABC when D lies on BC), so each arm is
+// replaced by a fixed representative point of its ray before building the key.
+export function angKey(a, v, b, rays) {
+  const ra = (rays && rays[v] && rays[v][a]) || a;
+  const rb = (rays && rays[v] && rays[v][b]) || b;
+  return 'a:' + v + ':' + [ra, rb].sort().join('');
+}
 
 export function termKey(t) {
+  if (t.key) return t.key;
   if (t.kind === 'seg') return segKey(...t.p);
   if (t.kind === 'ang') return angKey(...t.p);
   return 'n:' + t.type + ':' + t.v;
 }
 
+// For each vertex V and point X, the representative of the ray V→X: the first point
+// (alphabetically) that lies on that ray in the diagram.
+function computeRays(points) {
+  const names = Object.keys(points);
+  const rays = {};
+  for (const V of names) {
+    rays[V] = {};
+    for (const X of names) {
+      if (X === V) continue;
+      const vx = [points[X][0] - points[V][0], points[X][1] - points[V][1]];
+      let rep = X;
+      for (const Y of names) {
+        if (Y === V || Y === X) continue;
+        const vy = [points[Y][0] - points[V][0], points[Y][1] - points[V][1]];
+        const cross = vx[0] * vy[1] - vx[1] * vy[0];
+        const dot = vx[0] * vy[0] + vx[1] * vy[1];
+        if (Math.abs(cross) < 1e-6 * Math.hypot(...vx) * Math.hypot(...vy) && dot > 0 && Y < rep) rep = Y;
+      }
+      rays[V][X] = rep;
+    }
+  }
+  return rays;
+}
+
 // ---------- parsing ----------
 
-function parseAtom(body, points) {
+function parseAtom(body, points, rays) {
   let m;
   if ((m = body.match(/^∢([A-Z])([A-Z])([A-Z])$/))) {
     const pts = [m[1], m[2], m[3]];
     const bad = pts.find((x) => !points.includes(x));
     if (bad) return fail('unknownPoint', { p: `$${bad}$` });
     if (new Set(pts).size < 3) return fail('repeatPoint');
-    return { ok: true, term: { kind: 'ang', p: pts } };
+    return { ok: true, term: { kind: 'ang', p: pts, key: angKey(pts[0], pts[1], pts[2], rays) } };
   }
   if (/^∢[A-Z]{1,2}$/.test(body)) return fail('angle3');
   if ((m = body.match(/^([A-Z])([A-Z])$/))) {
@@ -64,7 +106,7 @@ function parseAtom(body, points) {
 }
 
 // One side of an equation: a sum of (coefficient × segment/angle) plus a constant.
-function parseSide(src, points) {
+function parseSide(src, points, rays) {
   if (!src) return fail('noRelation');
   const tokens = src.match(/[+-]?[^+-]+/g);
   if (!tokens || tokens.join('') !== src) return fail('unknownTerm', { t: `$${safe(src)}$` });
@@ -82,7 +124,7 @@ function parseSide(src, points) {
     }
     m = body.match(/^(\d+(?:[.,]\d+)?)?\*?(.+)$/);
     const coef = m && m[1] ? parseFloat(m[1].replace(',', '.')) : 1;
-    const r = parseAtom(m ? m[2] : body, points);
+    const r = parseAtom(m ? m[2] : body, points, rays);
     if (!r.ok) return r;
     const key = termKey(r.term);
     const same = terms.find((x) => termKey(x.t) === key);
@@ -99,7 +141,10 @@ function simpleTerm(side, of) {
   return null;
 }
 
-export function parseClaim(input, points) {
+// ctx is a prepared problem (or just a list of point names).
+export function parseClaim(input, ctx) {
+  const points = Array.isArray(ctx) ? ctx : ctx.pointNames;
+  const rays = Array.isArray(ctx) ? null : ctx.rays;
   const s = normalizeInput(input);
   if (!s) return fail('empty');
   if (s.includes('≅')) {
@@ -119,7 +164,7 @@ export function parseClaim(input, points) {
   if (parts.length !== 2 || !parts[0] || !parts[1]) return fail('noRelation');
   const sides = [];
   for (const part of parts) {
-    const r = parseSide(part, points);
+    const r = parseSide(part, points, rays);
     if (!r.ok) return r;
     sides.push(r.side);
   }
@@ -263,13 +308,14 @@ export function prepareProblem(p, stageId) {
   if (p.prepared) return p;
   p.stage = stageId;
   p.pointNames = Object.keys(p.points);
+  p.rays = computeRays(p.points);
   p.allowed = p.allowed || unlockedReasons(stageId);
   p.givensParsed = p.givens.map((g) => {
-    const r = parseClaim(g.claim, p.pointNames);
+    const r = parseClaim(g.claim, p);
     if (!r.ok) console.error('Bad given', g.claim, r.error);
     return r.claim;
   });
-  const goal = parseClaim(p.goal, p.pointNames);
+  const goal = parseClaim(p.goal, p);
   if (!goal.ok) console.error('Bad goal', p.goal, goal.error);
   p.goalParsed = goal.claim;
   p.goalKey = claimKey(goal.claim);
@@ -291,9 +337,9 @@ function degenerate(problem, T) {
 // ---------- congruence criteria ----------
 
 const sideEq = (P, Q, V, i, j) => inSpan(V, diffVec(segKey(P[i], P[j]), segKey(Q[i], Q[j])));
-const angEq = (P, Q, V, k) => {
+const angEq = (P, Q, V, k, rays) => {
   const [i, j] = others(k);
-  return inSpan(V, diffVec(angKey(P[i], P[k], P[j]), angKey(Q[i], Q[k], Q[j])));
+  return inSpan(V, diffVec(angKey(P[i], P[k], P[j], rays), angKey(Q[i], Q[k], Q[j], rays)));
 };
 const sideStr = (P, Q, i, j) => `${P[i]}${P[j]} = ${Q[i]}${Q[j]}`;
 const angStr = (P, Q, k) => {
@@ -309,20 +355,20 @@ function best(options) {
 
 const CRITERIA = {
   SSS: (P, Q, V) => best([[[0, 1], [1, 2], [0, 2]].filter(([i, j]) => !sideEq(P, Q, V, i, j)).map(([i, j]) => sideStr(P, Q, i, j))]),
-  SAS: (P, Q, V) => best([0, 1, 2].map((k) => {
+  SAS: (P, Q, V, pr) => best([0, 1, 2].map((k) => {
     const [i, j] = others(k);
     const miss = [];
     if (!sideEq(P, Q, V, k, i)) miss.push(sideStr(P, Q, k, i));
-    if (!angEq(P, Q, V, k)) miss.push(angStr(P, Q, k));
+    if (!angEq(P, Q, V, k, pr.rays)) miss.push(angStr(P, Q, k));
     if (!sideEq(P, Q, V, k, j)) miss.push(sideStr(P, Q, k, j));
     return miss;
   })),
-  ASA: (P, Q, V) => best([0, 1, 2].map((k) => {
+  ASA: (P, Q, V, pr) => best([0, 1, 2].map((k) => {
     const [i, j] = others(k);
     const miss = [];
-    if (!angEq(P, Q, V, i)) miss.push(angStr(P, Q, i));
+    if (!angEq(P, Q, V, i, pr.rays)) miss.push(angStr(P, Q, i));
     if (!sideEq(P, Q, V, i, j)) miss.push(sideStr(P, Q, i, j));
-    if (!angEq(P, Q, V, j)) miss.push(angStr(P, Q, j));
+    if (!angEq(P, Q, V, j, pr.rays)) miss.push(angStr(P, Q, j));
     return miss;
   })),
   // Two sides and the angle opposite the larger of them.
@@ -333,7 +379,7 @@ const CRITERIA = {
       const [i, j] = others(k);
       for (const adj of [i, j]) {
         const miss = [];
-        if (!angEq(P, Q, V, k)) miss.push(angStr(P, Q, k));
+        if (!angEq(P, Q, V, k, problem.rays)) miss.push(angStr(P, Q, k));
         if (!sideEq(P, Q, V, i, j)) miss.push(sideStr(P, Q, i, j));
         if (!sideEq(P, Q, V, k, adj)) miss.push(sideStr(P, Q, k, adj));
         const larger = dist(problem, P[i], P[j]) > dist(problem, P[k], P[adj]) + 1e-9;
@@ -379,7 +425,7 @@ function congruenceCheck(rid) {
 
 function cpctCheck(kind) {
   const isSide = kind === 'side';
-  return (claim, refRows) => {
+  return (claim, refRows, problem) => {
     const ref = refRows.length === 1 && refRows[0].claim.type === 'cong' ? refRows[0] : null;
     const fallback = `${isSide ? 'cong_side' : 'cong_angle'} ${refNames(refRows)}`.trim();
     if (!isEqOf(claim, isSide ? 'seg' : 'ang')) {
@@ -393,7 +439,7 @@ function cpctCheck(kind) {
       ? [[0, 1, 'AB'], [1, 2, 'BC'], [0, 2, 'AC']].map(([i, j, name]) => [segKey(P[i], P[j]), segKey(Q[i], Q[j]), `cong_side_${name}`])
       : [0, 1, 2].map((k) => {
         const [i, j] = others(k);
-        return [angKey(P[i], P[k], P[j]), angKey(Q[i], Q[k], Q[j]), `cong_angle_${'ABC'[k]}`];
+        return [angKey(P[i], P[k], P[j], problem.rays), angKey(Q[i], Q[k], Q[j], problem.rays), `cong_angle_${'ABC'[k]}`];
       });
     for (const [a, b, name] of options) {
       if (k1 === a && k2 === b) return { ok: true, proof: `${name} s${ref.n}` };
@@ -404,7 +450,11 @@ function cpctCheck(kind) {
 }
 
 // Index of a "between" fact of the diagram: O strictly between p and q.
-const betweenIdx = (problem, p, o, q) => problem.config.findIndex((c) => c.type === 'between' && c.o === o && ((c.a === p && c.b === q) || (c.a === q && c.b === p)));
+function betweenIdx(problem, p, o, q) {
+  const r = (x) => problem.rays[o][x];
+  return problem.config.findIndex((c) => c.type === 'between' && c.o === o
+    && ((r(c.a) === r(p) && r(c.b) === r(q)) || (r(c.a) === r(q) && r(c.b) === r(p))));
+}
 
 const CHECKS = {
   given(claim, refRows, problem) {
@@ -420,7 +470,8 @@ const CHECKS = {
   common_angle(claim) {
     if (!isEqOf(claim, 'ang')) return { ok: false, msg: { key: 'commonAngleNeedsAng' }, proof: 'rfl' };
     if (termKey(claim.left) !== termKey(claim.right)) return { ok: false, msg: { key: 'notCommonAngle' }, proof: 'rfl' };
-    return { ok: true, proof: 'rfl' };
+    const same = angKey(...claim.left.p) === angKey(...claim.right.p);
+    return { ok: true, proof: same ? 'rfl' : 'ang_same_rays (by from_diagram)' };
   },
   vert_angles(claim, refRows, problem) {
     const base = 'vert_angles_eq';
@@ -448,12 +499,13 @@ const CHECKS = {
     const [t1, t2] = angs.map((k) => terms.find((t) => termKey(t) === k));
     if (t1.p[1] !== t2.p[1]) return { ok: false, msg: { key: 'adjSameVertex' }, proof: base };
     const O = t1.p[1];
+    const ray = (x) => problem.rays[O][x];
     const r1 = [t1.p[0], t1.p[2]];
     const r2 = [t2.p[0], t2.p[2]];
-    const shared = r1.find((x) => r2.includes(x));
+    const shared = r1.find((x) => r2.some((y) => ray(y) === ray(x)));
     if (shared) {
-      const a = r1.find((x) => x !== shared);
-      const b = r2.find((x) => x !== shared);
+      const a = r1.find((x) => ray(x) !== ray(shared));
+      const b = r2.find((x) => ray(x) !== ray(shared));
       const ci = betweenIdx(problem, a, O, b);
       if (ci >= 0) return { ok: true, proof: `${base} cfg${ci + 1}` };
     }
@@ -485,7 +537,7 @@ export function checkProof(problem, rows) {
   const results = [];
   rows.forEach((row, i) => {
     const n = i + 1;
-    const parsed = parseClaim(row.text, problem.pointNames);
+    const parsed = parseClaim(row.text, problem);
     const res = { n, parsed, ok: false, msg: null, lean: null, goal: false };
     results.push(res);
     if (!parsed.ok) { res.msg = parsed.error; return; }
@@ -525,8 +577,10 @@ export function checkProof(problem, rows) {
 
 // If a claim is pure calculation from earlier correct rows (or an identity),
 // return the reason and the fewest rows that give it; otherwise null.
-export function autoReason(results, claim, upto) {
-  if (!claim || claim.type !== 'eq') return null;
+export function autoReason(problem, results, claim, upto) {
+  if (!claim) return null;
+  if (problem.givensParsed.some((g) => claimKey(g) === claimKey(claim))) return { reason: 'given', refs: [] };
+  if (claim.type !== 'eq') return null;
   const target = eqVec(claim);
   if (!target.size) {
     if (isEqOf(claim, 'seg')) return { reason: 'common_side', refs: [] };
