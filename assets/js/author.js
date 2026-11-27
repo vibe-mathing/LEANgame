@@ -13,6 +13,7 @@ import { icon } from './icons.js';
 import * as auth from './auth.js';
 import * as bank from './qbank.js';
 import * as Q from './qparse.js';
+import { problemToLean, leanToQuestion } from './leanconv.js';
 
 // ---------------------------------------------------------------- strings
 
@@ -48,6 +49,22 @@ const S = {
     'ed.text.lead': 'כתבו כמו בדף עבודה: שורת תיאור, שורת "נתון:" ושורת "הוכיחו:". מקביל כותבים $∥$ (או ||), זווית $∢$ (או <).',
     'ed.text.ph': 'במשולש ABC הנקודה D נמצאת על הצלע BC.\nנתון: AB = AC, AD חוצה את זווית BAC.\nהוכיחו: BD = CD.',
     'ed.example': 'דוגמה',
+    'lean.import': 'ייבוא מ-Lean',
+    'lean.paste': 'הדביקו כאן משפט Lean',
+    'lean.importLead': 'נקודות מסוג Point, והנחות באוצר המילים של המשחק: len, ang, Sbtw, Par, Perp, Cong, Sim, IsParallelogram, IsMidpoint, IsTangent ועוד. נבנים נוסח בעברית ושרטוט שבו כל הנתונים מתקיימים, ואפשר לשנות את שניהם לפני הבדיקה.',
+    'lean.convert': 'המרה לשאלה',
+    'lean.close': 'סגירה',
+    'lean.done': 'הנוסח והשרטוט מוכנים. עברו עליהם והמשיכו כרגיל.',
+    'lean.line': 'שורה {n}:',
+    'lean.h': 'Lean',
+    'lean.lead': 'השאלה כמשפט Lean עם sorry, באוצר המילים של הספרייה. הנוסח שלכם נשמר בהערות, כך שייבוא חוזר מחזיר אותו.',
+    'lean.show': 'הצגת ה-Lean',
+    'lean.hide': 'הסתרה',
+    'lean.copy': 'העתקה',
+    'lean.copied': 'הועתק',
+    'lean.download': 'הורדת קובץ',
+    'lean.fixFirst': 'קודם צריך לתקן את הבעיות שלמעלה.',
+    'lean.added': 'נוספו מהשרטוט עובדות שהמשפט צריך: {list}.',
     'ed.chips.sym': 'סימנים',
     'ed.chips.words': 'מושגים',
     'ed.chips.parts': 'מבנה',
@@ -273,6 +290,22 @@ const S = {
     'ed.text.lead': 'Write it as on a worksheet: a line of setup, a "נתון:" (given) line and a "הוכיחו:" (prove) line. Parallel is $∥$ (or ||), angle is $∢$ (or <).',
     'ed.text.ph': 'במשולש ABC הנקודה D נמצאת על הצלע BC.\nנתון: AB = AC, AD חוצה את זווית BAC.\nהוכיחו: BD = CD.',
     'ed.example': 'Example',
+    'lean.import': 'Import from Lean',
+    'lean.paste': 'Paste a Lean theorem here',
+    'lean.importLead': 'Points of type Point, and hypotheses in the game\'s vocabulary: len, ang, Sbtw, Par, Perp, Cong, Sim, IsParallelogram, IsMidpoint, IsTangent and more. You get Hebrew wording and a drawing where every given holds, and can change both before the review.',
+    'lean.convert': 'Convert to a question',
+    'lean.close': 'Close',
+    'lean.done': 'The wording and the drawing are ready. Look them over and go on as usual.',
+    'lean.line': 'Line {n}:',
+    'lean.h': 'Lean',
+    'lean.lead': 'The question as a Lean theorem with sorry, in the library\'s vocabulary. Your wording is kept in comments, so importing it again brings it back.',
+    'lean.show': 'Show the Lean',
+    'lean.hide': 'Hide',
+    'lean.copy': 'Copy',
+    'lean.copied': 'Copied',
+    'lean.download': 'Download file',
+    'lean.fixFirst': 'Fix the problems above first.',
+    'lean.added': 'Facts from the picture that the theorem needs were added: {list}.',
     'ed.chips.sym': 'Symbols',
     'ed.chips.words': 'Words',
     'ed.chips.parts': 'Parts',
@@ -822,11 +855,18 @@ function stepWrite(body, alive, redraw) {
   body.innerHTML = `
     <div class="au-grid">
       <section class="au-text paper">
-        <div class="au-sec-h"><h2 class="acct-h2">${esc(tt('ed.text.h'))}</h2><button type="button" class="tool-btn" id="auExample">${icon('bulb')} ${esc(tt('ed.example'))}</button></div>
+        <div class="au-sec-h"><h2 class="acct-h2">${esc(tt('ed.text.h'))}</h2><span class="au-sec-btns"><button type="button" class="tool-btn" id="auExample">${icon('bulb')} ${esc(tt('ed.example'))}</button><button type="button" class="tool-btn" id="auLeanImport" aria-expanded="false" aria-controls="auLean">${icon('code')} ${esc(tt('lean.import'))}</button></span></div>
         <p class="acct-hint">${srich(tt('ed.text.lead'))}</p>
         ${Object.entries(CHIPS).map(([g, list]) => `<div class="au-chips" role="group" aria-label="${esc(tt('ed.chips.' + g))}"><span class="au-chips-l">${esc(tt('ed.chips.' + g))}</span>${list.map(([label, ins]) => `<button type="button" class="${g === 'sym' ? 'symkey' : 'qchip'}" data-ins="${esc(ins)}">${esc(label)}</button>`).join('')}</div>`).join('')}
         <textarea id="auText" class="au-textarea" rows="7" dir="auto" spellcheck="false" placeholder="${esc(tt('ed.text.ph'))}">${esc(ED.text)}</textarea>
         <div class="au-live" id="auLive" aria-live="polite"></div>
+        <div class="au-lean" id="auLean" hidden>
+          <label class="au-field"><span>${esc(tt('lean.paste'))}</span>
+            <textarea id="auLeanSrc" class="acct-input au-lean-src" rows="8" dir="ltr" spellcheck="false" placeholder="theorem t (A B C D : Point) (h : Sbtw ℝ B D C) (g : len A B = len A C) : …"></textarea></label>
+          <p class="acct-hint">${esc(tt('lean.importLead'))}</p>
+          <div class="au-lean-actions"><button type="button" class="btn btn-primary btn-small" id="auLeanGo">${icon('arrow', 'dir')} ${esc(tt('lean.convert'))}</button><button type="button" class="linkish" id="auLeanClose">${esc(tt('lean.close'))}</button></div>
+          <div class="au-lean-msgs" id="auLeanMsg" aria-live="polite"></div>
+        </div>
       </section>
       <section class="au-draw paper">
         <div class="au-sec-h"><h2 class="acct-h2">${esc(tt('ed.draw.h'))}</h2></div>
@@ -1455,6 +1495,28 @@ function stepWrite(body, alive, redraw) {
         ui.sel = []; ui.pending = null;
         changed();
         break;
+      case 'auLeanImport': case 'auLeanClose': {
+        const panel = $('#auLean');
+        panel.hidden = b.id === 'auLeanClose' || !panel.hidden;
+        $('#auLeanImport').setAttribute('aria-expanded', String(!panel.hidden));
+        if (!panel.hidden) $('#auLeanSrc').focus();
+        break;
+      }
+      case 'auLeanGo': {
+        // a Lean theorem → the words and a drawing that witnesses it; the teacher goes on as usual
+        const res = leanToQuestion($('#auLeanSrc').value);
+        const msgs = (list, cls) => (list || []).map((m) => `<p class="au-msg ${cls}">${m.line ? `<b>${esc(tt('lean.line', { n: m.line }))}</b> ` : ''}${esc(L(m.msg || m))}${m.src ? ` <code dir="ltr">${esc(m.src)}</code>` : ''}</p>`).join('');
+        if (!res.ok) { $('#auLeanMsg').innerHTML = msgs(res.errors, 'is-err') + msgs(res.notes, 'is-warn'); break; }
+        if (ED.drawing.pts.length) pushHistory(); // undo brings the previous drawing back
+        ED.text = res.text; textEl.value = ED.text;
+        ED.drawing = res.drawing;
+        ED.review = res.title || res.stage ? { text: null, title: res.title || '', titleSet: !!res.title, stage: res.stage, stageSet: !!res.stage, hints: [], marksOff: [] } : null;
+        ED.reviewFor = '';
+        ui.sel = []; ui.pending = null;
+        $('#auLeanMsg').innerHTML = `<p class="au-msg is-ok">${esc(tt('lean.done'))}</p>${msgs(res.notes, 'is-warn')}`;
+        changed();
+        break;
+      }
       case 'auNext': {
         const err = !ED.text.trim() ? tt('ed.needText') : ED.drawing.pts.length < 2 ? tt('ed.needDrawing') : '';
         const el = $('#auStepErr');
@@ -1476,6 +1538,27 @@ function stepWrite(body, alive, redraw) {
 // ---------------------------------------------------------------- step 2: the review
 
 const SECTIONS = ['meta', 'figure', 'givens', 'goal', 'marks'];
+
+// The question as a Lean theorem (leanconv.js), kept until the question changes: the search for
+// facts the picture adds takes a moment.
+let leanCache = { key: '', out: null };
+function leanOf(rv) {
+  const problem = Q.buildProblem(rv, ED.drawing);
+  const opts = { title: rv.title, text: ED.text, ask: rv.goal && rv.goal.ask ? rv.goal.ask : null, name: `tq_${ED.id || 'new'}` };
+  const key = JSON.stringify([problem, rv.stage, opts, getLang()]);
+  if (leanCache.key === key) return leanCache.out;
+  let out = null;
+  try {
+    out = problemToLean({ ...problem, stage: rv.stage }, opts);
+    const en = getLang() === 'en';
+    out.added = [
+      ...out.triangles.map((T) => (en ? `${T.join('')} is a triangle` : `${T.join('')} משולש`)),
+      ...out.sides.map((s) => (en ? `${s.a}, ${s.b} on ${s.same ? 'the same side of' : 'opposite sides of'} ${s.p}${s.q}` : `${s.a} ו-${s.b} ${s.same ? 'באותו צד של' : 'משני צדי'} ${s.p}${s.q}`)),
+    ].join('; ');
+  } catch (e) { console.warn('[author] lean', e); }
+  leanCache = { key, out };
+  return out;
+}
 
 function ensureReview() {
   const s = sig(ED.text, ED.drawing);
@@ -1640,6 +1723,22 @@ function stepReview(body, alive, redraw) {
       <ol class="au-hints">${(rv.hints || []).map((h, i) => `<li><textarea class="acct-input au-ta" rows="2" data-hint="${i}" placeholder="${esc(tt('rv.hintPh'))}">${esc(h)}</textarea><button type="button" class="au-x" data-unhint="${i}" aria-label="${esc(tt('rv.remove'))}">${icon('trash')}</button></li>`).join('')}</ol>
       <button type="button" class="tool-btn" id="rvAddHint">${icon('bulb')} ${esc(tt('rv.addHint'))}</button>`, true);
 
+    // Lean: the question as a theorem, worked out only when opened
+    let leanBody = `<button type="button" class="tool-btn" data-act="leanShow">${icon('code')} ${esc(tt('lean.show'))}</button>`;
+    if (ED.leanOpen) {
+      const out = ctxRep.errors.length ? null : leanOf(rv);
+      leanBody = !out ? `<p class="au-msg is-warn">${esc(tt('lean.fixFirst'))}</p>` : `
+        ${out.added ? `<p class="acct-hint">${esc(tt('lean.added', { list: out.added }))}</p>` : ''}
+        ${out.warnings.map((w) => `<p class="au-msg is-warn">${esc(L(w))}</p>`).join('')}
+        <pre class="lean au-lean-pre" dir="ltr">${esc(out.lean)}</pre>
+        <div class="au-lean-actions">
+          <button type="button" class="tool-btn" data-act="leanCopy">${tic('copy')} <span>${esc(tt('lean.copy'))}</span></button>
+          <button type="button" class="tool-btn" data-act="leanDownload">${icon('code')} ${esc(tt('lean.download'))}</button>
+          <button type="button" class="linkish" data-act="leanHide">${esc(tt('lean.hide'))}</button>
+        </div>`;
+    }
+    const lean = sec('lean', tt('lean.h'), `<p class="acct-hint">${esc(tt('lean.lead'))}</p>${leanBody}`, true);
+
     return `
       <p class="acct-lead au-rvlead">${esc(tt('rv.lead'))}</p>
       <div class="au-rv">
@@ -1654,7 +1753,7 @@ function stepReview(body, alive, redraw) {
         </aside>
         <div class="au-rvmain">
           ${status}
-          ${meta}${figure}${givens}${goal}${marks}${hints}
+          ${meta}${figure}${givens}${goal}${marks}${hints}${lean}
           <div class="au-foot au-savebar paper">
             <label class="au-field au-inline"><span>${esc(tt('rv.status'))}</span>
               <select class="acct-input" id="rvStatus"><option value="published" ${ED.status === 'published' ? 'selected' : ''}>${esc(tt('rv.published'))}</option><option value="draft" ${ED.status === 'draft' ? 'selected' : ''}>${esc(tt('rv.draftS'))}</option></select></label>
@@ -1813,6 +1912,22 @@ function stepReview(body, alive, redraw) {
         } catch (err) {
           saving = false; saveErr = errText(err); render();
         }
+        break;
+      }
+      case 'leanShow': case 'leanHide': ED.leanOpen = b.dataset.act === 'leanShow'; render(); break;
+      case 'leanCopy': {
+        const out = leanCache.out;
+        if (out && await copyText(out.lean)) { const s = b.querySelector('span'); if (s) s.textContent = tt('lean.copied'); }
+        break;
+      }
+      case 'leanDownload': {
+        const out = leanCache.out;
+        if (!out) break;
+        const url = URL.createObjectURL(new Blob([out.lean], { type: 'text/plain;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = `${out.name}.lean`;
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         break;
       }
       default: break;
