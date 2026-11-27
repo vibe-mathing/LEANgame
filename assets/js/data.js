@@ -85,7 +85,7 @@ export const REASONS = {
   adj_angles: R('L01', 'theorem', 0, 'adj_angles_sum', ['זוויות צמודות', 'סכום זוויות צמודות', 'סכום זוויות צמודות הוא $180°$.'], ['Adjacent angles', 'Adjacent angles', 'Adjacent angles sum to $180°$.'], true),
   straight_angle: R('L01', 'theorem', 0, 'straight_angle', ['זווית שטוחה', 'זווית שטוחה', 'זווית שהשוקיים שלה יוצרות ישר אחד היא בת $180°$.'], ['Straight angle', 'Straight angle', 'An angle whose arms form one straight line measures $180°$.'], true),
   vert_angles: R('L01', 'theorem', 0, 'vert_angles_eq', ['זוויות קודקודיות', 'זוויות קודקודיות שוות', 'זוויות קודקודיות שוות זו לזו.'], ['Vertical angles', 'Vertical angles are equal', 'Vertical angles are equal.'], true),
-  around_point: R('L01', 'theorem', 0, 'around_point_sum', ['זוויות סביב נקודה', 'זוויות סביב נקודה', 'סכום הזוויות סביב נקודה הוא $360°$.'], ['Angles around a point', 'Angles around a point', 'The angles around a point sum to $360°$.']),
+  around_point: R('L01', 'theorem', 0, 'around_point_sum', ['זוויות סביב נקודה', 'זוויות סביב נקודה', 'סכום הזוויות סביב נקודה הוא $360°$.'], ['Angles around a point', 'Angles around a point', 'The angles around a point sum to $360°$.'], true),
   bisector_def: R('L01', 'definition', 0, 'bisector_def', ['חוצה זווית', 'הגדרת חוצה זווית', 'חוצה זווית מחלק אותה לשתי זוויות שוות.'], ['Angle bisector', 'Definition of angle bisector', 'An angle bisector splits an angle into two equal angles.'], true),
   midpoint_def: R('L01', 'definition', 0, 'midpoint_def', ['אמצע קטע', 'הגדרת אמצע קטע', 'אמצע קטע מחלק אותו לשני קטעים שווים.'], ['Midpoint', 'Definition of midpoint', 'A midpoint splits a segment into two equal parts.']),
   perp_def: R('L01', 'definition', 1, 'perp_def', ['ישרים מאונכים', 'הגדרת ישרים מאונכים', 'ישרים מאונכים יוצרים זווית של $90°$, ולהפך: זווית של $90°$ אומרת שהישרים מאונכים.'], ['Perpendicular lines', 'Definition of perpendicular', 'Perpendicular lines form a $90°$ angle, and a $90°$ angle means the lines are perpendicular.'], true),
@@ -101,6 +101,10 @@ export const REASONS = {
   // L03 isosceles
   iso_base: R('L03', 'theorem', 1, 'iso_base_angles', ['זוויות הבסיס', 'זוויות הבסיס במשולש שווה שוקיים', 'במשולש שווה שוקיים זוויות הבסיס שוות.'], ['Base angles', 'Base angles of an isosceles triangle', 'The base angles of an isosceles triangle are equal.'], true),
   iso_converse: R('L03', 'theorem', 1, 'iso_of_angles', ['שתי זוויות שוות', 'משולש עם שתי זוויות שוות', 'משולש שיש בו שתי זוויות שוות הוא שווה שוקיים.'], ['Two equal angles', 'Triangle with two equal angles', 'A triangle with two equal angles is isosceles.'], true),
+  // An equilateral triangle, both ways (geo.js equi_sides, equi_angles). A row says one equality at
+  // a time; "AB = BC = CA" in the composer becomes two rows with the same reason.
+  equi_sides: R('L03', 'theorem', 'many', 'equilateral_of_angles', ['שלוש זוויות שוות', 'משולש שכל זוויותיו שוות', 'משולש שכל שלוש זוויותיו שוות הוא שווה צלעות: כל הצלעות שלו שוות.'], ['Three equal angles', 'Triangle with three equal angles', 'A triangle whose three angles are equal is equilateral: all its sides are equal.'], true),
+  equi_angles: R('L04', 'theorem', 'many', 'equilateral_60', ['זוויות משולש שווה צלעות', 'זוויות במשולש שווה צלעות', 'במשולש שווה צלעות כל זווית היא $60°$.'], ['Angles of an equilateral triangle', 'Angles of an equilateral triangle', 'Each angle of an equilateral triangle is $60°$.'], true),
   iso_median: R('L03', 'theorem', 'many', 'iso_median', ['תיכון לבסיס', 'הקטע המיוחד במשולש שווה שוקיים', 'במשולש שווה שוקיים התיכון לבסיס, הגובה לבסיס וחוצה זווית הראש הם אותו קטע: אם הוא אחד מהם, הוא גם שני האחרים.'], ['Median to the base', 'The special segment of an isosceles triangle', 'In an isosceles triangle the median to the base, the altitude to the base and the apex bisector are one segment: if it is one of them, it is the other two.'], true),
 
   // L04 parallel lines
@@ -161,7 +165,9 @@ export const REASONS = {
   tan_def: R('L11', 'definition', 1, 'tan_def', ['הגדרת טנגנס', 'הגדרת טנגנס', 'במשולש ישר זווית, טנגנס של זווית חדה הוא הניצב שמולה חלקי הניצב שלידה.'], ['Tangent', 'Definition of tangent', 'In a right triangle, the tangent of an acute angle is the opposite leg over the adjacent leg.'], true),
   law_sines: R('L11', 'theorem', 0, 'law_sines', ['משפט הסינוסים', 'משפט הסינוסים', 'במשולש, היחס בין צלע לסינוס הזווית שמולה קבוע ושווה לקוטר המעגל החוסם.'], ['Law of sines', 'Law of sines', 'Each side over the sine of the opposite angle is constant, equal to the circumcircle diameter.'], true),
   law_cosines: R('L11', 'theorem', 0, 'law_cosines', ['משפט הקוסינוסים', 'משפט הקוסינוסים', 'ריבוע צלע שווה לסכום ריבועי שתי האחרות, פחות פעמיים מכפלתן בקוסינוס הזווית שביניהן.'], ['Law of cosines', 'Law of cosines', 'A side squared equals the other two squared, minus twice their product times the cosine of the angle between them.'], true),
-  tri_area: R('L11', 'theorem', 0, 'tri_area_sin', ['שטח משולש', 'שטח משולש בעזרת סינוס', 'שטח משולש הוא חצי מכפלת שתי צלעות בסינוס הזווית שביניהן.'], ['Triangle area', 'Triangle area with sine', 'The area of a triangle is half the product of two sides times the sine of the angle between them.']),
+  // S△ABC in claims (geo.js parseAtom). With the sine no rows are cited; with a height, the row
+  // that says it is perpendicular.
+  tri_area: R('L11', 'theorem', 'many', 'tri_area_sin', ['שטח משולש', 'שטח משולש', 'שטח משולש הוא חצי צלע כפול הגובה אליה ($S△ABC = \\frac{BC·AH}{2}$), או חצי מכפלת שתי צלעות בסינוס הזווית שביניהן ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], ['Triangle area', 'Triangle area', 'The area of a triangle is half a side times the height to it ($S△ABC = \\frac{BC·AH}{2}$), or half of two sides times the sine of the angle between them ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], true),
 };
 
 // The proposed order of geometry levels (to be aligned with the curriculum).

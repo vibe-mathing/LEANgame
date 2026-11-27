@@ -2,7 +2,7 @@
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
 import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList, UNI_SITE } from './data.js';
-import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions } from './geo.js';
+import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions, claimKey, findReason } from './geo.js';
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
@@ -632,7 +632,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
           <dl class="facts">
             <div class="fact-group">
               <dt>${t('pp.given')}</dt>
-              <dd><ul>${p.givens.map((g, i) => `<li data-claim="${esc(g.claim)}" tabindex="0">${g.text ? `${rich(L(g.text))} <small>${t('pp.meaning')} ${mathSpan(fmtClaim(p.givensParsed[i]))}</small>` : mathSpan(fmtClaim(p.givensParsed[i]))}</li>`).join('')}</ul></dd>
+              <dd><ul>${p.givens.map((g, i) => `<li data-claim="${esc(g.claim)}" data-g="${i}" tabindex="0">${g.text ? `${rich(L(g.text))} <small>${t('pp.meaning')} ${mathSpan(fmtClaim(p.givensParsed[i]))}</small>` : mathSpan(fmtClaim(p.givensParsed[i]))}</li>`).join('')}</ul></dd>
             </div>
             ${p.config.length || renamed.length ? `<div class="fact-group diag">
               <dt>${t('pp.fromDiagram')}</dt>
@@ -683,7 +683,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', 'S△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9, 'S△': 11 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
@@ -699,6 +699,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
                       aria-labelledby="reasonLabel" placeholder="${t('pp.reasonType')}" autocomplete="off" spellcheck="false">
                     <ul class="reason-sugg" id="reasonSugg" role="listbox" aria-labelledby="reasonLabel" hidden></ul>
                   </div>
+                  <button type="button" class="mini-tool ask-reason" id="askReasonBtn" hidden>${icon(TOOLS.askReason.icon)} ${t('tool.askReason.btn')}</button>
                 </div>
                 <p class="auto-line" id="autoLine" hidden></p>
               </div>
@@ -724,11 +725,14 @@ function viewProblem({ stage, n, problem: p, bank }) {
 // Matching ignores dots, quotes and spaces, so "צזצ" finds "צ.ז.צ".
 const squash = (s) => String(s).toLowerCase().replace(/[.\s"'״׳\-–,:()]/g, '');
 
-function matchReasons(query, allowed) {
+// usable(id): false for a reason the checker can't take here (area of a triangle: claims have no
+// areas yet; a definition only a given cites), so it isn't offered.
+function matchReasons(query, allowed, usable = () => true) {
   const q = squash(query);
   if (!q) return [];
   const scored = [];
   for (const [id, r] of Object.entries(REASONS)) {
+    if (!usable(id)) continue;
     const names = [r.short.he, r.short.en, r.name.he, r.name.en, r.lean];
     let score = 0;
     for (const nm of names) {
@@ -892,6 +896,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
         <span class="preason">${row.reason ? reasonShort(row.reason) : '—'}${refsText(row.refs)}${row.auto ? `<span class="auto-tag" title="${t('pp.autoTitle')}">${icon('spark')}${t('pp.autoTag')}</span>` : ''}${row.skip ? `<span class="auto-tag skip-tag" title="${esc(PX('skipTagTitle'))}">${icon('spark')}${esc(PX('skipTag'))}</span>` : ''}</span>
         <span class="pstat" title="${r.byLean ? t('lean.checked') + ' · ' : ''}${r.ok ? t('pp.ok') : t('pp.bad')}">${icon(r.ok ? 'check' : 'x')}<span class="sr">${r.ok ? t('pp.ok') : t('pp.bad')}</span></span>
         <span class="pactions">
+          <button type="button" class="mini mv-up" data-act="up" aria-label="${t('pp.moveUp', { n: i + 1 })}" title="${t('pp.moveUp', { n: i + 1 })}"${i === 0 ? ' disabled' : ''}>${icon('chevron')}</button>
+          <button type="button" class="mini mv-down" data-act="down" aria-label="${t('pp.moveDown', { n: i + 1 })}" title="${t('pp.moveDown', { n: i + 1 })}"${i === results.length - 1 ? ' disabled' : ''}>${icon('chevron')}</button>
           <button type="button" class="mini" data-act="edit" aria-label="${t('pp.edit', { n: i + 1 })}">${icon('edit')}</button>
           <button type="button" class="mini" data-act="del" aria-label="${t('pp.delete', { n: i + 1 })}">${icon('trash')}</button>
         </span>
@@ -901,6 +907,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     }).join('');
     $('#empty', root).hidden = state.rows.length > 0;
     $('#blocked', root).hidden = !result.blocked;
+    // a given already in the proof is marked, and clicking it again adds nothing
+    $$('.facts li[data-g]', root).forEach((li) => li.classList.toggle('is-used', givenRow(li) >= 0));
     renderSolved();
     renderComposerMeta();
     persist();
@@ -985,6 +993,10 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     if (!v) {
       preview.innerHTML = `<span class="muted">${t('pp.previewEmpty')}</span>`;
       preview.className = 'claim-preview';
+    } else if (chainParts(v)) {
+      const parts = chainParts(v);
+      preview.className = 'claim-preview is-ok';
+      preview.innerHTML = `${esc(t('pp.chainSplit', { n: parts.length }))} ${parts.map((s) => mathSpan(fmtClaim(parseClaim(s, p).claim))).join(' · ')}`;
     } else {
       const r = parseClaim(v, p);
       preview.className = 'claim-preview ' + (r.ok ? 'is-ok' : 'is-err');
@@ -996,6 +1008,43 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   }
 
   const upto = () => (state.editing != null ? state.editing : state.rows.length);
+
+  // "AB = BC = CA": one row for each neighbouring pair (AB = BC, BC = CA), or null.
+  function chainParts(text) {
+    const parts = String(text).split('=').map((s) => s.trim());
+    if (parts.length < 3 || parts.some((s) => !s)) return null;
+    const out = parts.slice(1).map((s, i) => `${parts[i]} = ${s}`);
+    return out.every((s) => parseClaim(s, p).ok) ? out : null;
+  }
+  // The rows of a chain go in where the claim was going, like skipped steps. A part that is a
+  // given, an identity or a calculation gets its own reason; the others get the chosen reason.
+  function addChain(parts) {
+    if (!state.reason && reasonInput.value.trim()) {
+      const exact = exactReason(reasonInput.value, p.allowed);
+      if (!exact) { showMsg(`${icon('info')} ${t('pp.pickFromList')}`); reasonInput.focus(); openSugg(); return; }
+      state.reason = exact;
+    }
+    const at = upto();
+    const before = state.rows.slice(0, at);
+    const chosen = state.reason ? { reason: state.reason, refs: [...state.refs].sort((a, b) => a - b) } : null;
+    const made = [];
+    for (const text of parts) {
+      const done = checkProof(p, [...before, ...made]).results;
+      const a = autoReason(p, done, parseClaim(text, p).claim, at + made.length);
+      const auto = a && p.allowed.includes(a.reason) ? { ...a, auto: true } : null;
+      const fits = (c) => c && checkProof(p, [...before, ...made, { text, reason: c.reason, refs: c.refs }]).results[at + made.length].ok;
+      const pick = [chosen, auto].find(fits) || chosen || auto;
+      if (!pick) { showMsg(`${icon('info')} ${t('pp.needReason')}`); reasonInput.focus(); return; }
+      made.push({ text, reason: pick.reason, refs: pick.refs, ...(pick.auto ? { auto: true } : {}) });
+    }
+    const editing = state.editing != null;
+    const extra = made.length - (editing ? 1 : 0);
+    const later = state.rows.slice(editing ? at + 1 : at).map((r) => ({ ...r, refs: (r.refs || []).map((k) => (k > at ? k + extra : k)) }));
+    state.rows = [...state.rows.slice(0, at), ...made, ...later];
+    resetComposer();
+    renderRows();
+    input.focus();
+  }
 
   // A calculation (or an identity such as AB = AB) fills in its own reason.
   function currentAuto() {
@@ -1087,7 +1136,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   }
 
   function openSugg() {
-    options = matchReasons(reasonInput.value, p.allowed);
+    options = matchReasons(reasonInput.value, p.allowed, (id) => REASONS[id].playable || p.givens.some((g) => (g.also || []).includes(id)));
     active = options.findIndex((o) => !o.locked);
     sugg.innerHTML = options.length
       ? options.map((o, i) => `<li role="option" id="rs-${i}" class="sugg${o.locked ? ' is-locked' : ''}${i === active ? ' is-active' : ''}" data-i="${i}" aria-disabled="${o.locked}">
@@ -1199,6 +1248,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     e.preventDefault();
     const text = input.value.trim();
     if (!text) { input.focus(); preview.className = 'claim-preview is-err'; preview.innerHTML = msgHTML({ key: 'empty' }); return; }
+    const chain = chainParts(text);
+    if (chain) { addChain(chain); return; }
     if (!parseClaim(text, p).ok) { input.focus(); updatePreview(); return; }
     let row;
     if (!state.reason && reasonInput.value.trim()) {
@@ -1242,7 +1293,9 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const i = +b.closest('.prow').dataset.i;
-    if (b.dataset.act === 'del') {
+    if (b.dataset.act === 'up' || b.dataset.act === 'down') {
+      moveRow(i, b.dataset.act === 'up' ? -1 : 1);
+    } else if (b.dataset.act === 'del') {
       state.rows.splice(i, 1);
       state.rows.forEach((r) => { r.refs = r.refs.filter((k) => k !== i + 1).map((k) => (k > i + 1 ? k - 1 : k)); });
       if (state.editing != null) resetComposer();
@@ -1258,6 +1311,21 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       input.focus();
     }
   });
+  // Swap a row with the one above or below it. References follow the rows, so a row that cited
+  // row 3 still cites the same claim; a row moved above a row it cites turns red until fixed.
+  function moveRow(i, d) {
+    const j = i + d;
+    if (j < 0 || j >= state.rows.length) return;
+    const a = i + 1, b = j + 1;
+    [state.rows[i], state.rows[j]] = [state.rows[j], state.rows[i]];
+    state.rows.forEach((r) => { r.refs = (r.refs || []).map((k) => (k === a ? b : k === b ? a : k)).sort((x, y) => x - y); });
+    if (state.editing === i) state.editing = j; else if (state.editing === j) state.editing = i;
+    if (state.editing == null) state.refs = new Set([...state.refs].map((k) => (k === a ? b : k === b ? a : k)));
+    renderRows();
+    const btn = rowsEl.querySelector(`.prow[data-i="${j}"] [data-act="${d < 0 ? 'up' : 'down'}"]`);
+    (btn && !btn.disabled ? btn : rowsEl.querySelector(`.prow[data-i="${j}"]`)).focus();
+  }
+
   const rowHover = (e) => {
     const li = e.target.closest('.prow');
     if (!li) return;
@@ -1275,6 +1343,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   const hintBtn = $('#hintBtn', root);
   const givensBtn = $('#givensBtn', root);
   const autoRefsBtn = $('#autoRefsBtn', root);
+  const askReasonBtn = $('#askReasonBtn', root);
   const cpctPanel = $('#cpctPanel', root);
   const toolsAbort = new AbortController(); // ends a hint wait when the student leaves the page
   let hintWaiting = false;
@@ -1298,10 +1367,12 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     givensBtn.innerHTML = `${icon(open ? TOOLS.fillGivens.icon : 'lock')} <span>${t('tool.fillGivens')}</span>`;
     autoRefsBtn.hidden = !toolOpen('autoRefs', solvedNow);
     autoRefsBtn.title = t('tool.autoRefs.title');
+    askReasonBtn.hidden = !toolOpen('askReason', solvedNow);
+    askReasonBtn.title = t('tool.askReason.title');
     // A special feature: clicking a given or the goal copies it into the claim field.
     const click = toolOpen('clickFacts', solvedNow);
     factsEl.classList.toggle('facts-click', click);
-    $$('.fact-group:not(.diag) li[data-claim]', factsEl).forEach((li) => { li.title = click ? t('tool.clickFacts.title') : ''; });
+    $$('.fact-group:not(.diag) li[data-claim]', factsEl).forEach((li) => { li.title = click ? t(li.dataset.g != null ? 'tool.clickFacts.titleGiven' : 'tool.clickFacts.title') : ''; });
     viewAsWrap.hidden = !realAdmin();
     viewAsSel.value = viewAs() || '';
     syncHint();
@@ -1393,6 +1464,28 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     renderComposerMeta();
   });
 
+  // "Ask for a reason": the reason and its rows go into the composer; the student adds the row.
+  askReasonBtn.addEventListener('click', () => {
+    if (!toolOpen('askReason', solvedNow)) return;
+    // In a chain, the theorem for the parts that are not identities or calculations.
+    const parts = chainParts(input.value) || [input.value.trim()];
+    const finds = parts[0] ? parts.map((s) => findReason(p, state.rows, upto(), s)) : [{ error: 'noClaim' }];
+    const plain = ['given', 'algebra', 'common_side', 'common_angle'];
+    const found = finds.find((f) => f && !f.error && !plain.includes(f.reason)) || finds.find((f) => f && !f.error) || finds[0];
+    if (!found || found.error) {
+      showMsg(`${icon('info')} ${t(found ? 'tool.autoRefs.noClaim' : 'tool.askReason.none')}`);
+      if (found) input.focus();
+      return;
+    }
+    state.reason = found.reason;
+    state.refs = new Set(found.refs);
+    reasonInput.value = '';
+    closeSugg();
+    renderComposerMeta();
+    updatePreview();
+    showMsg(`${icon('spark')} ${t('tool.askReason.found', { r: `<b>${reasonShort(found.reason)}</b>${refsText(found.refs)}` })}`);
+  });
+
   cpctPanel.addEventListener('click', (e) => {
     const b = e.target.closest('.cpct-chip');
     if (!b) return;
@@ -1402,7 +1495,29 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     renderRows();
   });
 
+  // The row that already states this given, or -1.
+  function givenRow(li) {
+    const g = p.givensParsed[+li.dataset.g];
+    if (!g) return -1;
+    const k = claimKey(g);
+    return result.results.findIndex((x) => x.parsed.ok && claimKey(x.parsed.claim) === k);
+  }
+  // A given goes into the proof as a row of its own ("given"), once; the goal and the
+  // facts from the diagram go into the claim field.
   function copyFact(li) {
+    if (li.dataset.g != null && p.givensParsed[+li.dataset.g]) {
+      const at = givenRow(li);
+      if (at >= 0) {
+        showMsg(`${icon('info')} ${t('tool.clickFacts.already', { n: at + 1 })}`);
+        const row = rowsEl.querySelector(`.prow[data-i="${at}"]`);
+        if (row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }
+        return;
+      }
+      state.rows.push({ text: fmtClaim(p.givensParsed[+li.dataset.g]), reason: 'given', refs: [] });
+      showMsg('');
+      renderRows();
+      return;
+    }
     const r = parseClaim(li.dataset.claim, p);
     input.value = r.ok ? fmtClaim(r.claim) : li.dataset.claim;
     input.dispatchEvent(new Event('input', { bubbles: true }));

@@ -909,6 +909,16 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .mini-tool[hidden] { display: none; }
 .mini-tool:hover, .mini-tool:focus-visible { border-color: var(--pen); }
 .mini-tool .ic { width: 14px; height: 14px; }
+.reason-row .ask-reason { align-self: center; }
+/* moving a row: the chevron turned to point up or down */
+.mini.mv-up .ic { transform: rotate(-90deg); }
+.mini.mv-down .ic { transform: rotate(90deg); }
+.mini:disabled { opacity: .3; cursor: default; background: none; }
+/* a given already in the proof */
+.facts li[data-g].is-used { opacity: .55; }
+.facts li[data-g].is-used::after { content: ' ✓'; color: var(--ok, #2e7d32); font-weight: 700; }
+.prow.flash { animation: rowflash .9s ease-out; }
+@keyframes rowflash { from { background: var(--pen-soft); } }
 .cpct-panel {
   display: grid; gap: 12px; margin-top: 12px; padding: 12px 14px; border-radius: 12px;
   border: 1px dashed color-mix(in srgb, var(--pen) 45%, transparent); background: var(--pen-soft);

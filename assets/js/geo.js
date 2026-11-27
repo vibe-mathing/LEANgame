@@ -132,6 +132,15 @@ function parseQuad(s, points) {
 
 function parseAtom(body, points, rays) {
   let m;
+  // The area of a triangle: S△ABC (also S(ABC)). Any order of the letters is the same area.
+  if ((m = body.match(/^S(?:△|\()([A-Z])([A-Z])([A-Z])\)?$/))) {
+    const pts = [m[1], m[2], m[3]];
+    const bad = pts.find((x) => !points.includes(x));
+    if (bad) return fail('unknownPoint', { p: `$${bad}$` });
+    if (new Set(pts).size < 3) return fail('repeatPoint');
+    return { ok: true, term: { kind: 'area', p: pts, key: 'S:' + [...pts].sort().join('') } };
+  }
+  if (/^S(△|\()/.test(body)) return fail('badArea');
   if ((m = body.match(/^(SIN|COS|TAN)(∢.*)$/))) {
     const r = parseAtom(m[2], points, rays);
     if (!r.ok) return r;
@@ -232,7 +241,8 @@ function dimOf(t) {
   if (t.kind === 'ang') return 'ang';
   if (t.kind === 'seg') return 'L1';
   if (t.kind === 'trig') return 'L0';
-  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : 0), 0);
+  if (t.kind === 'area') return 'L2';
+  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : x.t.kind === 'area' ? 2 * x.e : 0), 0);
 }
 const kindType = (t) => (dimOf(t) === 'ang' ? 'ang' : dimOf(t));
 
@@ -401,6 +411,7 @@ function atomStr(t) {
   if (t.kind === 'seg') return t.p.join('');
   if (t.kind === 'ang') return '∢' + t.p.join('');
   if (t.kind === 'trig') return t.fn + atomStr(t.a);
+  if (t.kind === 'area') return 'S△' + t.p.join('');
   // a monomial: AB·CD, AB², BC/AB, BC/sin∢BAC (each denominator after its own /)
   const pw = (x) => atomStr(x.t) + (Math.abs(x.e) === 1 ? '' : POW[Math.abs(x.e)] || '^' + Math.abs(x.e));
   const top = t.f.filter((x) => x.e > 0).map(pw).join('·') || '1';
@@ -449,6 +460,7 @@ function leanAtom(t) {
   if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
   if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
   if (t.kind === 'trig') return `${t.fn}D (${leanAtom(t.a)})`;
+  if (t.kind === 'area') return `area ${t.p.join(' ')}`;
   const pw = (x) => leanAtom(x.t) + (Math.abs(x.e) === 1 ? '' : ` ^ ${Math.abs(x.e)}`);
   const top = t.f.filter((x) => x.e > 0).map(pw).join(' * ') || '1';
   const den = t.f.filter((x) => x.e < 0).map(pw);
@@ -726,6 +738,32 @@ const CHECKS = {
     if (sameKeys(ref.claim, [angKey(A, B, C, problem.rays), angKey(A, C, B, problem.rays)])) return { ok: true, proof };
     return { ok: false, msg: { key: 'isoConvWrong', vars: { s: `$${fmtClaim(claim)}$`, a: `$∢${A}${B}${C} = ∢${A}${C}${B}$` } }, proof };
   },
+  // A triangle whose three angles are equal is equilateral. The claim is two of its sides
+  // (AB = AC); the rows cited give ∢A = ∢B = ∢C with calculation (∢A = ∢B and ∢B = ∢C, or
+  // all three are 60°).
+  equi_sides(claim, refRows, problem) {
+    const proof = `equilateral_of_angles ${refNames(refRows)}`.trim();
+    const legs = apexOf(claim);
+    if (!legs) return { ok: false, msg: { key: 'equiNeedSides' }, proof };
+    const { A, B, C } = legs;
+    if (degenerate(problem, [A, B, C])) return { ok: false, msg: { key: 'degenerate', vars: { t: `$△${A}${B}${C}$` } }, proof };
+    const need = [`∢${B}${A}${C} = ∢${A}${B}${C}`, `∢${A}${B}${C} = ∢${A}${C}${B}`].map((s) => parseClaim(s, problem).claim);
+    if (need.every((c) => c && algebraFollows(c, refRows.map((r) => r.claim)))) return { ok: true, proof };
+    return { ok: false, msg: { key: 'equiNeedAngles', vars: { t: `$△${A}${B}${C}$` } }, proof };
+  },
+  // Each angle of an equilateral triangle is 60°. The claim is ∢XYZ = 60°; the rows cited give
+  // XY = YZ = ZX with calculation.
+  equi_angles(claim, refRows, problem) {
+    const proof = `equilateral_60 ${refNames(refRows)}`.trim();
+    const P = claimPoints(claim);
+    const want = P.length === 3 && parseClaim(`∢${P[0]}${P[1]}${P[2]} = 60°`, problem);
+    if (!want || !want.ok || claimKey(want.claim) !== claimKey(claim)) return { ok: false, msg: { key: 'equiNeed60' }, proof };
+    const [X, Y, Z] = P;
+    if (degenerate(problem, [X, Y, Z])) return { ok: false, msg: { key: 'degenerate', vars: { t: `$△${X}${Y}${Z}$` } }, proof };
+    const need = [`${X}${Y} = ${Y}${Z}`, `${Y}${Z} = ${Z}${X}`].map((s) => parseClaim(s, problem).claim);
+    if (need.every((c) => c && algebraFollows(c, refRows.map((r) => r.claim)))) return { ok: true, proof };
+    return { ok: false, msg: { key: 'equiNeedSidesEq', vars: { t: `$△${X}${Y}${Z}$` } }, proof };
+  },
   // In an isosceles triangle the median to the base, the apex bisector and the altitude
   // to the base are the same segment: knowing one of them gives the other two.
   iso_median(claim, refRows, problem) {
@@ -772,6 +810,36 @@ const CHECKS = {
       if (c1 >= 0 && c2 >= 0) return { ok: true, proof: `${base} cfg${c1 + 1} cfg${c2 + 1}` };
     }
     return { ok: false, msg: { key: 'vertNotOpposite' }, proof: base };
+  },
+  // Angles around a point: ∢XOY + ∢YOZ + ∢ZOX = 360° for three rays from O, when O is inside
+  // the triangle XYZ (read off the diagram, as with angle addition). Lean: angles_around_point.
+  around_point(claim, refRows, problem) {
+    const proof = 'angles_around_point';
+    const v = claim.type === 'eq' && claim.of === 'ang' ? eqVec(claim) : null;
+    const angs = v ? [...v.keys()].filter((k) => k.startsWith('a:')) : [];
+    const c1 = angs.length === 3 ? v.get(angs[0]) : 0;
+    if (!c1 || v.size !== 4 || angs.some((k) => Math.abs(v.get(k) - c1) > 1e-9) || Math.abs((v.get('1') || 0) + 360 * c1) > 1e-6) {
+      return { ok: false, msg: { key: 'aroundNeedSum' }, proof };
+    }
+    const terms = [...claim.L.terms, ...claim.R.terms].map((x) => x.t).filter((t) => t.kind === 'ang');
+    const ts = angs.map((k) => terms.find((t) => termKey(t) === k));
+    const O = ts[0].p[1];
+    if (ts.some((t) => t.p[1] !== O)) return { ok: false, msg: { key: 'adjSameVertex' }, proof };
+    const ray = (x) => problem.rays[O][x];
+    const arms = ts.map((t) => [ray(t.p[0]), ray(t.p[2])]);
+    const count = new Map();
+    arms.flat().forEach((r) => count.set(r, (count.get(r) || 0) + 1));
+    if (count.size !== 3 || [...count.values()].some((k) => k !== 2) || arms.some(([a, b]) => a === b)) {
+      return { ok: false, msg: { key: 'aroundNeedThree' }, proof };
+    }
+    const ends = ts.flatMap((t) => [t.p[0], t.p[2]]);
+    const [X, Y, Z] = [...count.keys()].map((r) => ends.find((x) => ray(x) === r));
+    const P = problem.points;
+    const o = P[O];
+    const cr = (a, b) => (P[a][0] - o[0]) * (P[b][1] - o[1]) - (P[a][1] - o[1]) * (P[b][0] - o[0]);
+    const s = [cr(X, Y), cr(Y, Z), cr(Z, X)];
+    if (s.every((x) => x > 1e-9) || s.every((x) => x < -1e-9)) return { ok: true, proof };
+    return { ok: false, msg: { key: 'aroundNotAround', vars: { o: `$${O}$` } }, proof };
   },
   adj_angles(claim, refRows, problem) {
     const base = 'adj_angles_sum';
@@ -1090,6 +1158,40 @@ const STAGE_CHECKS = {
     }
     if (!rel) return fail2('notTransversal', proof, { n: refRows[0].n });
     return fail2('parConvWrong', proof);
+  },
+  // The area of a triangle, two ways (Lean: area_sine, area_perp):
+  // half of two sides times the sine of the angle between them, S△ABC = AB·AC·sin∢BAC/2 (no rows);
+  // half a side times the height to it, S△ABC = BC·AH/2, citing the row AH ⊥ BC, with H on line BC
+  // (H may be B or C: in a right triangle the height is a leg).
+  tri_area(claim, refRows, problem) {
+    const area = claim.type === 'eq' ? [...claim.L.terms, ...claim.R.terms].map((x) => x.t).find((t) => t.kind === 'area') : null;
+    if (!area) return fail2('areaNeedArea', 'area_sine');
+    const T = area.p;
+    const name = `S△${T.join('')}`;
+    if (degenerate(problem, T)) return fail2('degenerate', 'area_sine', { t: `$△${T.join('')}$` });
+    for (let i = 0; i < 3; i++) {
+      const [X, Y, Z] = [T[i], T[(i + 1) % 3], T[(i + 2) % 3]];
+      if (matches(problem, claim, [`${name}=${X}${Y}*${X}${Z}*SIN∢${Y}${X}${Z}/2`])) return { ok: true, proof: 'area_sine' };
+    }
+    const proof = `area_perp ${refNames(refRows)}`.trim();
+    const P = problem.points;
+    let need = null;
+    for (let i = 0; i < 3; i++) {
+      const [Z, X, Y] = [T[i], T[(i + 1) % 3], T[(i + 2) % 3]];
+      const u = vsub(P[Y], P[X]);
+      for (const W of problem.pointNames) {
+        if (W === Z) continue;
+        const w = vsub(P[W], P[X]);
+        if (Math.abs(vcross(u, w)) > 1e-6 * vlen(u) * Math.max(1, vlen(w))) continue; // W on line XY
+        if (!matches(problem, claim, [`${name}=${X}${Y}*${Z}${W}/2`])) continue;
+        const lh = lineKey(P, Z, W);
+        const lb = lineKey(P, X, Y);
+        if (refRows.some((r) => r.claim.type === 'perp' && ((r.claim.la === lh && r.claim.lb === lb) || (r.claim.la === lb && r.claim.lb === lh)))) return { ok: true, proof };
+        need = need || { h: `$${Z}${W} ⊥ ${X}${Y}$` };
+      }
+    }
+    if (need) return fail2('areaNeedPerp', proof, need);
+    return fail2('areaNoForm', proof, { s: `$${name}$` });
   },
   tri_sum(claim, refRows, problem) {
     const proof = 'tri_angle_sum';
@@ -1740,7 +1842,7 @@ function claimPoints(c) {
   const out = new Set();
   const term = (t) => {
     if (!t) return;
-    if (t.kind === 'seg' || t.kind === 'ang') t.p.forEach((x) => out.add(x));
+    if (t.kind === 'seg' || t.kind === 'ang' || t.kind === 'area') t.p.forEach((x) => out.add(x));
     else if (t.kind === 'trig') term(t.a);
     else if (t.kind === 'mono') t.f.forEach((x) => term(x.t));
   };
@@ -1836,6 +1938,48 @@ export function autoReason(problem, results, claim, upto) {
     if (follows(trial)) keep = trial;
   }
   return { reason: 'algebra', refs: keep.map((x) => pool[x].n) };
+}
+
+// "Ask for a reason": a reason the student may use, with the fewest earlier correct rows, that
+// proves `text` as row upto+1. Calculation and givens first (autoReason), then every open theorem
+// with no rows, one row, two, three. { reason, refs }, { error: 'noClaim' }, or null.
+function* chooseRows(arr, k, from = 0, pick = []) {
+  if (pick.length === k) { yield [...pick]; return; }
+  for (let i = from; i < arr.length; i++) {
+    pick.push(arr[i]);
+    yield* chooseRows(arr, k, i + 1, pick);
+    pick.pop();
+  }
+}
+export function findReason(problem0, rows, upto, text, { ms = 2500 } = {}) {
+  const before = rows.slice(0, upto);
+  const problem = withConstructions(problem0, before);
+  const parsed = parseClaim(text, problem);
+  if (!parsed.ok) return { error: 'noClaim' };
+  const claim = parsed.claim;
+  if (claimPoints(claim).some((x) => problem.consBorn && problem.consBorn[x] >= upto)) return null;
+  const { results } = checkProof(problem0, before);
+  const auto = autoReason(problem, results, claim, upto);
+  if (auto) return auto;
+  const key = claimKey(claim);
+  const gi = problem.givens.findIndex((g, j) => (g.also || []).some((rid) => problem.allowed.includes(rid)) && claimKey(problem.givensParsed[j]) === key);
+  if (gi >= 0) return { reason: problem.givens[gi].also.find((rid) => problem.allowed.includes(rid)), refs: [] };
+  const pool = results.filter((r) => r.ok && r.parsed.ok).map((r) => ({ n: r.n, claim: r.parsed.claim })).slice(-14);
+  const rids = problem.allowed.filter((rid) => CHECKS[rid] && REASONS[rid] && !['given', 'algebra'].includes(rid) && !isConsReason(rid));
+  const stop = Date.now() + ms;
+  for (const k of [0, 1, 2, 3]) {
+    const cands = rids.filter((rid) => { const need = REASONS[rid].refs || 0; return need === 'many' ? k >= 1 : need === k; });
+    if (!cands.length || k > pool.length) continue;
+    for (const refRows of chooseRows(pool, k)) {
+      for (const rid of cands) {
+        let out = null;
+        try { out = CHECKS[rid](claim, refRows, problem); } catch { out = null; }
+        if (out && out.ok) return { reason: rid, refs: refRows.map((r) => r.n) };
+      }
+      if (Date.now() > stop) return null;
+    }
+  }
+  return null;
 }
 
 // ---------- one angle, many names ----------

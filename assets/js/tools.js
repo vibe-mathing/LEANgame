@@ -26,6 +26,8 @@ export const TOOLS = {
   autoRefs: { open: 'start', icon: 'search' },
   cpctList: { open: 'start', icon: 'spark' },
   clickFacts: { open: 'start', icon: 'enter' },
+  // "Ask for a reason" (geo.js findReason): finds the reason and the rows for a claim.
+  askReason: { open: 'start', icon: 'search' },
   hint: { open: 'start', icon: 'bulb' },
   // Skip steps (play-extras.js findSkip): a feature, closed unless the admin opens it for a track
   // (the admin page's table) or for one student ('open:skipSteps' in their features).

@@ -432,7 +432,8 @@ const SINGLE = [
     setup: true,
   },
   { re: new RegExp(`${PF}משולש(?:ים)?\\s+(?:ה)?△?([A-Z]{3})(?![A-Z])`, 'g'), fn: (m) => [{ kind: 'ctx', tri: m[1] }], setup: true },
-  { re: /(?<![≅∼]\s*)△([A-Z]{3})(?![A-Z]|\s*[≅∼])/g, fn: (m) => [{ kind: 'ctx', tri: m[1] }], setup: true },
+  // "△ABC" alone names the triangle; "S△ABC" is its area, a term of a claim, so it is left whole
+  { re: /(?<![≅∼]\s*|S)△([A-Z]{3})(?![A-Z]|\s*[≅∼])/g, fn: (m) => [{ kind: 'ctx', tri: m[1] }], setup: true },
 ];
 
 function median(m, ctx) {
@@ -762,6 +763,10 @@ function termVal(t, pos) {
   if (t.kind === 'seg') return { v: dist(pos[t.p[0]], pos[t.p[1]]), dim: 1 };
   if (t.kind === 'ang') return { v: angDeg(pos, ...t.p), dim: 0, ang: true };
   if (t.kind === 'trig') return { v: Math[t.fn](angDeg(pos, ...t.a.p) / DEG), dim: 0 };
+  if (t.kind === 'area') {
+    const [a, b, c] = t.p.map((x) => pos[x]);
+    return { v: Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2, dim: 2 };
+  }
   let v = 1; let dim = 0;
   for (const x of t.f) { const r = termVal(x.t, pos); v *= r.v ** x.e; dim += r.dim * x.e; }
   return { v, dim };
@@ -1247,8 +1252,10 @@ export function reviewReport(review, drawing) {
   // every point the words use must be in the drawing
   const used = new Set();
   const mark = (s) => { for (const ch of String(s).match(/[A-Z]/g) || []) used.add(ch); };
-  review.givens.forEach((g) => mark(g.claim.replace(/sin|cos|tan/g, '')));
-  if (goalClaim) mark(goalClaim.replace(/sin|cos|tan/g, ''));
+  // not point names: sin/cos/tan, and the S of an area (S△ABC, S(ABC))
+  const letters = (s) => String(s).replace(/sin|cos|tan/gi, '').replace(/S(?=\s*[△(])/g, '');
+  review.givens.forEach((g) => mark(letters(g.claim)));
+  if (goalClaim) mark(letters(goalClaim));
   (review.facts || []).forEach((f) => [f.p, f.a, f.b, f.o, f.l1, f.l2, f.line, ...(f.pts || [])].forEach((x) => x && mark(x)));
   const missing = [...used].filter((x) => !pos[x]).sort();
   if (missing.length) errors.push({ key: 'missingPoints', pts: missing });
