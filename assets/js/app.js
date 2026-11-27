@@ -10,6 +10,7 @@ import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congCo
   onToolsChange, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress } from './auth.js';
+import { appStrip, appFootLink } from './mobile-app.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -69,6 +70,7 @@ function renderChrome() {
         <a href="#/hs/geometry">${t('footer.map')}</a>
         <a href="#/hs/geometry/L01/1">${t('footer.first')}</a>
         <a href="#/hs/geometry" data-scroll="toolbox">${t('footer.toolbox')}</a>
+        ${appFootLink()}
       </div>
       <div class="foot-col">
         <h4>${t('footer.lean')}</h4>
@@ -230,6 +232,7 @@ function viewHome() {
       </div>
     </div>
   </section>
+  ${appStrip()}
 
   <section class="section" id="how">
     <div class="wrap">
