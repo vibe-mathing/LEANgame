@@ -2,6 +2,8 @@
 // catalog and the playable demo problems. Text is Hebrew-first with an English twin.
 // Math inside strings is wrapped in $...$ so it renders left-to-right.
 
+import { PROBLEMS_L04_L11 } from './problems-l04-l11.js';
+
 export const TRACKS = [
   { id: 'hs', status: 'open', name: { he: 'תיכון', en: 'High school' } },
   { id: 'uni', status: 'later', name: { he: 'אוניברסיטה', en: 'University' } },
@@ -83,6 +85,8 @@ export const REASONS = {
   common_side: R(null, 'basic', 0, 'rfl', ['צלע משותפת', 'צלע משותפת', 'כל קטע שווה לעצמו.'], ['Common side', 'Common side', 'Every segment equals itself.'], true),
   common_angle: R(null, 'basic', 0, 'rfl', ['זווית משותפת', 'זווית משותפת', 'כל זווית שווה לעצמה, גם כשקוראים לה בשמות שונים, כמו $∢ABD$ ו-$∢ABC$ כש-$D$ על $BC$.'], ['Common angle', 'Common angle', 'Every angle equals itself, even under different names, like $∢ABD$ and $∢ABC$ when $D$ is on $BC$.'], true),
   algebra: R(null, 'algebra', 'many', 'by linarith', ['חשבון', 'חשבון: הצבה והעברת אגפים', 'הצבה, העברת אגפים וחישוב, על סמך השורות שציינתם בלבד. כשהמשחק מזהה חישוב, הוא משלים את הנימוק לבד.'], ['Algebra', 'Algebra and substitution', 'Substitution, rearranging and arithmetic, using only the rows you cite. When the game spots a calculation, it fills this in for you.'], true),
+  segment_add: R(null, 'basic', 0, 'seg_add', ['חיבור קטעים', 'חיבור קטעים', 'אם $B$ נמצאת על הקטע $AC$, אז $AB + BC = AC$.'], ['Segment addition', 'Segment addition', 'If $B$ lies on segment $AC$, then $AB + BC = AC$.'], true),
+  angle_add: R(null, 'basic', 0, 'ang_add', ['חיבור זוויות', 'חיבור זוויות', 'אם הקרן $BD$ עוברת בתוך $∢ABC$, אז $∢ABD + ∢DBC = ∢ABC$.'], ['Angle addition', 'Angle addition', 'If ray $BD$ runs inside $∢ABC$, then $∢ABD + ∢DBC = ∢ABC$.'], true),
 
   // L01 angles
   adj_angles: R('L01', 'theorem', 0, 'adj_angles_sum', ['זוויות צמודות', 'סכום זוויות צמודות', 'סכום זוויות צמודות הוא $180°$.'], ['Adjacent angles', 'Adjacent angles', 'Adjacent angles sum to $180°$.'], true),
@@ -107,60 +111,62 @@ export const REASONS = {
   iso_median: R('L03', 'theorem', 'many', 'iso_median', ['תיכון לבסיס', 'הקטע המיוחד במשולש שווה שוקיים', 'במשולש שווה שוקיים התיכון לבסיס, הגובה לבסיס וחוצה זווית הראש הם אותו קטע: אם הוא אחד מהם, הוא גם שני האחרים.'], ['Median to the base', 'The special segment of an isosceles triangle', 'In an isosceles triangle the median to the base, the altitude to the base and the apex bisector are one segment: if it is one of them, it is the other two.'], true),
 
   // L04 parallel lines
-  alt_angles: R('L04', 'theorem', 1, 'par_alt_angles', ['זוויות מתחלפות', 'זוויות מתחלפות בין מקבילים', 'זוויות מתחלפות בין ישרים מקבילים שוות.'], ['Alternate angles', 'Alternate angles between parallels', 'Alternate angles between parallel lines are equal.']),
-  corr_angles: R('L04', 'theorem', 1, 'par_corr_angles', ['זוויות מתאימות בין מקבילים', 'זוויות מתאימות בין מקבילים', 'זוויות מתאימות בין ישרים מקבילים שוות.'], ['Corresponding angles (parallels)', 'Corresponding angles between parallels', 'Corresponding angles between parallel lines are equal.']),
-  cointerior: R('L04', 'theorem', 1, 'par_cointerior', ['זוויות חד-צדדיות', 'זוויות חד-צדדיות בין מקבילים', 'סכום זוויות חד-צדדיות בין ישרים מקבילים הוא $180°$.'], ['Co-interior angles', 'Co-interior angles between parallels', 'Co-interior angles between parallel lines sum to $180°$.']),
-  par_converse: R('L04', 'theorem', 1, 'par_of_alt', ['תנאי להקבלה', 'משפט הפוך לישרים מקבילים', 'אם זוויות מתחלפות או מתאימות שוות, הישרים מקבילים.'], ['Test for parallels', 'Converse for parallel lines', 'If alternate or corresponding angles are equal, the lines are parallel.']),
-  tri_sum: R('L04', 'theorem', 0, 'tri_angle_sum', ['סכום זוויות במשולש', 'סכום הזוויות במשולש', 'סכום הזוויות במשולש הוא $180°$.'], ['Triangle angle sum', 'Triangle angle sum', 'The angles of a triangle sum to $180°$.']),
-  ext_angle: R('L04', 'theorem', 0, 'ext_angle', ['זווית חיצונית', 'זווית חיצונית למשולש', 'זווית חיצונית למשולש שווה לסכום שתי הזוויות הפנימיות שאינן צמודות לה.'], ['Exterior angle', 'Exterior angle of a triangle', 'An exterior angle equals the sum of the two remote interior angles.']),
+  alt_angles: R('L04', 'theorem', 1, 'par_alt', ['זוויות מתחלפות', 'זוויות מתחלפות בין מקבילים', 'זוויות מתחלפות בין ישרים מקבילים שוות.'], ['Alternate angles', 'Alternate angles between parallels', 'Alternate angles between parallel lines are equal.'], true),
+  corr_angles: R('L04', 'theorem', 1, 'par_corr', ['זוויות מתאימות בין מקבילים', 'זוויות מתאימות בין מקבילים', 'זוויות מתאימות בין ישרים מקבילים שוות.'], ['Corresponding angles (parallels)', 'Corresponding angles between parallels', 'Corresponding angles between parallel lines are equal.'], true),
+  cointerior: R('L04', 'theorem', 1, 'par_coint', ['זוויות חד-צדדיות', 'זוויות חד-צדדיות בין מקבילים', 'סכום זוויות חד-צדדיות בין ישרים מקבילים הוא $180°$.'], ['Co-interior angles', 'Co-interior angles between parallels', 'Co-interior angles between parallel lines sum to $180°$.'], true),
+  par_converse: R('L04', 'theorem', 1, 'alt_par', ['תנאי להקבלה', 'משפט הפוך לישרים מקבילים', 'אם זוויות מתחלפות או מתאימות שוות, או שסכום זוויות חד-צדדיות הוא $180°$, הישרים מקבילים.'], ['Test for parallels', 'Converse for parallel lines', 'If alternate or corresponding angles are equal, or co-interior angles sum to $180°$, the lines are parallel.'], true),
+  tri_sum: R('L04', 'theorem', 0, 'tri_angle_sum', ['סכום זוויות במשולש', 'סכום הזוויות במשולש', 'סכום הזוויות במשולש הוא $180°$.'], ['Triangle angle sum', 'Triangle angle sum', 'The angles of a triangle sum to $180°$.'], true),
+  ext_angle: R('L04', 'theorem', 0, 'ext_angle', ['זווית חיצונית', 'זווית חיצונית למשולש', 'זווית חיצונית למשולש שווה לסכום שתי הזוויות הפנימיות שאינן צמודות לה.'], ['Exterior angle', 'Exterior angle of a triangle', 'An exterior angle equals the sum of the two remote interior angles.'], true),
 
   // L05 inequalities
-  side_angle: R('L05', 'theorem', 1, 'larger_side_larger_angle', ['מול צלע גדולה', 'מול צלע גדולה זווית גדולה', 'מול הצלע הגדולה במשולש מונחת הזווית הגדולה.'], ['Larger side', 'Larger side, larger angle', 'The larger side of a triangle faces the larger angle.']),
-  angle_side: R('L05', 'theorem', 1, 'larger_angle_larger_side', ['מול זווית גדולה', 'מול זווית גדולה צלע גדולה', 'מול הזווית הגדולה במשולש מונחת הצלע הגדולה.'], ['Larger angle', 'Larger angle, larger side', 'The larger angle of a triangle faces the larger side.']),
-  tri_ineq: R('L05', 'theorem', 0, 'tri_ineq', ['אי-שוויון המשולש', 'אי-שוויון המשולש', 'סכום שתי צלעות במשולש גדול מהצלע השלישית.'], ['Triangle inequality', 'Triangle inequality', 'Any two sides of a triangle add up to more than the third.']),
+  side_angle: R('L05', 'theorem', 1, 'side_angle_ineq', ['מול צלע גדולה', 'מול צלע גדולה זווית גדולה', 'מול הצלע הגדולה במשולש מונחת הזווית הגדולה.'], ['Larger side', 'Larger side, larger angle', 'The larger side of a triangle faces the larger angle.'], true),
+  angle_side: R('L05', 'theorem', 1, 'angle_side_ineq', ['מול זווית גדולה', 'מול זווית גדולה צלע גדולה', 'מול הזווית הגדולה במשולש מונחת הצלע הגדולה.'], ['Larger angle', 'Larger angle, larger side', 'The larger angle of a triangle faces the larger side.'], true),
+  tri_ineq: R('L05', 'theorem', 0, 'tri_ineq', ['אי-שוויון המשולש', 'אי-שוויון המשולש', 'סכום שתי צלעות במשולש גדול מהצלע השלישית.'], ['Triangle inequality', 'Triangle inequality', 'Any two sides of a triangle add up to more than the third.'], true),
 
   // L06 quadrilaterals
-  para_def: R('L06', 'definition', 0, 'parallelogram_def', ['הגדרת מקבילית', 'הגדרת מקבילית', 'מקבילית היא מרובע שבו כל זוג צלעות נגדיות מקבילות.'], ['Parallelogram', 'Definition of parallelogram', 'A parallelogram is a quadrilateral with both pairs of opposite sides parallel.']),
-  para_sides: R('L06', 'theorem', 1, 'para_opp_sides', ['צלעות נגדיות במקבילית', 'צלעות נגדיות במקבילית', 'במקבילית כל זוג צלעות נגדיות שוות.'], ['Opposite sides', 'Opposite sides of a parallelogram', 'Opposite sides of a parallelogram are equal.']),
-  para_angles: R('L06', 'theorem', 1, 'para_opp_angles', ['זוויות נגדיות במקבילית', 'זוויות נגדיות במקבילית', 'במקבילית כל זוג זוויות נגדיות שוות.'], ['Opposite angles', 'Opposite angles of a parallelogram', 'Opposite angles of a parallelogram are equal.']),
-  para_diag: R('L06', 'theorem', 1, 'para_diagonals', ['אלכסוני מקבילית', 'האלכסונים במקבילית', 'במקבילית האלכסונים חוצים זה את זה.'], ['Parallelogram diagonals', 'Diagonals of a parallelogram', 'The diagonals of a parallelogram bisect each other.']),
-  para_test: R('L06', 'theorem', 2, 'para_of_opp_sides', ['זיהוי מקבילית', 'משפט זיהוי למקבילית', 'מרובע שבו כל זוג צלעות נגדיות שוות הוא מקבילית.'], ['Parallelogram test', 'Test for a parallelogram', 'A quadrilateral with both pairs of opposite sides equal is a parallelogram.']),
-  rect_diag: R('L06', 'theorem', 1, 'rect_diagonals', ['אלכסוני מלבן', 'האלכסונים במלבן', 'במלבן האלכסונים שווים.'], ['Rectangle diagonals', 'Diagonals of a rectangle', 'The diagonals of a rectangle are equal.']),
-  rhombus_diag: R('L06', 'theorem', 1, 'rhombus_diagonals', ['אלכסוני מעוין', 'האלכסונים במעוין', 'במעוין האלכסונים מאונכים זה לזה וחוצים את זוויות המעוין.'], ['Rhombus diagonals', 'Diagonals of a rhombus', 'The diagonals of a rhombus are perpendicular and bisect its angles.']),
-  kite_diag: R('L06', 'theorem', 1, 'kite_main_diagonal', ['אלכסון ראשי בדלתון', 'האלכסון הראשי בדלתון', 'בדלתון האלכסון הראשי חוצה את זוויות הראש ומאונך לאלכסון המשני.'], ['Kite diagonal', 'Main diagonal of a kite', 'In a kite the main diagonal bisects the apex angles and is perpendicular to the other diagonal.']),
-  trap_iso: R('L06', 'theorem', 1, 'iso_trapezoid_angles', ['טרפז שווה שוקיים', 'זוויות בטרפז שווה שוקיים', 'בטרפז שווה שוקיים זוויות הבסיס שוות.'], ['Isosceles trapezoid', 'Angles of an isosceles trapezoid', 'The base angles of an isosceles trapezoid are equal.']),
+  para_def: R('L06', 'definition', 'many', 'parallelogram_def', ['הגדרת מקבילית', 'הגדרת מקבילית', 'מקבילית היא מרובע שבו כל זוג צלעות נגדיות מקבילות.'], ['Parallelogram', 'Definition of parallelogram', 'A parallelogram is a quadrilateral with both pairs of opposite sides parallel.'], true),
+  para_sides: R('L06', 'theorem', 1, 'pg_opp_sides', ['צלעות נגדיות במקבילית', 'צלעות נגדיות במקבילית', 'במקבילית כל זוג צלעות נגדיות שוות.'], ['Opposite sides', 'Opposite sides of a parallelogram', 'Opposite sides of a parallelogram are equal.'], true),
+  para_angles: R('L06', 'theorem', 1, 'pg_opp_angles', ['זוויות נגדיות במקבילית', 'זוויות נגדיות במקבילית', 'במקבילית כל זוג זוויות נגדיות שוות.'], ['Opposite angles', 'Opposite angles of a parallelogram', 'Opposite angles of a parallelogram are equal.'], true),
+  para_diag: R('L06', 'theorem', 1, 'pg_diag', ['אלכסוני מקבילית', 'האלכסונים במקבילית', 'במקבילית האלכסונים חוצים זה את זה.'], ['Parallelogram diagonals', 'Diagonals of a parallelogram', 'The diagonals of a parallelogram bisect each other.'], true),
+  para_test: R('L06', 'theorem', 2, 'opp_sides_pg', ['זיהוי מקבילית', 'משפט זיהוי למקבילית', 'מרובע שבו כל זוג צלעות נגדיות שוות הוא מקבילית.'], ['Parallelogram test', 'Test for a parallelogram', 'A quadrilateral with both pairs of opposite sides equal is a parallelogram.'], true),
+  rect_diag: R('L06', 'theorem', 1, 'rect_diag', ['אלכסוני מלבן', 'האלכסונים במלבן', 'במלבן האלכסונים שווים.'], ['Rectangle diagonals', 'Diagonals of a rectangle', 'The diagonals of a rectangle are equal.'], true),
+  rhombus_diag: R('L06', 'theorem', 1, 'rh_diag_perp', ['אלכסוני מעוין', 'האלכסונים במעוין', 'במעוין האלכסונים מאונכים זה לזה וחוצים את זוויות המעוין.'], ['Rhombus diagonals', 'Diagonals of a rhombus', 'The diagonals of a rhombus are perpendicular and bisect its angles.'], true),
+  kite_diag: R('L06', 'theorem', 1, 'kite_diag_perp', ['אלכסון ראשי בדלתון', 'האלכסון הראשי בדלתון', 'בדלתון האלכסון הראשי חוצה את זוויות הראש ומאונך לאלכסון המשני.'], ['Kite diagonal', 'Main diagonal of a kite', 'In a kite the main diagonal bisects the apex angles and is perpendicular to the other diagonal.'], true),
+  trap_iso: R('L06', 'theorem', 1, 'iso_trap_angles', ['טרפז שווה שוקיים', 'זוויות בטרפז שווה שוקיים', 'בטרפז שווה שוקיים זוויות הבסיס שוות.'], ['Isosceles trapezoid', 'Angles of an isosceles trapezoid', 'The base angles of an isosceles trapezoid are equal.'], true),
 
   // L07 midsegments
-  midseg_tri: R('L07', 'theorem', 2, 'midsegment_tri', ['קטע אמצעים במשולש', 'קטע אמצעים במשולש', 'קטע אמצעים במשולש מקביל לצלע השלישית ושווה למחציתה.'], ['Triangle midsegment', 'Midsegment of a triangle', 'A triangle midsegment is parallel to the third side and half as long.']),
-  midseg_trap: R('L07', 'theorem', 2, 'midsegment_trap', ['קטע אמצעים בטרפז', 'קטע אמצעים בטרפז', 'קטע אמצעים בטרפז מקביל לבסיסים ושווה לחצי סכומם.'], ['Trapezoid midsegment', 'Midsegment of a trapezoid', 'A trapezoid midsegment is parallel to the bases and equals half their sum.']),
-  median_hyp: R('L07', 'theorem', 1, 'median_hypotenuse', ['תיכון ליתר', 'התיכון ליתר', 'במשולש ישר זווית התיכון ליתר שווה למחצית היתר.'], ['Median to hypotenuse', 'Median to the hypotenuse', 'In a right triangle the median to the hypotenuse is half the hypotenuse.']),
-  tri_30: R('L07', 'theorem', 1, 'leg_opposite_30', ['משולש 30-60-90', 'הניצב שמול זווית של 30 מעלות', 'במשולש ישר זווית, הניצב שמול זווית של $30°$ שווה למחצית היתר.'], ['30-60-90 triangle', 'Leg opposite 30 degrees', 'In a right triangle, the leg opposite a $30°$ angle is half the hypotenuse.']),
+  midseg_tri: R('L07', 'theorem', 2, 'midseg_par', ['קטע אמצעים במשולש', 'קטע אמצעים במשולש', 'קטע אמצעים במשולש מקביל לצלע השלישית ושווה למחציתה.'], ['Triangle midsegment', 'Midsegment of a triangle', 'A triangle midsegment is parallel to the third side and half as long.'], true),
+  midseg_trap: R('L07', 'theorem', 3, 'midseg_trap_par', ['קטע אמצעים בטרפז', 'קטע אמצעים בטרפז', 'קטע אמצעים בטרפז מקביל לבסיסים ושווה לחצי סכומם.'], ['Trapezoid midsegment', 'Midsegment of a trapezoid', 'A trapezoid midsegment is parallel to the bases and equals half their sum.'], true),
+  median_hyp: R('L07', 'theorem', 2, 'median_hyp', ['תיכון ליתר', 'התיכון ליתר', 'במשולש ישר זווית התיכון ליתר שווה למחצית היתר.'], ['Median to hypotenuse', 'Median to the hypotenuse', 'In a right triangle the median to the hypotenuse is half the hypotenuse.'], true),
+  tri_30: R('L07', 'theorem', 2, 'leg_30', ['משולש 30-60-90', 'הניצב שמול זווית של 30 מעלות', 'במשולש ישר זווית, הניצב שמול זווית של $30°$ שווה למחצית היתר.'], ['30-60-90 triangle', 'Leg opposite 30 degrees', 'In a right triangle, the leg opposite a $30°$ angle is half the hypotenuse.'], true),
 
   // L08 Pythagoras
-  pythagoras: R('L08', 'theorem', 1, 'pythagoras', ['פיתגורס', 'משפט פיתגורס', 'במשולש ישר זווית סכום ריבועי הניצבים שווה לריבוע היתר.'], ['Pythagoras', 'Pythagorean theorem', 'In a right triangle, the squares of the legs add up to the square of the hypotenuse.']),
-  pyth_conv: R('L08', 'theorem', 1, 'pythagoras_converse', ['הפוך לפיתגורס', 'המשפט ההפוך לפיתגורס', 'אם סכום ריבועי שתי צלעות שווה לריבוע השלישית, המשולש ישר זווית.'], ['Converse of Pythagoras', 'Converse of the Pythagorean theorem', 'If two sides squared add up to the third side squared, the triangle is right-angled.']),
+  pythagoras: R('L08', 'theorem', 1, 'pythagoras', ['פיתגורס', 'משפט פיתגורס', 'במשולש ישר זווית סכום ריבועי הניצבים שווה לריבוע היתר.'], ['Pythagoras', 'Pythagorean theorem', 'In a right triangle, the squares of the legs add up to the square of the hypotenuse.'], true),
+  pyth_conv: R('L08', 'theorem', 1, 'pythagoras_conv', ['הפוך לפיתגורס', 'המשפט ההפוך לפיתגורס', 'אם סכום ריבועי שתי צלעות שווה לריבוע השלישית, המשולש ישר זווית.'], ['Converse of Pythagoras', 'Converse of the Pythagorean theorem', 'If two sides squared add up to the third side squared, the triangle is right-angled.'], true),
 
   // L09 similarity
-  thales: R('L09', 'theorem', 1, 'intercept_thm', ['משפט תאלס', 'משפט תאלס', 'ישרים מקבילים חותכים על שוקי זווית קטעים פרופורציוניים.'], ['Intercept theorem', 'Intercept theorem', 'Parallel lines cut proportional segments on the arms of an angle.']),
-  sim_aa: R('L09', 'theorem', 2, 'sim_AA', ['דמיון ז.ז', 'משפט דמיון ז.ז', 'שתי זוויות שוות בשני משולשים, ולכן המשולשים דומים.'], ['AA similarity', 'AA similarity', 'Two equal angles, so the triangles are similar.']),
-  sim_sas: R('L09', 'theorem', 2, 'sim_SAS', ['דמיון צ.ז.צ', 'משפט דמיון צ.ז.צ', 'שתי צלעות פרופורציוניות והזווית שביניהן שווה, ולכן המשולשים דומים.'], ['SAS similarity', 'SAS similarity', 'Two proportional sides with an equal angle between them, so the triangles are similar.']),
-  sim_sss: R('L09', 'theorem', 1, 'sim_SSS', ['דמיון צ.צ.צ', 'משפט דמיון צ.צ.צ', 'שלוש צלעות פרופורציוניות, ולכן המשולשים דומים.'], ['SSS similarity', 'SSS similarity', 'Three proportional sides, so the triangles are similar.']),
-  bis_ratio: R('L09', 'theorem', 1, 'angle_bisector_ratio', ['חוצה זווית ויחס', 'משפט חוצה הזווית', 'חוצה זווית במשולש מחלק את הצלע שמולה ביחס הצלעות הכולאות את הזווית.'], ['Angle bisector theorem', 'Angle bisector theorem', 'An angle bisector divides the opposite side in the ratio of the adjacent sides.']),
+  thales: R('L09', 'theorem', 1, 'thales', ['משפט תאלס', 'משפט תאלס', 'ישרים מקבילים חותכים על שוקי זווית קטעים פרופורציוניים.'], ['Intercept theorem', 'Intercept theorem', 'Parallel lines cut proportional segments on the arms of an angle.'], true),
+  sim_aa: R('L09', 'theorem', 2, 'sim_AA', ['דמיון ז.ז', 'משפט דמיון ז.ז', 'שתי זוויות שוות בשני משולשים, ולכן המשולשים דומים.'], ['AA similarity', 'AA similarity', 'Two equal angles, so the triangles are similar.'], true),
+  sim_sas: R('L09', 'theorem', 2, 'sim_SAS', ['דמיון צ.ז.צ', 'משפט דמיון צ.ז.צ', 'שתי צלעות פרופורציוניות והזווית שביניהן שווה, ולכן המשולשים דומים.'], ['SAS similarity', 'SAS similarity', 'Two proportional sides with an equal angle between them, so the triangles are similar.'], true),
+  sim_sss: R('L09', 'theorem', 2, 'sim_SSS', ['דמיון צ.צ.צ', 'משפט דמיון צ.צ.צ', 'שלוש צלעות פרופורציוניות, ולכן המשולשים דומים.'], ['SSS similarity', 'SSS similarity', 'Three proportional sides, so the triangles are similar.'], true),
+  sim_parts: R('L09', 'theorem', 1, 'sim_parts', ['צלעות וזוויות מתאימות בדמיון', 'צלעות וזוויות מתאימות במשולשים דומים', 'במשולשים דומים, יחס הצלעות המתאימות שווה, והזוויות המתאימות שוות.'], ['Similar parts', 'Corresponding parts of similar triangles', 'In similar triangles, corresponding sides are in the same ratio, and corresponding angles are equal.'], true),
+  bis_ratio: R('L09', 'theorem', 1, 'bisector_thm', ['חוצה זווית ויחס', 'משפט חוצה הזווית', 'חוצה זווית במשולש מחלק את הצלע שמולה ביחס הצלעות הכולאות את הזווית.'], ['Angle bisector theorem', 'Angle bisector theorem', 'An angle bisector divides the opposite side in the ratio of the adjacent sides.'], true),
 
   // L10 circles
-  inscribed_central: R('L10', 'theorem', 0, 'inscribed_half_central', ['היקפית ומרכזית', 'זווית היקפית וזווית מרכזית', 'זווית היקפית שווה למחצית הזווית המרכזית הנשענת על אותה קשת.'], ['Inscribed and central', 'Inscribed and central angles', 'An inscribed angle is half the central angle on the same arc.']),
-  inscribed_same: R('L10', 'theorem', 0, 'inscribed_same_arc', ['היקפיות על אותה קשת', 'זוויות היקפיות על אותה קשת', 'זוויות היקפיות הנשענות על אותה קשת שוות.'], ['Same arc', 'Inscribed angles on the same arc', 'Inscribed angles on the same arc are equal.']),
-  semicircle: R('L10', 'theorem', 0, 'angle_in_semicircle', ['זווית על קוטר', 'זווית היקפית על קוטר', 'זווית היקפית הנשענת על קוטר היא זווית ישרה.'], ['Angle on a diameter', 'Angle in a semicircle', 'An inscribed angle on a diameter is a right angle.']),
-  tangent_radius: R('L10', 'theorem', 0, 'tangent_perp_radius', ['משיק ורדיוס', 'משיק ורדיוס', 'משיק למעגל מאונך לרדיוס בנקודת ההשקה.'], ['Tangent and radius', 'Tangent and radius', 'A tangent is perpendicular to the radius at the point of contact.']),
-  tangents_eq: R('L10', 'theorem', 0, 'tangents_equal', ['שני משיקים', 'שני משיקים מנקודה', 'שני משיקים למעגל היוצאים מאותה נקודה שווים.'], ['Two tangents', 'Two tangents from a point', 'The two tangents from a point to a circle are equal.']),
-  cyclic_quad: R('L10', 'theorem', 0, 'cyclic_opp_angles', ['מרובע חסום', 'מרובע חסום במעגל', 'במרובע חסום במעגל סכום כל זוג זוויות נגדיות הוא $180°$.'], ['Cyclic quadrilateral', 'Cyclic quadrilateral', 'Opposite angles of a cyclic quadrilateral sum to $180°$.']),
+  radii: R('L10', 'definition', 0, 'radii_eq', ['רדיוסים', 'רדיוסים במעגל', 'כל הרדיוסים באותו מעגל שווים: אם $A$ ו-$B$ על המעגל שמרכזו $O$, אז $OA = OB$.'], ['Radii', 'Radii of a circle', 'All radii of one circle are equal: if $A$ and $B$ are on the circle with center $O$, then $OA = OB$.'], true),
+  inscribed_central: R('L10', 'theorem', 0, 'inscribed_central', ['היקפית ומרכזית', 'זווית היקפית וזווית מרכזית', 'זווית היקפית שווה למחצית הזווית המרכזית הנשענת על אותה קשת.'], ['Inscribed and central', 'Inscribed and central angles', 'An inscribed angle is half the central angle on the same arc.'], true),
+  inscribed_same: R('L10', 'theorem', 0, 'inscribed_same_arc', ['היקפיות על אותה קשת', 'זוויות היקפיות על אותה קשת', 'זוויות היקפיות הנשענות על אותה קשת שוות.'], ['Same arc', 'Inscribed angles on the same arc', 'Inscribed angles on the same arc are equal.'], true),
+  semicircle: R('L10', 'theorem', 0, 'inscribed_diameter', ['זווית על קוטר', 'זווית היקפית על קוטר', 'זווית היקפית הנשענת על קוטר היא זווית ישרה.'], ['Angle on a diameter', 'Angle in a semicircle', 'An inscribed angle on a diameter is a right angle.'], true),
+  tangent_radius: R('L10', 'theorem', 0, 'tangent_perp', ['משיק ורדיוס', 'משיק ורדיוס', 'משיק למעגל מאונך לרדיוס בנקודת ההשקה.'], ['Tangent and radius', 'Tangent and radius', 'A tangent is perpendicular to the radius at the point of contact.'], true),
+  tangents_eq: R('L10', 'theorem', 0, 'tangents_eq', ['שני משיקים', 'שני משיקים מנקודה', 'שני משיקים למעגל היוצאים מאותה נקודה שווים.'], ['Two tangents', 'Two tangents from a point', 'The two tangents from a point to a circle are equal.'], true),
+  cyclic_quad: R('L10', 'theorem', 0, 'cyclic_quad', ['מרובע חסום', 'מרובע חסום במעגל', 'במרובע חסום במעגל סכום כל זוג זוויות נגדיות הוא $180°$.'], ['Cyclic quadrilateral', 'Cyclic quadrilateral', 'Opposite angles of a cyclic quadrilateral sum to $180°$.'], true),
 
   // L11 trigonometry in the triangle
-  sin_def: R('L11', 'definition', 0, 'sin_def', ['הגדרת סינוס', 'הגדרת סינוס', 'במשולש ישר זווית, סינוס של זווית חדה הוא הניצב שמולה חלקי היתר.'], ['Sine', 'Definition of sine', 'In a right triangle, the sine of an acute angle is the opposite leg over the hypotenuse.']),
-  cos_def: R('L11', 'definition', 0, 'cos_def', ['הגדרת קוסינוס', 'הגדרת קוסינוס', 'במשולש ישר זווית, קוסינוס של זווית חדה הוא הניצב שלידה חלקי היתר.'], ['Cosine', 'Definition of cosine', 'In a right triangle, the cosine of an acute angle is the adjacent leg over the hypotenuse.']),
-  tan_def: R('L11', 'definition', 0, 'tan_def', ['הגדרת טנגנס', 'הגדרת טנגנס', 'במשולש ישר זווית, טנגנס של זווית חדה הוא הניצב שמולה חלקי הניצב שלידה.'], ['Tangent', 'Definition of tangent', 'In a right triangle, the tangent of an acute angle is the opposite leg over the adjacent leg.']),
-  law_sines: R('L11', 'theorem', 0, 'law_sines', ['משפט הסינוסים', 'משפט הסינוסים', 'במשולש, היחס בין צלע לסינוס הזווית שמולה קבוע ושווה לקוטר המעגל החוסם.'], ['Law of sines', 'Law of sines', 'Each side over the sine of the opposite angle is constant, equal to the circumcircle diameter.']),
-  law_cosines: R('L11', 'theorem', 0, 'law_cosines', ['משפט הקוסינוסים', 'משפט הקוסינוסים', 'ריבוע צלע שווה לסכום ריבועי שתי האחרות, פחות פעמיים מכפלתן בקוסינוס הזווית שביניהן.'], ['Law of cosines', 'Law of cosines', 'A side squared equals the other two squared, minus twice their product times the cosine of the angle between them.']),
+  sin_def: R('L11', 'definition', 1, 'sin_def', ['הגדרת סינוס', 'הגדרת סינוס', 'במשולש ישר זווית, סינוס של זווית חדה הוא הניצב שמולה חלקי היתר.'], ['Sine', 'Definition of sine', 'In a right triangle, the sine of an acute angle is the opposite leg over the hypotenuse.'], true),
+  cos_def: R('L11', 'definition', 1, 'cos_def', ['הגדרת קוסינוס', 'הגדרת קוסינוס', 'במשולש ישר זווית, קוסינוס של זווית חדה הוא הניצב שלידה חלקי היתר.'], ['Cosine', 'Definition of cosine', 'In a right triangle, the cosine of an acute angle is the adjacent leg over the hypotenuse.'], true),
+  tan_def: R('L11', 'definition', 1, 'tan_def', ['הגדרת טנגנס', 'הגדרת טנגנס', 'במשולש ישר זווית, טנגנס של זווית חדה הוא הניצב שמולה חלקי הניצב שלידה.'], ['Tangent', 'Definition of tangent', 'In a right triangle, the tangent of an acute angle is the opposite leg over the adjacent leg.'], true),
+  law_sines: R('L11', 'theorem', 0, 'law_sines', ['משפט הסינוסים', 'משפט הסינוסים', 'במשולש, היחס בין צלע לסינוס הזווית שמולה קבוע ושווה לקוטר המעגל החוסם.'], ['Law of sines', 'Law of sines', 'Each side over the sine of the opposite angle is constant, equal to the circumcircle diameter.'], true),
+  law_cosines: R('L11', 'theorem', 0, 'law_cosines', ['משפט הקוסינוסים', 'משפט הקוסינוסים', 'ריבוע צלע שווה לסכום ריבועי שתי האחרות, פחות פעמיים מכפלתן בקוסינוס הזווית שביניהן.'], ['Law of cosines', 'Law of cosines', 'A side squared equals the other two squared, minus twice their product times the cosine of the angle between them.'], true),
   tri_area: R('L11', 'theorem', 0, 'tri_area_sin', ['שטח משולש', 'שטח משולש בעזרת סינוס', 'שטח משולש הוא חצי מכפלת שתי צלעות בסינוס הזווית שביניהן.'], ['Triangle area', 'Triangle area with sine', 'The area of a triangle is half the product of two sides times the sine of the angle between them.']),
 };
 
@@ -183,42 +189,42 @@ export const STAGES = [
     blurb: { he: 'זוויות הבסיס, המשפט ההפוך, והקטע שהוא גם תיכון, גם גובה וגם חוצה זווית.', en: 'Base angles, the converse, and the segment that is median, altitude and bisector at once.' },
   },
   {
-    id: 'L04', glyph: 'parallel', status: 'soon',
+    id: 'L04', glyph: 'parallel', status: 'open',
     name: { he: 'ישרים מקבילים', en: 'Parallel lines' },
     blurb: { he: 'זוויות מתחלפות, מתאימות וחד-צדדיות, ומשם סכום הזוויות במשולש.', en: 'Alternate, corresponding and co-interior angles, and from there the triangle angle sum.' },
   },
   {
-    id: 'L05', glyph: 'inequality', status: 'soon',
+    id: 'L05', glyph: 'inequality', status: 'open',
     name: { he: 'אי-שוויונים במשולש', en: 'Triangle inequalities' },
     blurb: { he: 'מול הצלע הגדולה הזווית הגדולה, ואי-שוויון המשולש.', en: 'The larger side faces the larger angle, and the triangle inequality.' },
   },
   {
-    id: 'L06', glyph: 'quad', status: 'soon',
+    id: 'L06', glyph: 'quad', status: 'open',
     name: { he: 'מרובעים', en: 'Quadrilaterals' },
     blurb: { he: 'מקבילית, מלבן, מעוין, ריבוע, דלתון וטרפז: תכונות ומשפטי זיהוי.', en: 'Parallelogram, rectangle, rhombus, square, kite and trapezoid: properties and tests.' },
   },
   {
-    id: 'L07', glyph: 'midsegment', status: 'soon',
+    id: 'L07', glyph: 'midsegment', status: 'open',
     name: { he: 'קטע אמצעים', en: 'Midsegments' },
     blurb: { he: 'קטע אמצעים במשולש ובטרפז, התיכון ליתר והמשולש $30°$-$60°$-$90°$.', en: 'Midsegments in triangles and trapezoids, the median to the hypotenuse, the $30°$-$60°$-$90°$ triangle.' },
   },
   {
-    id: 'L08', glyph: 'pythagoras', status: 'soon',
+    id: 'L08', glyph: 'pythagoras', status: 'open',
     name: { he: 'משפט פיתגורס', en: 'Pythagoras' },
     blurb: { he: 'המשפט המפורסם ביותר בגאומטריה, וגם המשפט ההפוך.', en: 'The most famous theorem in geometry, and its converse.' },
   },
   {
-    id: 'L09', glyph: 'similarity', status: 'soon',
+    id: 'L09', glyph: 'similarity', status: 'open',
     name: { he: 'דמיון משולשים', en: 'Similarity' },
     blurb: { he: 'משפט תאלס, משפטי הדמיון ומשפט חוצה הזווית.', en: 'The intercept theorem, the similarity tests and the angle bisector theorem.' },
   },
   {
-    id: 'L10', glyph: 'circle', status: 'soon',
+    id: 'L10', glyph: 'circle', status: 'open',
     name: { he: 'מעגל', en: 'Circles' },
     blurb: { he: 'מיתרים, זוויות מרכזיות והיקפיות, משיקים, ומרובעים חסומים וחוסמים.', en: 'Chords, central and inscribed angles, tangents, cyclic and tangential quadrilaterals.' },
   },
   {
-    id: 'L11', glyph: 'trigtri', status: 'soon',
+    id: 'L11', glyph: 'trigtri', status: 'open',
     name: { he: 'טריגונומטריה במשולש', en: 'Trigonometry in the triangle' },
     blurb: { he: 'סינוס, קוסינוס וטנגנס, משפט הסינוסים ומשפט הקוסינוסים. הגשר לנושא הבא.', en: 'sin, cos and tan, the laws of sines and cosines. The bridge to the next topic.' },
   },
@@ -420,6 +426,8 @@ export const PROBLEMS = {
       ],
     },
   ],
+  // stages 4–11 live in problems-l04-l11.js
+  ...PROBLEMS_L04_L11,
 };
 
 export function stageById(id) { return STAGES.find((s) => s.id === id); }

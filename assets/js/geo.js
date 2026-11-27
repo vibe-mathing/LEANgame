@@ -5,6 +5,8 @@
 // the rows it cites, spots pure calculation steps, and emits the matching Lean.
 
 import { REASONS, STAGES } from './data.js';
+import { getLang } from './i18n.js';
+import * as alg from './algebra.js';
 
 const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 const others = (k) => [0, 1, 2].filter((x) => x !== k);
@@ -13,12 +15,13 @@ const EPS = 1e-9;
 const ok = (claim) => ({ ok: true, claim });
 const fail = (key, vars) => ({ ok: false, error: { key, vars } });
 
-// While typing: < or > where a term starts (at the beginning, or after =, +, −, ≅)
-// means an angle, so it becomes ∢; Latin letters become capitals. Same length, so the
-// caret stays put.
+// While typing: < or > where a term starts (at the beginning, after =, +, −, ≅, after a
+// relation sign, or after sin/cos/tan) means an angle, so it becomes ∢; Latin letters
+// become capitals. Same length, so the caret stays put. A lone < or > after a term is
+// "less than" / "greater than".
 export function liveFormat(s) {
   return String(s)
-    .replace(/(^|[=+\-−*≅]\s*|\d)[<>]/g, '$1∢')
+    .replace(/(^|[=+\-−*/≅<>∥⊥∼]\s*|\d|sin|cos|tan)[<>]/gi, '$1∢')
     .replace(/[a-z]/g, (c) => c.toUpperCase());
 }
 
@@ -26,17 +29,22 @@ export function normalizeInput(s) {
   return String(s)
     .replace(/\s+/g, '')
     .replace(/_\|_|⟂/g, '⊥')
+    .replace(/\|\||\/\//g, '∥')
     .replace(/[∠∡]/g, '∢')
-    .replace(/(^|[=+\-−*≅~\d])[<>]/g, '$1∢')
+    .replace(/(sin|cos|tan)[<>]/gi, '$1∢')
+    .replace(/(^|[=+\-−*/≅~<>∥⊥∼\d])[<>]/g, '$1∢')
     .replace(/[Δ∆▵▲]/g, '△')
     .replace(/~=|=~|≡|≃|≌/g, '≅')
+    .replace(/~/g, '∼')
     .replace(/[º˚]/g, '°')
+    .replace(/\^2/g, '²')
     .replace(/[−–]/g, '-')
     .replace(/[·×]/g, '*')
+    .replace(/[÷:]/g, '/')
     .toUpperCase();
 }
 
-const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=.,+\-*]/g, '');
+const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=<>∥∼².,+\-*/√]/g, '');
 
 // ---------- keys ----------
 
@@ -84,8 +92,57 @@ function computeRays(points) {
 
 // ---------- parsing ----------
 
+// The quadrilateral types a claim can state, as "ABCD מקבילית" or "parallelogram ABCD".
+// `sym`: the vertex orders that name the same quadrilateral of that type. A parallelogram
+// ABCD is also BCDA and DCBA; a kite ABCD (AB = AD, CB = CD, heads A and C) is also ADCB,
+// CBAD and CDAB; a trapezoid ABCD (bases AB and DC) is also BADC, DCBA and CDAB.
+const D4 = [[0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1], [3, 0, 1, 2], [3, 2, 1, 0], [2, 1, 0, 3], [1, 0, 3, 2], [0, 3, 2, 1]];
+const KITE = [[0, 1, 2, 3], [0, 3, 2, 1], [2, 1, 0, 3], [2, 3, 0, 1]];
+const TRAP = [[0, 1, 2, 3], [1, 0, 3, 2], [3, 2, 1, 0], [2, 3, 0, 1]];
+export const QUADS = {
+  parallelogram: { he: 'מקבילית', en: 'parallelogram', lean: 'IsParallelogram', sym: D4 },
+  rectangle: { he: 'מלבן', en: 'rectangle', lean: 'IsRectangle', sym: D4 },
+  rhombus: { he: 'מעוין', en: 'rhombus', alt: ['מעויין'], lean: 'IsRhombus', sym: D4 },
+  square: { he: 'ריבוע', en: 'square', lean: 'IsSquare', sym: D4 },
+  kite: { he: 'דלתון', en: 'kite', lean: 'IsKite', sym: KITE },
+  isoTrapezoid: { he: 'טרפז שווה שוקיים', en: 'isosceles trapezoid', alt: ['טרפז ש"ש', 'טרפז ש״ש'], lean: 'IsIsoTrapezoid', sym: TRAP },
+  trapezoid: { he: 'טרפז', en: 'trapezoid', lean: 'IsTrapezoid', sym: TRAP },
+};
+const squashName = (s) => s.replace(/\s+/g, '').toUpperCase();
+
+// "ABCD מקבילית", "מקבילית ABCD", "ABCD is a parallelogram". null when no type is named.
+function parseQuad(s, points) {
+  for (const [kind, q] of Object.entries(QUADS)) {
+    for (const w of [q.he, q.en, ...(q.alt || [])].map(squashName)) {
+      let rest = null;
+      if (s.startsWith(w)) rest = s.slice(w.length);
+      else if (s.endsWith(w)) rest = s.slice(0, -w.length).replace(/(הוא|היא|IS(AN?)?)$/, '');
+      if (rest === null) continue;
+      rest = rest.replace(/^(המרובע|QUADRILATERAL)/, '');
+      if (!/^[A-Z]{4}$/.test(rest)) return fail('badQuad');
+      const P = [...rest];
+      const bad = P.find((x) => !points.includes(x));
+      if (bad) return fail('unknownPoint', { p: `$${bad}$` });
+      if (new Set(P).size < 4) return fail('repeatPoint');
+      return ok({ type: 'quad', kind, P });
+    }
+  }
+  return null;
+}
+
 function parseAtom(body, points, rays) {
   let m;
+  if ((m = body.match(/^(SIN|COS|TAN)(∢.*)$/))) {
+    const r = parseAtom(m[2], points, rays);
+    if (!r.ok) return r;
+    const fn = m[1].toLowerCase();
+    return { ok: true, term: { kind: 'trig', fn, a: r.term, key: `t:${fn}(${r.term.key})` } };
+  }
+  if ((m = body.match(/^(SIN|COS|TAN)(\d+(?:[.,]\d+)?)°?$/))) {
+    const v = alg.trigDeg(m[1].toLowerCase(), parseFloat(m[2].replace(',', '.')));
+    return v == null ? fail('unknownTerm', { t: `$${safe(body)}$` }) : { ok: true, num: v };
+  }
+  if (/^(SIN|COS|TAN)/.test(body)) return fail('trigNeedsAngle');
   if ((m = body.match(/^∢([A-Z])([A-Z])([A-Z])$/))) {
     const pts = [m[1], m[2], m[3]];
     const bad = pts.find((x) => !points.includes(x));
@@ -106,7 +163,11 @@ function parseAtom(body, points, rays) {
   return fail('unknownTerm', { t: shown ? `$${shown}$` : '…' });
 }
 
-// One side of an equation: a sum of (coefficient × segment/angle) plus a constant.
+// One side of an equation: a sum of terms plus a constant. A term is a coefficient times a
+// product of factors: segments, angles, sin/cos/tan of an angle and numbers (2, 0.5, √3),
+// each to the first or second power (AB²), multiplied (AB·CD) or divided (AB/CD,
+// BC/sin∢BAC). A single segment or angle stays a plain term, so linear claims look
+// exactly as before; anything else is a monomial { kind: 'mono', f: [{ t, e }], key }.
 function parseSide(src, points, rays) {
   if (!src) return fail('noRelation');
   const tokens = src.match(/[+-]?[^+-]+/g);
@@ -116,25 +177,64 @@ function parseSide(src, points, rays) {
   let deg = false;
   for (const tok of tokens) {
     const sign = tok[0] === '-' ? -1 : 1;
-    const body = tok.replace(/^[+-]/, '');
-    let m;
-    if ((m = body.match(/^(\d+(?:[.,]\d+)?)(°)?$/))) {
-      k += sign * parseFloat(m[1].replace(',', '.'));
-      if (m[2]) deg = true;
-      continue;
-    }
-    m = body.match(/^(\d+(?:[.,]\d+)?)?\*?(.+)$/);
-    const coef = m && m[1] ? parseFloat(m[1].replace(',', '.')) : 1;
-    const r = parseAtom(m ? m[2] : body, points, rays);
+    const r = parseProduct(tok.replace(/^[+-]/, ''), points, rays);
     if (!r.ok) return r;
-    const key = termKey(r.term);
+    if (r.deg) deg = true;
+    if (!r.t) { k += sign * r.c; continue; }
+    const key = termKey(r.t);
     const same = terms.find((x) => termKey(x.t) === key);
-    if (same) same.c += sign * coef; else terms.push({ c: sign * coef, t: r.term });
+    if (same) same.c += sign * r.c; else terms.push({ c: sign * r.c, t: r.t });
   }
   return { ok: true, side: { terms: terms.filter((x) => Math.abs(x.c) > EPS), k, deg } };
 }
 
-const kindType = (t) => (t.kind === 'seg' ? 'len' : 'ang');
+const NUM_RE = /^(\d+(?:[.,]\d+)?)?(?:√(\d+(?:[.,]\d+)?))?(°)?(.*)$/;
+const num = (s) => parseFloat(s.replace(',', '.'));
+
+function parseProduct(body, points, rays) {
+  const pieces = body.split(/([*/])/);
+  let c = 1;
+  let deg = false;
+  const f = new Map(); // key → { t, e }
+  for (let i = 0; i < pieces.length; i += 2) {
+    const piece = pieces[i];
+    const sgn = pieces[i - 1] === '/' ? -1 : 1;
+    const m = piece.match(NUM_RE);
+    const hasNum = !!(m[1] || m[2]);
+    if (hasNum) c *= ((m[1] ? num(m[1]) : 1) * (m[2] ? Math.sqrt(num(m[2])) : 1)) ** sgn;
+    if (m[3]) deg = true;
+    let rest = m[4];
+    if (!rest) {
+      if (!hasNum) return fail('unknownTerm', { t: `$${safe(body) || '…'}$` });
+      continue;
+    }
+    let e = 1;
+    if (rest.endsWith('²')) { e = 2; rest = rest.slice(0, -1); }
+    const a = parseAtom(rest, points, rays);
+    if (!a.ok) return a;
+    if (a.num != null) { c *= (a.num ** e) ** sgn; continue; }
+    const key = termKey(a.term);
+    const cur = f.get(key) || { t: a.term, e: 0 };
+    cur.e += e * sgn;
+    f.set(key, cur);
+  }
+  if (!Number.isFinite(c)) return fail('unknownTerm', { t: `$${safe(body)}$` });
+  const fs = [...f.values()].filter((x) => x.e !== 0);
+  if (!fs.length) return { ok: true, c, deg };
+  if (fs.some((x) => x.t.kind === 'ang') && (fs.length > 1 || fs[0].e !== 1)) return fail('angleProduct');
+  if (fs.length === 1 && fs[0].e === 1) return { ok: true, c, t: fs[0].t, deg };
+  return { ok: true, c, t: { kind: 'mono', f: fs, key: alg.keyOf(new Map(fs.map((x) => [termKey(x.t), x.e]))) }, deg };
+}
+
+// What a term measures: an angle ('ang'), or a length to some power ('L1' for AB, 'L2' for
+// AB², 'L0' for a ratio or a sine). Only terms of one kind may be added or compared.
+function dimOf(t) {
+  if (t.kind === 'ang') return 'ang';
+  if (t.kind === 'seg') return 'L1';
+  if (t.kind === 'trig') return 'L0';
+  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : 0), 0);
+}
+const kindType = (t) => (dimOf(t) === 'ang' ? 'ang' : dimOf(t));
 
 function simpleTerm(side, of) {
   if (side.terms.length === 1 && Math.abs(side.terms[0].c - 1) < EPS && Math.abs(side.k) < EPS) return side.terms[0].t;
@@ -148,31 +248,43 @@ export function parseClaim(input, ctx) {
   const rays = Array.isArray(ctx) ? null : ctx.rays;
   const s = normalizeInput(input);
   if (!s) return fail('empty');
-  if (s.includes('≅')) {
-    const parts = s.split('≅');
-    if (parts.length !== 2) return fail('badCong');
+  // △ABC ≅ △DEF and △ABC ∼ △DEF: the letter order is the correspondence.
+  for (const [sym, type, badKey] of [['≅', 'cong', 'badCong'], ['∼', 'sim', 'badSim']]) {
+    if (!s.includes(sym)) continue;
+    const parts = s.split(sym);
+    if (parts.length !== 2) return fail(badKey);
     const tri = parts.map((x) => x.replace(/^△/, ''));
-    if (!tri.every((x) => /^[A-Z]{3}$/.test(x))) return fail('badCong');
+    if (!tri.every((x) => /^[A-Z]{3}$/.test(x))) return fail(badKey);
     const P = [...tri[0]];
     const Q = [...tri[1]];
     const bad = [...P, ...Q].find((x) => !points.includes(x));
     if (bad) return fail('unknownPoint', { p: `$${bad}$` });
     if (new Set(P).size < 3 || new Set(Q).size < 3) return fail('repeatPoint');
-    return ok({ type: 'cong', P, Q });
+    return ok({ type, P, Q });
   }
-  if (s.includes('⊥')) {
-    const parts = s.split('⊥');
-    if (parts.length !== 2 || !parts.every((x) => /^[A-Z]{2}$/.test(x))) return fail('badPerp');
+  // AD ⊥ BC and DE ∥ BC: lines, keyed by every diagram point on them.
+  for (const [sym, type, badKey] of [['⊥', 'perp', 'badPerp'], ['∥', 'par', 'badPar']]) {
+    if (!s.includes(sym)) continue;
+    const parts = s.split(sym);
+    if (parts.length !== 2 || !parts.every((x) => /^[A-Z]{2}$/.test(x))) return fail(badKey);
     const [a, b] = parts.map((x) => [...x]);
     const bad = [...a, ...b].find((x) => !points.includes(x));
     if (bad) return fail('unknownPoint', { p: `$${bad}$` });
     if (a[0] === a[1] || b[0] === b[1]) return fail('repeatPoint');
     const coords = Array.isArray(ctx) ? null : ctx.points;
-    return ok({ type: 'perp', a, b, la: lineKey(coords, a[0], a[1]), lb: lineKey(coords, b[0], b[1]) });
+    return ok({ type, a, b, la: lineKey(coords, a[0], a[1]), lb: lineKey(coords, b[0], b[1]) });
   }
-  const parts = s.split('=');
-  if (parts.length > 2) return fail('oneRelation');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return fail('noRelation');
+  if (!/[=<>]/.test(s)) {
+    const q = parseQuad(s, points);
+    if (q) return q;
+  }
+  // One relation: =, < or >.
+  const rels = s.match(/[=<>]/g) || [];
+  if (rels.length > 1) return fail('oneRelation');
+  if (!rels.length) return fail('noRelation');
+  const op = rels[0];
+  const parts = s.split(op);
+  if (!parts[0] || !parts[1]) return fail('noRelation');
   const sides = [];
   for (const part of parts) {
     const r = parseSide(part, points, rays);
@@ -185,56 +297,30 @@ export function parseClaim(input, ctx) {
   const types = new Set(all.map((x) => kindType(x.t)));
   if (L.deg || R.deg) types.add('ang');
   if (types.size > 1) return fail('mixedTypes');
-  const of = [...types][0];
+  const of = [...types][0] === 'ang' ? 'ang' : 'len';
+  if (op !== '=') return ok({ type: 'ineq', op, L, R, of });
   return ok({ type: 'eq', L, R, of, left: simpleTerm(L, of), right: simpleTerm(R, of) });
 }
 
 // ---------- linear algebra over the cited rows ----------
 
-function addTo(m, k, v) {
-  const nv = (m.get(k) || 0) + v;
-  if (Math.abs(nv) < EPS) m.delete(k); else m.set(k, nv);
-}
+const { addTo } = alg;
 
-// The equation as a vector: (left − right) = 0, keyed by segment/angle, '1' for the constant.
+// The equation as a vector: (left − right) = 0, keyed by term (segment, angle or monomial),
+// '1' for the constant. For an inequality, the side that is larger minus the smaller one.
 export function eqVec(c) {
   const m = new Map();
   for (const { c: co, t } of c.L.terms) addTo(m, termKey(t), co);
   if (c.L.k) addTo(m, '1', c.L.k);
   for (const { c: co, t } of c.R.terms) addTo(m, termKey(t), -co);
   if (c.R.k) addTo(m, '1', -c.R.k);
-  return m;
+  return c.type === 'ineq' && c.op === '<' ? alg.scale(m, -1) : m;
 }
 
 const diffVec = (k1, k2) => { const m = new Map(); addTo(m, k1, 1); addTo(m, k2, -1); return m; };
 
 // Is `target` a linear combination of `vectors`? (What linarith does for equalities.)
-export function inSpan(vectors, target) {
-  const basis = [];
-  const reduce = (vec) => {
-    const r = new Map(vec);
-    for (const b of basis) {
-      const c = r.get(b.pivot);
-      if (c) for (const [k, v] of b.vec) addTo(r, k, -c * v);
-    }
-    return r;
-  };
-  for (const v of vectors) {
-    const r = reduce(v);
-    if (!r.size) continue;
-    let pivot = null; let best = 0;
-    for (const [k, val] of r) if (Math.abs(val) > best) { best = Math.abs(val); pivot = k; }
-    const pv = r.get(pivot);
-    const norm = new Map();
-    for (const [k, val] of r) norm.set(k, val / pv);
-    for (const b of basis) {
-      const c = b.vec.get(pivot);
-      if (c) for (const [k, val] of norm) addTo(b.vec, k, -c * val);
-    }
-    basis.push({ pivot, vec: norm });
-  }
-  return reduce(target).size === 0;
-}
+export const inSpan = alg.inSpan;
 
 const refVectors = (refRows) => refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
 
@@ -255,9 +341,23 @@ export function lineKey(pts, P, Q) {
 
 // ---------- canonical form ----------
 
+// The name of quadrilateral P that comes first among the orders naming the same one.
+const quadKey = (kind, P) => QUADS[kind].sym.map((o) => o.map((i) => P[i]).join('')).sort()[0];
+
 export function claimKey(c) {
   if (!c) return '';
-  if (c.type === 'perp') return 'perp:' + [c.la, c.lb].sort().join('|');
+  if (c.type === 'perp' || c.type === 'par') return c.type + ':' + [c.la, c.lb].sort().join('|');
+  if (c.type === 'quad') return `quad:${c.kind}:${quadKey(c.kind, c.P)}`;
+  if (c.type === 'ineq') {
+    // larger − smaller > 0, never rescaled: "2AB > 2CD" is not "AB > CD"
+    const v = eqVec(c);
+    return 'ineq:' + [...v.keys()].sort().map((k) => `${k}=${v.get(k).toFixed(6)}`).join('|');
+  }
+  if (c.type === 'sim') {
+    const a = c.P.map((p, i) => p + c.Q[i]).sort().join(',');
+    const b = c.Q.map((q, i) => q + c.P[i]).sort().join(',');
+    return 'sim:' + (a < b ? a : b);
+  }
   if (c.type === 'eq') {
     const v = eqVec(c);
     if (!v.size) return 'eq:0';
@@ -274,8 +374,37 @@ export function claimKey(c) {
 
 // ---------- formatting ----------
 
-const fmtNum = (v) => String(Math.round(v * 1000) / 1000);
-const atomStr = (t) => (t.kind === 'seg' ? t.p.join('') : '∢' + t.p.join(''));
+// A number as a student would write it: 6√3 rather than 10.392.
+const ROOTS = [2, 3, 5, 6, 7];
+function numParts(v) {
+  const r = Math.round(v * 1000) / 1000;
+  if (Math.abs(v - r) < 1e-9) return { q: r, n: 1 };
+  for (const n of ROOTS) {
+    const q = v / Math.sqrt(n);
+    const qr = Math.round(q * 1000) / 1000;
+    if (qr !== 0 && Math.abs(q - qr) < 1e-9) return { q: qr, n };
+  }
+  return { q: r, n: 1 };
+}
+const fmtNum = (v) => {
+  const { q, n } = numParts(v);
+  return n === 1 ? String(q) : `${q === 1 ? '' : q}√${n}`;
+};
+const leanNum = (v) => {
+  const { q, n } = numParts(v);
+  return n === 1 ? String(q) : `${q === 1 ? '' : q + ' * '}Real.sqrt ${n}`;
+};
+
+const POW = { 2: '²', 3: '³' };
+function atomStr(t) {
+  if (t.kind === 'seg') return t.p.join('');
+  if (t.kind === 'ang') return '∢' + t.p.join('');
+  if (t.kind === 'trig') return t.fn + atomStr(t.a);
+  // a monomial: AB·CD, AB², BC/AB, BC/sin∢BAC (each denominator after its own /)
+  const pw = (x) => atomStr(x.t) + (Math.abs(x.e) === 1 ? '' : POW[Math.abs(x.e)] || '^' + Math.abs(x.e));
+  const top = t.f.filter((x) => x.e > 0).map(pw).join('·') || '1';
+  return top + t.f.filter((x) => x.e < 0).map((x) => '/' + pw(x)).join('');
+}
 
 export function fmtTerm(t) {
   if (t.kind === 'num') return fmtNum(t.v) + (t.type === 'ang' ? '°' : '');
@@ -287,7 +416,8 @@ function fmtSide(side, of) {
   const parts = [];
   side.terms.forEach(({ c, t }, i) => {
     const a = Math.abs(c);
-    const body = (Math.abs(a - 1) < EPS ? '' : fmtNum(a)) + atomStr(t);
+    const s = atomStr(t);
+    const body = Math.abs(a - 1) < EPS ? s : fmtNum(a) + (s.startsWith('1/') ? s.slice(1) : s);
     parts.push(i === 0 ? (c < 0 ? '−' : '') + body : (c < 0 ? ' − ' : ' + ') + body);
   });
   if (!side.terms.length) parts.push(fmtNum(side.k) + unit);
@@ -295,31 +425,53 @@ function fmtSide(side, of) {
   return parts.join('');
 }
 
+export function quadName(kind) {
+  const q = QUADS[kind];
+  return getLang() === 'en' ? q.en : q.he;
+}
+
 export function fmtClaim(c) {
   if (!c) return '';
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
+  if (c.type === 'sim') return `△${c.P.join('')} ∼ △${c.Q.join('')}`;
   if (c.type === 'perp') return `${c.a.join('')} ⊥ ${c.b.join('')}`;
-  return `${fmtSide(c.L, c.of)} = ${fmtSide(c.R, c.of)}`;
+  if (c.type === 'par') return `${c.a.join('')} ∥ ${c.b.join('')}`;
+  if (c.type === 'quad') {
+    if (getLang() !== 'en') return `${c.P.join('')} ${QUADS[c.kind].he}`;
+    return `${c.P.join('')} is ${/^[aeiou]/.test(QUADS[c.kind].en) ? 'an' : 'a'} ${QUADS[c.kind].en}`;
+  }
+  return `${fmtSide(c.L, c.of)} ${c.type === 'ineq' ? c.op : '='} ${fmtSide(c.R, c.of)}`;
 }
 
-const leanAtom = (t) => (t.kind === 'seg' ? `len ${t.p[0]} ${t.p[1]}` : `ang ${t.p.join(' ')}`);
+function leanAtom(t) {
+  if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
+  if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
+  if (t.kind === 'trig') return `${t.fn}D (${leanAtom(t.a)})`;
+  const pw = (x) => leanAtom(x.t) + (Math.abs(x.e) === 1 ? '' : ` ^ ${Math.abs(x.e)}`);
+  const top = t.f.filter((x) => x.e > 0).map(pw).join(' * ') || '1';
+  const den = t.f.filter((x) => x.e < 0).map(pw);
+  return den.length ? `${top} / ${den.length > 1 ? `(${den.join(' * ')})` : den[0]}` : top;
+}
 
 function leanSide(side) {
   const parts = [];
   side.terms.forEach(({ c, t }, i) => {
     const a = Math.abs(c);
-    const body = (Math.abs(a - 1) < EPS ? '' : `${fmtNum(a)} * `) + leanAtom(t);
+    const body = (Math.abs(a - 1) < EPS ? '' : `${leanNum(a)} * `) + leanAtom(t);
     parts.push(i === 0 ? (c < 0 ? '-' : '') + body : (c < 0 ? ' - ' : ' + ') + body);
   });
-  if (!side.terms.length) parts.push(fmtNum(side.k));
-  else if (Math.abs(side.k) > EPS) parts.push((side.k < 0 ? ' - ' : ' + ') + fmtNum(Math.abs(side.k)));
+  if (!side.terms.length) parts.push(leanNum(side.k));
+  else if (Math.abs(side.k) > EPS) parts.push((side.k < 0 ? ' - ' : ' + ') + leanNum(Math.abs(side.k)));
   return parts.join('');
 }
 
 export function leanClaim(c) {
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
+  if (c.type === 'sim') return `Sim ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'perp') return `Perp ${c.a.join(' ')} ${c.b.join(' ')}`;
-  return `${leanSide(c.L)} = ${leanSide(c.R)}`;
+  if (c.type === 'par') return `Par ${c.a.join(' ')} ${c.b.join(' ')}`;
+  if (c.type === 'quad') return `${QUADS[c.kind].lean} ${c.P.join(' ')}`;
+  return `${leanSide(c.L)} ${c.type === 'ineq' ? c.op : '='} ${leanSide(c.R)}`;
 }
 
 // ---------- problem preparation ----------
@@ -652,13 +804,17 @@ const CHECKS = {
     if (ci < 0) return { ok: false, msg: { key: 'straightNotLine' }, proof: base };
     return { ok: true, proof: `${base} cfg${ci + 1}` };
   },
+  // Linear steps as before, and from stage 4 on also inequalities, squares and roots,
+  // proportions and the values of sin/cos/tan (algebra.js).
   algebra(claim, refRows) {
-    const proof = refRows.length ? `by linarith [${refRows.map((r) => 's' + r.n).join(', ')}]` : 'by ring';
-    if (claim.type !== 'eq') return { ok: false, msg: { key: 'algebraNeedEq' }, proof };
+    const names = refRows.map((r) => 's' + r.n).join(', ');
+    const proof = refRows.length ? `by linarith [${names}]` : 'by ring';
+    if (claim.type !== 'eq' && claim.type !== 'ineq') return { ok: false, msg: { key: 'algebraNeedEq' }, proof };
     const target = eqVec(claim);
-    if (!target.size) return { ok: true, proof: 'by ring' };
-    if (!refRows.length) return { ok: false, msg: { key: 'needRefs' }, proof };
-    if (inSpan(refVectors(refRows), target)) return { ok: true, proof };
+    if (claim.type === 'eq' && !target.size) return { ok: true, proof: 'by ring' };
+    if (!refRows.length && claim.type === 'eq') return { ok: false, msg: { key: 'needRefs' }, proof };
+    const how = algebraFollows(claim, refRows.map((r) => r.claim));
+    if (how) return { ok: true, proof: how === 'linear' ? proof : `by nlinarith [${names}]` };
     return {
       ok: false,
       msg: { key: 'algebraFail', vars: { rows: refRows.map((r) => r.n).join(', '), claim: `$${fmtClaim(claim)}$` } },
@@ -672,6 +828,708 @@ const CHECKS = {
   cpct_side: cpctCheck('side'),
   cpct_angle: cpctCheck('angle'),
 };
+
+// ---------- algebra over the cited rows ----------
+
+// Does `claim` follow by calculation from `claims`? 'linear', 'nonlinear' or false.
+function algebraFollows(claim, claims) {
+  const eqs = claims.filter((c) => c.type === 'eq').map(eqVec);
+  if (claim.type === 'eq') return alg.follows(eqs, eqVec(claim));
+  if (claim.type !== 'ineq') return false;
+  const gts = claims.filter((c) => c.type === 'ineq').map(eqVec);
+  return alg.followsIneq(eqs, gts, eqVec(claim)) ? 'linear' : false;
+}
+
+// ---------- stages 4–11 ----------
+// Each check works out, from the cited rows and the diagram, the claims the theorem gives,
+// writes them in school notation, and compares the student's claim with them. Comparing
+// goes through the same keys as everywhere else, so every name of an angle or a line
+// counts; an equation also counts multiplied through (2DE = BC is DE = 0.5BC) and with its
+// denominators cleared (AD/DB = AE/EC is AD·EC = AE·DB).
+
+function normKey(c) {
+  if (!c || c.type !== 'eq') return claimKey(c);
+  const v = alg.clearDen(eqVec(c));
+  const keys = [...v.keys()].sort();
+  if (!keys.length) return 'eq:0';
+  const d = v.get(keys[0]);
+  return 'n:' + keys.map((k) => `${k}=${(v.get(k) / d).toFixed(6)}`).join('|');
+}
+
+// The candidates (school notation) that `claim` matches, or false.
+function matches(problem, claim, strs) {
+  const k = normKey(claim);
+  return strs.some((s) => {
+    const r = parseClaim(s, problem);
+    return r.ok && normKey(r.claim) === k;
+  });
+}
+
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const vcross = (u, v) => u[0] * v[1] - u[1] * v[0];
+const vdot = (u, v) => u[0] * v[0] + u[1] * v[1];
+const vlen = (u) => Math.hypot(u[0], u[1]);
+const xy = (problem, X) => problem.points[X];
+
+// Which side of line PQ the point X is on: 1, −1, or 0 when X is on the line.
+function sideOf(problem, P, Q, X) {
+  const u = vsub(xy(problem, Q), xy(problem, P));
+  const v = vsub(xy(problem, X), xy(problem, P));
+  const c = vcross(u, v);
+  return Math.abs(c) < 1e-6 * vlen(u) * Math.max(1, vlen(v)) ? 0 : Math.sign(c);
+}
+const between = (problem, P, V, Q) => strictlyBetween(problem.points, P, V, Q);
+const onLine = (lk, X) => lk.slice(2).includes(X);
+const sameRay = (problem, V, X, Y) => problem.rays[V][X] === problem.rays[V][Y];
+const pointsOnRay = (problem, V, X) => problem.pointNames.filter((P) => P !== V && sameRay(problem, V, P, X));
+const fail2 = (key, proof, vars) => ({ ok: false, msg: { key, vars }, proof });
+const gives = (rid, ex, proof) => fail2('reasonGives', proof, { rid, ex: `$${ex.replace(/\s*([=<>+∥⊥])\s*/g, ' $1 ').replace(/\*/g, '·').replace(/(\d)-/g, '$1 − ')}$` });
+
+// The terms of an equation or inequality, by key.
+function atomsOf(c) {
+  const m = new Map();
+  for (const { t } of [...c.L.terms, ...c.R.terms]) m.set(termKey(t), t);
+  return m;
+}
+
+// "∢1 = ∢2" → { ts: [t1, t2], sum: false }; "∢1 + ∢2 = 180°" → { ts, sum: true }.
+function twoAngles(c) {
+  if (!c || c.type !== 'eq' || c.of !== 'ang') return null;
+  const v = eqVec(c);
+  const keys = [...v.keys()].filter((k) => k !== '1');
+  if (keys.length !== 2 || !keys.every((k) => k.startsWith('a:'))) return null;
+  const [c1, c2] = keys.map((k) => v.get(k));
+  const k0 = v.get('1') || 0;
+  const at = atomsOf(c);
+  const ts = keys.map((k) => at.get(k));
+  if (Math.abs(c1 + c2) < EPS && Math.abs(k0) < 1e-6) return { ts, sum: false };
+  if (Math.abs(c1 - c2) < EPS && Math.abs(k0 + 180 * c1) < 1e-6) return { ts, sum: true };
+  return null;
+}
+
+// "M is the midpoint of AB", stated as AM = MB with M strictly between A and B.
+function midOf(problem, c) {
+  if (!isEqOf(c, 'seg')) return null;
+  const [p, q] = c.left.p;
+  const [r, s] = c.right.p;
+  const common = [p, q].filter((x) => x === r || x === s);
+  if (common.length !== 1) return null;
+  const M = common[0];
+  const A = p === M ? q : p;
+  const B = r === M ? s : r;
+  return A !== B && between(problem, A, M, B) ? { M, A, B } : null;
+}
+
+// Two angles on a transversal: t1 at V1 on one of the lines la, lb and t2 at V2 on the
+// other, each with one arm along the transversal V1V2 and the other along its own line.
+// 'corr' (corresponding), 'alt' (alternate), 'co' (co-interior), 'other', or null when the
+// angles don't sit like that.
+function transversal(problem, t1, t2, la, lb) {
+  const V1 = t1.p[1];
+  const V2 = t2.p[1];
+  if (V1 === V2 || la === lb) return null;
+  let l1; let l2;
+  if (onLine(la, V1) && onLine(lb, V2)) [l1, l2] = [la, lb];
+  else if (onLine(lb, V1) && onLine(la, V2)) [l1, l2] = [lb, la];
+  else return null;
+  const lt = lineKey(problem.points, V1, V2);
+  if (lt === l1 || lt === l2) return null;
+  const arms = (t, V, l) => {
+    const [X, , Y] = t.p;
+    const on = (Z, line) => lineKey(problem.points, V, Z) === line;
+    if (on(X, lt) && on(Y, l)) return [X, Y];
+    if (on(Y, lt) && on(X, l)) return [Y, X];
+    return null;
+  };
+  const a1 = arms(t1, V1, l1);
+  const a2 = arms(t2, V2, l2);
+  if (!a1 || !a2) return null;
+  const d = vsub(xy(problem, V2), xy(problem, V1));
+  const tau1 = Math.sign(vdot(vsub(xy(problem, a1[0]), xy(problem, V1)), d));
+  const tau2 = Math.sign(vdot(vsub(xy(problem, a2[0]), xy(problem, V2)), d));
+  const s1 = sideOf(problem, V1, V2, a1[1]);
+  const s2 = sideOf(problem, V1, V2, a2[1]);
+  if (!tau1 || !tau2 || !s1 || !s2) return null;
+  if (tau1 === tau2 && s1 === s2) return 'corr';
+  if (tau1 !== tau2 && s1 !== s2) return 'alt';
+  if (tau1 > 0 && tau2 < 0 && s1 === s2) return 'co';
+  return 'other';
+}
+
+const PAR_LEAN = { alt: 'par_alt', corr: 'par_corr', co: 'par_coint' };
+const PAR_MSG = { alt: 'parIsAlt', corr: 'parIsCorr', co: 'parIsCo' };
+
+function parAngles(kind) {
+  return (claim, refRows, problem) => {
+    const proof = `${PAR_LEAN[kind]} ${refNames(refRows)}`.trim();
+    const ref = refRows.length === 1 && refRows[0].claim.type === 'par' ? refRows[0] : null;
+    if (!ref) return fail2('needParRef', proof);
+    const two = twoAngles(claim);
+    if (!two) return fail2(kind === 'co' ? 'cointNeedSum' : 'parNeedEqual', proof);
+    const rel = transversal(problem, two.ts[0], two.ts[1], ref.claim.la, ref.claim.lb);
+    if (!rel) return fail2('notTransversal', proof, { n: ref.n });
+    if (rel === 'other') return fail2('parNoPair', proof);
+    if (rel !== kind) return fail2(PAR_MSG[rel], proof);
+    if (two.sum !== (kind === 'co')) return fail2(kind === 'co' ? 'cointNeedSum' : 'parNeedEqual', proof);
+    return { ok: true, proof };
+  };
+}
+
+// Three angles at the three vertices of one triangle, as keys.
+function triAngleKeys(problem, T) {
+  const r = problem.rays;
+  return [angKey(T[1], T[0], T[2], r), angKey(T[0], T[1], T[2], r), angKey(T[0], T[2], T[1], r)];
+}
+
+// The two terms of an inequality between two atoms of one kind: { big, small }.
+function ineqPair(c, kind) {
+  if (!c || c.type !== 'ineq') return null;
+  const v = eqVec(c);
+  const keys = [...v.keys()];
+  if (keys.length !== 2 || keys.includes('1')) return null;
+  const at = atomsOf(c);
+  const [a, b] = keys.map((k) => at.get(k));
+  if (a.kind !== kind || b.kind !== kind || Math.abs(v.get(keys[0]) + v.get(keys[1])) > EPS) return null;
+  return v.get(keys[0]) > 0 ? { big: a, small: b } : { big: b, small: a };
+}
+
+const third = (pair, T) => T.find((x) => !pair.includes(x));
+
+// The quadrilateral of a cited row, if it is one of `kinds`.
+const PG = ['parallelogram', 'rectangle', 'rhombus', 'square'];
+function quadRef(refRows, kinds) {
+  return refRows.find((r) => r.claim.type === 'quad' && kinds.includes(r.claim.kind)) || null;
+}
+// Where the diagonals AC and BD meet, if they do.
+function diagMeet(problem, [A, B, C, D]) {
+  return problem.pointNames.find((O) => between(problem, A, O, C) && between(problem, B, O, D)) || null;
+}
+function convexQuad(problem, P) {
+  const s = [0, 1, 2, 3].map((i) => sideOf(problem, P[i], P[(i + 1) % 4], P[(i + 2) % 4]));
+  return s.every((x) => x !== 0 && x === s[0]);
+}
+
+function quadCheck(rid, kinds, lean, candidates) {
+  return (claim, refRows, problem) => {
+    const proof = `${lean} ${refNames(refRows)}`.trim();
+    const ref = quadRef(refRows, kinds);
+    if (!ref) return fail2('needQuadRef', proof, { kinds: kinds.map((k) => quadName(k)).join(' / ') });
+    const P = ref.claim.P;
+    const strs = candidates(problem, P);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives(rid, strs[0], proof);
+  };
+}
+
+// The circles and tangents of the diagram.
+const circles = (problem) => problem.config.filter((c) => c.type === 'circle');
+const tangents = (problem) => problem.config.filter((c) => c.type === 'tangent');
+
+function* triples(arr) {
+  for (const a of arr) for (const b of arr) for (const c of arr) if (a !== b && b !== c && a !== c) yield [a, b, c];
+}
+
+// Points P on the ray C→X and Q on the ray C→Y of a right angle ∢XCY.
+function legPairs(problem, t) {
+  const [X, C, Y] = t.p;
+  const out = [];
+  for (const P of pointsOnRay(problem, C, X)) for (const Q of pointsOnRay(problem, C, Y)) out.push([P, C, Q]);
+  return out;
+}
+
+const rightRef = (refRows) => refRows.map((r) => ({ r, t: rightAngle(r.claim) })).find((x) => x.t) || null;
+
+const STAGE_CHECKS = {
+  // ---- basics: from the diagram
+  segment_add(claim, refRows, problem) {
+    const proof = 'seg_add';
+    const strs = [];
+    for (const [X, Y, Z] of triples(problem.pointNames)) if (X < Z && between(problem, X, Y, Z)) strs.push(`${X}${Y}+${Y}${Z}=${X}${Z}`);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('segAddShape', proof);
+  },
+  angle_add(claim, refRows, problem) {
+    const proof = 'ang_add';
+    if (claim.type !== 'eq' || claim.of !== 'ang') return fail2('angAddShape', proof);
+    const ts = [...atomsOf(claim).values()].filter((t) => t.kind === 'ang');
+    const V = ts[0] && ts[0].p[1];
+    if (!V || !ts.every((t) => t.p[1] === V)) return fail2('angAddShape', proof);
+    const arms = [...new Set(ts.flatMap((t) => [t.p[0], t.p[2]]))];
+    const strs = [];
+    for (const [X, Y, Z] of triples(arms)) {
+      if (X > Z) continue;
+      const a = vsub(xy(problem, X), xy(problem, V));
+      const b = vsub(xy(problem, Y), xy(problem, V));
+      const c = vsub(xy(problem, Z), xy(problem, V));
+      // Y strictly inside the angle XVZ, which is less than 180°
+      const inside = Math.sign(vcross(a, b)) === Math.sign(vcross(b, c)) && Math.sign(vcross(a, b)) === Math.sign(vcross(a, c)) && vcross(a, c) !== 0;
+      if (inside) strs.push(`∢${X}${V}${Y}+∢${Y}${V}${Z}=∢${X}${V}${Z}`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('angAddNotInside', proof);
+  },
+
+  // ---- L04 parallel lines
+  alt_angles: parAngles('alt'),
+  corr_angles: parAngles('corr'),
+  cointerior: parAngles('co'),
+  par_converse(claim, refRows, problem) {
+    const proof = `alt_par ${refNames(refRows)}`.trim();
+    if (claim.type !== 'par') return fail2('parConvNeedPar', proof);
+    const two = refRows.length === 1 ? twoAngles(refRows[0].claim) : null;
+    if (!two) return fail2('parConvNeedAngles', proof);
+    const rel = transversal(problem, two.ts[0], two.ts[1], claim.la, claim.lb);
+    if (rel && (two.sum ? rel === 'co' : rel === 'alt' || rel === 'corr')) {
+      return { ok: true, proof: `${{ alt: 'alt_par', corr: 'corr_par', co: 'coint_par' }[rel]} s${refRows[0].n}` };
+    }
+    if (!rel) return fail2('notTransversal', proof, { n: refRows[0].n });
+    return fail2('parConvWrong', proof);
+  },
+  tri_sum(claim, refRows, problem) {
+    const proof = 'tri_angle_sum';
+    const v = claim.type === 'eq' && claim.of === 'ang' ? eqVec(claim) : null;
+    const keys = v ? [...v.keys()].filter((k) => k !== '1') : [];
+    const c = keys.length ? v.get(keys[0]) : 0;
+    if (keys.length !== 3 || !keys.every((k) => k.startsWith('a:') && Math.abs(v.get(k) - c) < EPS)
+      || Math.abs((v.get('1') || 0) + 180 * c) > 1e-6) return fail2('triSumShape', proof);
+    const at = atomsOf(claim);
+    const T = keys.map((k) => at.get(k).p[1]);
+    if (new Set(T).size < 3 || degenerate(problem, T)) return fail2('triSumNotTri', proof);
+    if ([...keys].sort().join('|') !== triAngleKeys(problem, T).sort().join('|')) return fail2('triSumNotTri', proof);
+    return { ok: true, proof: `tri_angle_sum (T := △${T.join('')})` };
+  },
+  ext_angle(claim, refRows, problem) {
+    const proof = 'ext_angle';
+    const v = claim.type === 'eq' && claim.of === 'ang' ? eqVec(claim) : null;
+    const keys = v ? [...v.keys()] : [];
+    if (keys.length !== 3 || !keys.every((k) => k.startsWith('a:'))) return fail2('extShape', proof);
+    const pos = keys.filter((k) => v.get(k) > 0);
+    const neg = keys.filter((k) => v.get(k) < 0);
+    const [one, two] = pos.length === 1 ? [pos, neg] : [neg, pos];
+    if (one.length !== 1 || two.length !== 2 || Math.abs(Math.abs(v.get(one[0])) - Math.abs(v.get(two[0]))) > EPS
+      || Math.abs(v.get(two[0]) - v.get(two[1])) > EPS) return fail2('extShape', proof);
+    const at = atomsOf(claim);
+    const e = at.get(one[0]);
+    const V = e.p[1];
+    const [P, Q] = two.map((k) => at.get(k).p[1]);
+    if (new Set([V, P, Q]).size < 3 || degenerate(problem, [V, P, Q])) return fail2('extNotTri', proof);
+    const want = [angKey(V, P, Q, problem.rays), angKey(V, Q, P, problem.rays)].sort().join('|');
+    if ([...two].sort().join('|') !== want) return fail2('extNotTri', proof);
+    const [X, , Y] = e.p;
+    for (const [A, B] of [[P, Q], [Q, P]]) {
+      if ((sameRay(problem, V, X, A) && between(problem, B, V, Y)) || (sameRay(problem, V, Y, A) && between(problem, B, V, X))) return { ok: true, proof };
+    }
+    return fail2('extNotExterior', proof);
+  },
+
+  // ---- L05 inequalities in a triangle
+  side_angle(claim, refRows, problem) {
+    const proof = `side_angle_ineq ${refNames(refRows)}`.trim();
+    const s = refRows.length === 1 ? ineqPair(refRows[0].claim, 'seg') : null;
+    const T = s ? [...new Set([...s.big.p, ...s.small.p])] : [];
+    if (T.length !== 3) return fail2('sideAngleNeedRef', proof);
+    if (degenerate(problem, T)) return fail2('degenerate', proof, { t: `$△${T.join('')}$` });
+    const oppAng = (seg) => { const W = third(seg.p, T); return `∢${seg.p[0]}${W}${seg.p[1]}`; };
+    const ex = `${oppAng(s.small)} < ${oppAng(s.big)}`;
+    if (matches(problem, claim, [ex])) return { ok: true, proof };
+    return gives('side_angle', ex, proof);
+  },
+  angle_side(claim, refRows, problem) {
+    const proof = `angle_side_ineq ${refNames(refRows)}`.trim();
+    const a = refRows.length === 1 ? ineqPair(refRows[0].claim, 'ang') : null;
+    if (!a) return fail2('angleSideNeedRef', proof);
+    const V1 = a.big.p[1];
+    const V2 = a.small.p[1];
+    const W = problem.pointNames.find((x) => x !== V1 && x !== V2 && !degenerate(problem, [V1, V2, x])
+      && termKey(a.big) === angKey(V2, V1, x, problem.rays) && termKey(a.small) === angKey(V1, V2, x, problem.rays));
+    if (!W) return fail2('angleSideNeedRef', proof);
+    const ex = `${V1}${W} < ${V2}${W}`;
+    if (matches(problem, claim, [ex])) return { ok: true, proof };
+    return gives('angle_side', ex, proof);
+  },
+  tri_ineq(claim, refRows, problem) {
+    const proof = 'tri_ineq';
+    const v = claim.type === 'ineq' ? eqVec(claim) : null;
+    const keys = v ? [...v.keys()] : [];
+    if (keys.length !== 3 || !keys.every((k) => k.startsWith('s:'))) return fail2('triIneqShape', proof);
+    const T = [...new Set(keys.flatMap((k) => [...k.slice(2)]))];
+    if (T.length !== 3 || degenerate(problem, T)) return fail2('triIneqShape', proof);
+    const pos = keys.filter((k) => v.get(k) > 0);
+    const c = Math.abs(v.get(keys[0]));
+    if (pos.length !== 2 || !keys.every((k) => Math.abs(Math.abs(v.get(k)) - c) < EPS)) return fail2('triIneqShape', proof);
+    return { ok: true, proof: `tri_ineq (T := △${T.join('')})` };
+  },
+
+  // ---- L06 quadrilaterals (ABCD in order; parallelogram: AB ∥ DC and AD ∥ BC)
+  para_def(claim, refRows, problem) {
+    const proof = `parallelogram_def ${refNames(refRows)}`.trim();
+    if (claim.type === 'quad') {
+      if (claim.kind !== 'parallelogram') return fail2('paraDefKind', proof);
+      const [A, B, C, D] = claim.P;
+      const need = [`${A}${B}∥${D}${C}`, `${A}${D}∥${B}${C}`];
+      const have = need.filter((s) => refRows.some((r) => matches(problem, r.claim, [s])));
+      if (have.length < 2) return fail2('critMissing1', proof, { rid: 'para_def', m: need.filter((s) => !have.includes(s)).map((s) => `$${s}$`).join(', ') });
+      if (!convexQuad(problem, claim.P)) return fail2('notConvex', proof, { q: `$${claim.P.join('')}$` });
+      return { ok: true, proof: `parallelogram_def.mpr ⟨${refNames(refRows)}⟩` };
+    }
+    const ref = quadRef(refRows, PG);
+    if (!ref) return fail2('needQuadRef', proof, { kinds: quadName('parallelogram') });
+    const [A, B, C, D] = ref.claim.P;
+    const strs = [`${A}${B}∥${D}${C}`, `${A}${D}∥${B}${C}`];
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('para_def', strs[0], proof);
+  },
+  para_sides: quadCheck('para_sides', PG, 'pg_opp_sides', (pr, [A, B, C, D]) => [`${A}${B}=${D}${C}`, `${A}${D}=${B}${C}`]),
+  para_angles: quadCheck('para_angles', PG, 'pg_opp_angles', (pr, [A, B, C, D]) => [`∢${D}${A}${B}=∢${B}${C}${D}`, `∢${A}${B}${C}=∢${C}${D}${A}`]),
+  para_diag(claim, refRows, problem) {
+    const proof = `pg_diag ${refNames(refRows)}`.trim();
+    const ref = quadRef(refRows, PG);
+    if (!ref) return fail2('needQuadRef', proof, { kinds: quadName('parallelogram') });
+    const [A, B, C, D] = ref.claim.P;
+    const O = diagMeet(problem, ref.claim.P);
+    if (!O) return fail2('diagNoMeet', proof);
+    const strs = [`${A}${O}=${O}${C}`, `${B}${O}=${O}${D}`];
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('para_diag', strs[0], proof);
+  },
+  para_test(claim, refRows, problem) {
+    const proof = `opp_sides_pg ${refNames(refRows)}`.trim();
+    if (claim.type !== 'quad' || claim.kind !== 'parallelogram') return fail2('paraTestShape', proof);
+    const [A, B, C, D] = claim.P;
+    const need = [`${A}${B}=${D}${C}`, `${A}${D}=${B}${C}`];
+    const missing = need.filter((s) => !refRows.some((r) => matches(problem, r.claim, [s])));
+    if (missing.length) return fail2(missing.length === 1 ? 'critMissing1' : 'critMissingN', proof, { rid: 'para_test', m: missing.map((s) => `$${s}$`).join(', ') });
+    if (!convexQuad(problem, claim.P)) return fail2('notConvex', proof, { q: `$${claim.P.join('')}$` });
+    return { ok: true, proof };
+  },
+  rect_diag: quadCheck('rect_diag', ['rectangle', 'square'], 'rect_diag', (pr, [A, B, C, D]) => [`${A}${C}=${B}${D}`]),
+  rhombus_diag: quadCheck('rhombus_diag', ['rhombus', 'square'], 'rh_diag', (pr, P) => {
+    const [A, B, C, D] = P;
+    const O = diagMeet(pr, P);
+    return [`${A}${C}⊥${B}${D}`, ...(O ? [`∢${A}${O}${B}=90`, `∢${B}${O}${C}=90`, `∢${C}${O}${D}=90`, `∢${D}${O}${A}=90`] : []),
+      `∢${B}${A}${C}=∢${C}${A}${D}`, `∢${A}${B}${D}=∢${D}${B}${C}`, `∢${B}${C}${A}=∢${A}${C}${D}`, `∢${C}${D}${B}=∢${B}${D}${A}`];
+  }),
+  kite_diag: quadCheck('kite_diag', ['kite'], 'kite_main_diag', (pr, P) => {
+    const [A, B, C, D] = P;
+    const O = diagMeet(pr, P);
+    return [`∢${B}${A}${C}=∢${C}${A}${D}`, `∢${B}${C}${A}=∢${A}${C}${D}`, `${A}${C}⊥${B}${D}`,
+      ...(O ? [`${B}${O}=${O}${D}`, `∢${A}${O}${B}=90`, `∢${A}${O}${D}=90`, `∢${C}${O}${B}=90`, `∢${C}${O}${D}=90`] : [])];
+  }),
+  trap_iso: quadCheck('trap_iso', ['isoTrapezoid'], 'iso_trap_angles', (pr, [A, B, C, D]) => [`∢${D}${A}${B}=∢${A}${B}${C}`, `∢${A}${D}${C}=∢${B}${C}${D}`, `${A}${C}=${B}${D}`]),
+
+  // ---- L07 midsegments and the right triangle
+  midseg_tri(claim, refRows, problem) {
+    const proof = `midseg_tri ${refNames(refRows)}`.trim();
+    const mids = refRows.map((r) => midOf(problem, r.claim)).filter(Boolean);
+    for (const m1 of mids) {
+      for (const m2 of mids) {
+        if (m1 === m2) continue;
+        for (const A of [m1.A, m1.B]) {
+          if (A !== m2.A && A !== m2.B) continue;
+          const B = A === m1.A ? m1.B : m1.A;
+          const C = A === m2.A ? m2.B : m2.A;
+          if (B === C || degenerate(problem, [A, B, C])) continue;
+          const strs = [`${m1.M}${m2.M}∥${B}${C}`, `2${m1.M}${m2.M}=${B}${C}`];
+          if (matches(problem, claim, strs)) return { ok: true, proof };
+          return gives('midseg_tri', strs[1], proof);
+        }
+      }
+    }
+    return fail2('needTwoMids', proof);
+  },
+  midseg_trap(claim, refRows, problem) {
+    const proof = `midseg_trap ${refNames(refRows)}`.trim();
+    const mids = refRows.map((r) => midOf(problem, r.claim)).filter(Boolean);
+    const q = quadRef(refRows, ['trapezoid', 'isoTrapezoid']);
+    const parRow = refRows.find((r) => r.claim.type === 'par');
+    let bases = null;
+    if (q) {
+      const [A, B, C, D] = q.claim.P;
+      bases = [lineKey(problem.points, A, B), lineKey(problem.points, D, C)];
+    } else if (parRow) bases = [parRow.claim.la, parRow.claim.lb];
+    if (!bases) return fail2('trapNeedBases', proof);
+    for (const m1 of mids) {
+      for (const m2 of mids) {
+        if (m1 === m2) continue;
+        // each midpoint on a leg: one end on each base
+        const ends = (m) => (onLine(bases[0], m.A) && onLine(bases[1], m.B) ? [m.A, m.B] : onLine(bases[0], m.B) && onLine(bases[1], m.A) ? [m.B, m.A] : null);
+        const e1 = ends(m1);
+        const e2 = ends(m2);
+        if (!e1 || !e2 || e1[0] === e2[0] || e1[1] === e2[1]) continue;
+        const strs = [`${m1.M}${m2.M}∥${e1[0]}${e2[0]}`, `${m1.M}${m2.M}∥${e1[1]}${e2[1]}`, `2${m1.M}${m2.M}=${e1[0]}${e2[0]}+${e1[1]}${e2[1]}`];
+        if (matches(problem, claim, strs)) return { ok: true, proof };
+        return gives('midseg_trap', strs[2], proof);
+      }
+    }
+    return fail2('needTwoMids', proof);
+  },
+  median_hyp(claim, refRows, problem) {
+    const proof = `median_hyp ${refNames(refRows)}`.trim();
+    const ra = rightRef(refRows);
+    if (!ra) return fail2('needRightRef', proof);
+    for (const r of refRows) {
+      const m = midOf(problem, r.claim);
+      if (!m) continue;
+      const C = ra.t.p[1];
+      const ok1 = legPairs(problem, ra.t).some(([P, , Q]) => (P === m.A && Q === m.B) || (P === m.B && Q === m.A));
+      if (!ok1) continue;
+      const strs = [`${C}${m.M}=${m.A}${m.M}`, `${C}${m.M}=${m.M}${m.B}`, `2${C}${m.M}=${m.A}${m.B}`];
+      if (matches(problem, claim, strs)) return { ok: true, proof };
+      return gives('median_hyp', strs[0], proof);
+    }
+    return fail2('needHypMid', proof);
+  },
+  tri_30(claim, refRows, problem) {
+    const proof = `leg_30 ${refNames(refRows)}`.trim();
+    const ra = rightRef(refRows);
+    if (!ra) return fail2('needRightRef', proof);
+    for (const r of refRows) {
+      if (r === ra.r || r.claim.type !== 'eq') continue;
+      const v = eqVec(r.claim);
+      const keys = [...v.keys()].filter((k) => k !== '1');
+      if (keys.length !== 1 || !keys[0].startsWith('a:') || Math.abs((v.get('1') || 0) + 30 * v.get(keys[0])) > 1e-6) continue;
+      const t = atomsOf(r.claim).get(keys[0]);
+      for (const [P, C, Q] of legPairs(problem, ra.t)) {
+        for (const [A, B] of [[P, Q], [Q, P]]) {
+          if (termKey(t) !== angKey(C, A, B, problem.rays)) continue;
+          const strs = [`2${B}${C}=${A}${B}`];
+          if (matches(problem, claim, strs)) return { ok: true, proof };
+          return gives('tri_30', strs[0], proof);
+        }
+      }
+    }
+    return fail2('need30Ref', proof);
+  },
+
+  // ---- L08 Pythagoras (right angle at C: CA² + CB² = AB²)
+  pythagoras(claim, refRows, problem) {
+    const proof = `pythagoras ${refNames(refRows)}`.trim();
+    const ra = rightRef(refRows);
+    if (!ra) return fail2('needRightRef', proof);
+    const strs = legPairs(problem, ra.t).map(([P, C, Q]) => `${C}${P}²+${C}${Q}²=${P}${Q}²`);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('pythagoras', strs[0], proof);
+  },
+  pyth_conv(claim, refRows, problem) {
+    const proof = `pythagoras_conv ${refNames(refRows)}`.trim();
+    const t = rightAngle(claim);
+    if (!t) return fail2('pythConvShape', proof);
+    const strs = legPairs(problem, t).map(([P, C, Q]) => `${C}${P}²+${C}${Q}²=${P}${Q}²`);
+    if (refRows.length === 1 && matches(problem, refRows[0].claim, strs)) return { ok: true, proof };
+    return fail2('critMissing1', proof, { rid: 'pyth_conv', m: `$${strs[0]}$` });
+  },
+
+  // ---- L09 similarity
+  sim_aa(claim, refRows, problem) {
+    const proof = `sim_AA ${refNames(refRows)}`.trim();
+    if (claim.type !== 'sim') return fail2('needSim', proof, { rid: 'sim_aa' });
+    for (const T of [claim.P, claim.Q]) if (degenerate(problem, T)) return fail2('degenerate', proof, { t: `$△${T.join('')}$` });
+    const V = refVectors(refRows);
+    const count = (Q) => [0, 1, 2].filter((k) => angEq(claim.P, Q, V, k, problem.rays)).length;
+    if (count(claim.Q) >= 2) return { ok: true, proof };
+    for (const perm of PERMS.slice(1)) {
+      const Q2 = perm.map((i) => claim.Q[i]);
+      if (count(Q2) >= 2) return fail2('wrongOrder', proof, { s: `$△${claim.P.join('')} ∼ △${Q2.join('')}$` });
+    }
+    return fail2('simAANeed', proof);
+  },
+  sim_sas(claim, refRows, problem) {
+    const proof = `sim_SAS ${refNames(refRows)}`.trim();
+    if (claim.type !== 'sim') return fail2('needSim', proof, { rid: 'sim_sas' });
+    const { P, Q } = claim;
+    const V = refVectors(refRows);
+    for (const k of [0, 1, 2]) {
+      const [i, j] = others(k);
+      if (!angEq(P, Q, V, k, problem.rays)) continue;
+      const ratio = `${P[k]}${P[i]}/${Q[k]}${Q[i]}=${P[k]}${P[j]}/${Q[k]}${Q[j]}`;
+      if (refRows.some((r) => matches(problem, r.claim, [ratio]))) return { ok: true, proof };
+      return fail2('critMissing1', proof, { rid: 'sim_sas', m: `$${ratio}$` });
+    }
+    return fail2('simSASNeed', proof);
+  },
+  sim_sss(claim, refRows, problem) {
+    const proof = `sim_SSS ${refNames(refRows)}`.trim();
+    if (claim.type !== 'sim') return fail2('needSim', proof, { rid: 'sim_sss' });
+    const { P, Q } = claim;
+    const sides = [[0, 1], [1, 2], [0, 2]].map(([i, j]) => `${P[i]}${P[j]}/${Q[i]}${Q[j]}`);
+    const links = [[0, 1], [1, 2], [0, 2]].filter(([a, b]) => refRows.some((r) => matches(problem, r.claim, [`${sides[a]}=${sides[b]}`])));
+    if (links.length >= 2) return { ok: true, proof };
+    return fail2('simSSSNeed', proof, { m: `$${sides[0]} = ${sides[1]} = ${sides[2]}$` });
+  },
+  sim_parts(claim, refRows, problem) {
+    const proof = `sim_parts ${refNames(refRows)}`.trim();
+    const ref = refRows.length === 1 && refRows[0].claim.type === 'sim' ? refRows[0] : null;
+    if (!ref) return fail2('needSimRef', proof);
+    const { P, Q } = ref.claim;
+    const sides = [[0, 1], [1, 2], [0, 2]].map(([i, j]) => [`${P[i]}${P[j]}`, `${Q[i]}${Q[j]}`]);
+    const strs = [];
+    for (const [a, b] of [[0, 1], [1, 2], [0, 2]]) strs.push(`${sides[a][0]}/${sides[a][1]}=${sides[b][0]}/${sides[b][1]}`);
+    for (const k of [0, 1, 2]) { const [i, j] = others(k); strs.push(`∢${P[i]}${P[k]}${P[j]}=∢${Q[i]}${Q[k]}${Q[j]}`); }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('sim_parts', strs[0], proof);
+  },
+  thales(claim, refRows, problem) {
+    const proof = `thales ${refNames(refRows)}`.trim();
+    const ref = refRows.length === 1 && refRows[0].claim.type === 'par' ? refRows[0] : null;
+    if (!ref) return fail2('needParRef', proof);
+    const { la, lb } = ref.claim;
+    const on = (lk) => problem.pointNames.filter((X) => onLine(lk, X));
+    const strs = [];
+    for (const A of problem.pointNames.filter((X) => !onLine(la, X) && !onLine(lb, X))) {
+      const arms = [];
+      for (const B of on(la)) for (const D of on(lb)) if (sideOf(problem, A, B, D) === 0) arms.push([B, D]);
+      for (const [B, D] of arms) {
+        for (const [C, E] of arms) {
+          if (B >= C || lineKey(problem.points, A, B) === lineKey(problem.points, A, C)) continue;
+          strs.push(`${A}${B}/${A}${D}=${A}${C}/${A}${E}`, `${A}${B}/${B}${D}=${A}${C}/${C}${E}`, `${A}${D}/${B}${D}=${A}${E}/${C}${E}`);
+        }
+      }
+    }
+    if (!strs.length) return fail2('thalesNoAngle', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('thales', strs[0], proof);
+  },
+  bis_ratio(claim, refRows, problem) {
+    const proof = `bisector_thm ${refNames(refRows)}`.trim();
+    const two = refRows.length === 1 ? twoAngles(refRows[0].claim) : null;
+    if (!two || two.sum || two.ts[0].p[1] !== two.ts[1].p[1]) return fail2('bisNeedRef', proof);
+    const A = two.ts[0].p[1];
+    const [t1, t2] = two.ts;
+    const arms1 = [t1.p[0], t1.p[2]];
+    const arms2 = [t2.p[0], t2.p[2]];
+    const shared = arms1.find((x) => arms2.some((y) => sameRay(problem, A, x, y)));
+    if (!shared) return fail2('bisNeedRef', proof);
+    const o1 = arms1.find((x) => !sameRay(problem, A, x, shared));
+    const o2 = arms2.find((x) => !sameRay(problem, A, x, shared));
+    const strs = [];
+    for (const D of pointsOnRay(problem, A, shared)) {
+      for (const B of pointsOnRay(problem, A, o1)) {
+        for (const C of pointsOnRay(problem, A, o2)) if (between(problem, B, D, C)) strs.push(`${B}${D}/${D}${C}=${A}${B}/${A}${C}`);
+      }
+    }
+    if (!strs.length) return fail2('bisNeedRef', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('bis_ratio', strs[0], proof);
+  },
+
+  // ---- L10 circles
+  radii(claim, refRows, problem) {
+    const proof = 'radii_eq';
+    const strs = [];
+    for (const c of circles(problem)) for (const X of c.on) for (const Y of c.on) if (X < Y) strs.push(`${c.o}${X}=${c.o}${Y}`);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('radiiWrong', proof);
+  },
+  inscribed_central(claim, refRows, problem) {
+    const proof = 'inscribed_central';
+    const strs = [];
+    for (const c of circles(problem)) {
+      for (const [A, B, C] of triples(c.on)) {
+        if (A < B && sideOf(problem, A, B, C) * sideOf(problem, A, B, c.o) > 0) strs.push(`2∢${A}${C}${B}=∢${A}${c.o}${B}`);
+      }
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('inscribedWrong', proof);
+  },
+  inscribed_same(claim, refRows, problem) {
+    const proof = 'inscribed_same_arc';
+    const strs = [];
+    for (const c of circles(problem)) {
+      for (const [A, B, C] of triples(c.on)) {
+        for (const D of c.on) {
+          if (A < B && C < D && D !== A && D !== B && sideOf(problem, A, B, C) * sideOf(problem, A, B, D) > 0) strs.push(`∢${A}${C}${B}=∢${A}${D}${B}`);
+        }
+      }
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('inscribedSameWrong', proof);
+  },
+  semicircle(claim, refRows, problem) {
+    const proof = 'inscribed_diameter';
+    const strs = [];
+    for (const c of circles(problem)) {
+      for (const [A, B, C] of triples(c.on)) if (A < B && between(problem, A, c.o, B)) strs.push(`∢${A}${C}${B}=90`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('semicircleWrong', proof);
+  },
+  tangent_radius(claim, refRows, problem) {
+    const proof = 'tangent_perp';
+    const strs = [];
+    for (const tg of tangents(problem)) {
+      strs.push(`${tg.o}${tg.t}⊥${tg.t}${tg.p}`);
+      for (const X of problem.pointNames) if (X !== tg.t && sideOf(problem, tg.t, tg.p, X) === 0) strs.push(`∢${tg.o}${tg.t}${X}=90`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('tangentWrong', proof);
+  },
+  tangents_eq(claim, refRows, problem) {
+    const proof = 'tangents_eq';
+    const strs = [];
+    for (const t1 of tangents(problem)) {
+      for (const t2 of tangents(problem)) if (t1.t < t2.t && t1.p === t2.p && t1.o === t2.o) strs.push(`${t1.p}${t1.t}=${t2.p}${t2.t}`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('tangentsEqWrong', proof);
+  },
+  cyclic_quad(claim, refRows, problem) {
+    const proof = 'cyclic_quad';
+    const strs = [];
+    for (const c of circles(problem)) {
+      for (const [B, A, D] of triples(c.on)) {
+        for (const C of c.on) {
+          if (B < D && A < C && C !== B && C !== D && sideOf(problem, B, D, A) * sideOf(problem, B, D, C) < 0) strs.push(`∢${B}${A}${D}+∢${B}${C}${D}=180`);
+        }
+      }
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('cyclicWrong', proof);
+  },
+
+  // ---- L11 trigonometry in the triangle
+  sin_def: trigDef('sin'),
+  cos_def: trigDef('cos'),
+  tan_def: trigDef('tan'),
+  law_sines(claim, refRows, problem) {
+    const proof = 'law_sines';
+    const strs = [];
+    for (const [X, Y, Z] of triples(problem.pointNames)) {
+      if (Y < Z && !degenerate(problem, [X, Y, Z])) strs.push(`${X}${Y}/sin∢${X}${Z}${Y}=${X}${Z}/sin∢${X}${Y}${Z}`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('lawSinesWrong', proof);
+  },
+  law_cosines(claim, refRows, problem) {
+    const proof = 'law_cosines';
+    const strs = [];
+    for (const [X, Y, Z] of triples(problem.pointNames)) {
+      if (Y < Z && !degenerate(problem, [X, Y, Z])) strs.push(`${Y}${Z}²=${X}${Y}²+${X}${Z}²-2${X}${Y}*${X}${Z}*cos∢${Y}${X}${Z}`);
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return fail2('lawCosinesWrong', proof);
+  },
+};
+
+// sin, cos and tan of an acute angle of a right triangle (right angle at C).
+function trigDef(fn) {
+  return (claim, refRows, problem) => {
+    const proof = `${fn}_def ${refNames(refRows)}`.trim();
+    const ra = rightRef(refRows);
+    if (!ra) return fail2('needRightRef', proof);
+    const strs = [];
+    for (const [P, C, Q] of legPairs(problem, ra.t)) {
+      for (const [A, B] of [[P, Q], [Q, P]]) {
+        // the angle at A: opposite leg CB, adjacent leg CA, hypotenuse AB
+        const [opp, adj, hyp] = [`${C}${B}`, `${C}${A}`, `${A}${B}`];
+        strs.push(`${fn}∢${C}${A}${B}=${fn === 'sin' ? opp : fn === 'cos' ? adj : opp}/${fn === 'tan' ? adj : hyp}`);
+      }
+    }
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives(`${fn}_def`, strs[0], proof);
+  };
+}
+
+Object.assign(CHECKS, STAGE_CHECKS);
 
 // Check every row. rows: [{ text, reason, refs: [rowNumbers] }].
 export function checkProof(problem, rows) {
@@ -721,21 +1579,27 @@ export function checkProof(problem, rows) {
 export function autoReason(problem, results, claim, upto) {
   if (!claim) return null;
   if (problem.givensParsed.some((g) => claimKey(g) === claimKey(claim))) return { reason: 'given', refs: [] };
-  if (claim.type !== 'eq') return null;
+  if (claim.type !== 'eq' && claim.type !== 'ineq') return null;
   const target = eqVec(claim);
-  if (!target.size) {
+  if (claim.type === 'eq' && !target.size) {
     if (isEqOf(claim, 'seg')) return { reason: 'common_side', refs: [] };
     if (isEqOf(claim, 'ang')) return { reason: 'common_angle', refs: [] };
     return { reason: 'algebra', refs: [] };
   }
-  const pool = results.slice(0, upto).filter((r) => r.ok && r.parsed.ok && r.parsed.claim.type === 'eq');
+  // AB + BC = AC with B on AC, and ∢ABD + ∢DBC = ∢ABC with D inside the angle: read off the diagram.
+  if (claim.type === 'eq' && target.size === 3 && !target.has('1')) {
+    for (const rid of ['segment_add', 'angle_add']) {
+      if (problem.allowed.includes(rid) && CHECKS[rid](claim, [], problem).ok) return { reason: rid, refs: [] };
+    }
+  }
+  const pool = results.slice(0, upto).filter((r) => r.ok && r.parsed.ok && (r.parsed.claim.type === 'eq' || r.parsed.claim.type === 'ineq'));
   if (!pool.length) return null;
-  const vecs = pool.map((r) => eqVec(r.parsed.claim));
-  if (!inSpan(vecs, target)) return null;
+  const follows = (idx) => algebraFollows(claim, idx.map((i) => pool[i].parsed.claim));
   let keep = pool.map((_, i) => i);
+  if (!follows(keep)) return null;
   for (const i of [...keep].reverse()) {
     const trial = keep.filter((x) => x !== i);
-    if (inSpan(trial.map((x) => vecs[x]), target)) keep = trial;
+    if (follows(trial)) keep = trial;
   }
   return { reason: 'algebra', refs: keep.map((x) => pool[x].n) };
 }

@@ -52,7 +52,8 @@ function reasonFor(p, row, r) {
 function request(p, rows, results) {
   return {
     points: p.points,
-    config: p.config.map(({ type, a, o, b }) => ({ type, a, o, b })),
+    // every field of a diagram fact except its display text and Lean text (a circle's `on`, a tangent's `p`, `t`)
+    config: p.config.map(({ text, lean, ...fact }) => fact),
     givens: p.givensParsed,
     goal: p.goalParsed,
     allowed: p.allowed,

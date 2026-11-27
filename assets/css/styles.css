@@ -667,7 +667,7 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 }
 .claim-input::placeholder { color: var(--muted); opacity: .7; font-size: 1.05rem; }
 .claim-input:focus { outline: none; border-color: var(--pen); box-shadow: 0 0 0 4px var(--pen-soft); }
-.symkeys { display: flex; gap: 4px; direction: ltr; }
+.symkeys { display: flex; flex-wrap: wrap; gap: 4px; direction: ltr; }
 .symkey { width: 42px; height: 52px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card); font-family: var(--font-math); font-size: 1.25rem; cursor: pointer; color: var(--ink); box-shadow: 0 2px 0 var(--line-2); transition: transform .1s, box-shadow .1s, border-color .2s; }
 .symkey:hover { border-color: var(--pen); color: var(--pen); }
 .symkey:active { transform: translateY(2px); box-shadow: 0 0 0 var(--line-2); }

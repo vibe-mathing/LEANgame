@@ -27,6 +27,14 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
   const names = Object.keys(problem.points);
   const xs = names.map((n) => problem.points[n][0]);
   const ys = names.map((n) => problem.points[n][1]);
+  // circles of the diagram (config { type: 'circle', o, on }) count toward the frame
+  const circles = (problem.config || []).filter((c) => c.type === 'circle' && c.on && c.on.length)
+    .map((c) => ({ o: c.o, r: dist(problem.points[c.o], problem.points[c.on[0]]) }));
+  for (const c of circles) {
+    const [x, y] = problem.points[c.o];
+    xs.push(x - c.r, x + c.r);
+    ys.push(y - c.r, y + c.r);
+  }
   const minX = Math.min(...xs); const maxX = Math.max(...xs);
   const minY = Math.min(...ys); const maxY = Math.max(...ys);
   const spanX = Math.max(maxX - minX, 1e-6);
@@ -56,6 +64,20 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
         const c = [M[0] + u[0] * off, M[1] + u[1] * off];
         marks += `<path class="dg-tick" d="M${pt([c[0] - nrm[0] * 7, c[1] - nrm[1] * 7])}L${pt([c[0] + nrm[0] * 7, c[1] + nrm[1] * 7])}"/>`;
       }
+    } else if (m.type === 'par') {
+      // arrowheads in the middle of a segment, pointing from its first letter to its second
+      const [a, b] = m.seg.split('');
+      const A = P[a]; const B = P[b];
+      const L = dist(A, B);
+      const u = [(B[0] - A[0]) / L, (B[1] - A[1]) / L];
+      const nrm = [-u[1], u[0]];
+      const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+      for (let k = 0; k < (m.n || 1); k++) {
+        const off = (k - ((m.n || 1) - 1) / 2) * 6 + 3;
+        const tip = [M[0] + u[0] * off, M[1] + u[1] * off];
+        const w = (sg) => [tip[0] - u[0] * 6 + nrm[0] * 4.5 * sg, tip[1] - u[1] * 6 + nrm[1] * 4.5 * sg];
+        marks += `<path class="dg-tick" d="M${pt(w(1))}L${pt(tip)}L${pt(w(-1))}"/>`;
+      }
     } else if (m.type === 'right') {
       // the right-angle square at V between the arms toward X and Y
       const [X, V, Y] = m.ang.split('');
@@ -81,9 +103,14 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     }
   }
 
-  const lines = (problem.segments || []).map((sg, i) => {
+  const circlePaths = circles.map((c, i) => {
+    const [x, y] = P[c.o];
+    const r = c.r * s;
+    return `<path class="dg-line dg-circle" pathLength="1" style="--i:${i}" d="M${pt([x + r, y])}A${f(r)} ${f(r)} 0 1 0 ${pt([x - r, y])}A${f(r)} ${f(r)} 0 1 0 ${pt([x + r, y])}"/>`;
+  }).join('');
+  const lines = circlePaths + (problem.segments || []).map((sg, i) => {
     const [a, b] = sg.split('');
-    return `<path class="dg-line" pathLength="1" style="--i:${i}" d="M${pt(P[a])}L${pt(P[b])}"/>`;
+    return `<path class="dg-line" pathLength="1" style="--i:${i + circles.length}" d="M${pt(P[a])}L${pt(P[b])}"/>`;
   }).join('');
 
   const points = names.map((n, i) => `<circle class="dg-point" style="--i:${i}" cx="${f(P[n][0])}" cy="${f(P[n][1])}" r="3.4"/>`).join('');
@@ -130,13 +157,19 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
 export function claimToItems(claim) {
   if (!claim) return [];
   if (claim.type === 'cong') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];
-  if (claim.type === 'perp') return [{ kind: 'seg', p: claim.a, tone: 'a' }, { kind: 'seg', p: claim.b, tone: 'b' }];
-  // Every segment and angle of each side (sides can be sums such as ∢AOC + ∢COB).
+  if (claim.type === 'perp' || claim.type === 'par') return [{ kind: 'seg', p: claim.a, tone: 'a' }, { kind: 'seg', p: claim.b, tone: 'b' }];
+  if (claim.type === 'sim') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];
+  if (claim.type === 'quad') return [{ kind: 'tri', p: claim.P, tone: 'a' }];
+  // Every segment and angle of each side (sides can be sums such as ∢AOC + ∢COB, and
+  // terms can be products, ratios, squares or sin∢A).
   const items = [];
+  const add = (t, tone) => {
+    if (t.kind === 'seg' || t.kind === 'ang') items.push({ kind: t.kind, p: t.p, tone });
+    else if (t.kind === 'trig') add(t.a, tone);
+    else if (t.kind === 'mono') for (const x of t.f) add(x.t, tone);
+  };
   for (const [side, tone] of [[claim.L, 'a'], [claim.R, 'b']]) {
-    for (const { t } of (side && side.terms) || []) {
-      if (t.kind === 'seg' || t.kind === 'ang') items.push({ kind: t.kind, p: t.p, tone });
-    }
+    for (const { t } of (side && side.terms) || []) add(t, tone);
   }
   return items;
 }

@@ -23,7 +23,7 @@ function request(p, rows, results) {
   };
   return {
     points: p.points,
-    config: p.config.map(({ type, a, o, b }) => ({ type, a, o, b })),
+    config: p.config.map(({ text, lean, ...fact }) => fact),
     givens: p.givensParsed,
     goal: p.goalParsed,
     allowed: p.allowed,
@@ -78,6 +78,54 @@ const CASES = [
     R('∢ADB=∢AEC', 'algebra', [2, 3, 4]), R('BD=CE', 'given'), R('ADB≅AEC', 'SAS', [1, 5, 6]), R('AB=AC', 'cpct_side', [7])]],
   ['L03 converse and wrong rows', PROBLEMS.L03[2], [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('AD=AE', 'iso_converse', [2]),
     R('AB=AE', 'iso_converse', [2]), R('∢ADB=∢AEC', 'iso_base', [1])]],
+
+  // stages 4–11: every problem as its hints solve it, then rows both must reject
+  ...(() => {
+    const Q = (s, n) => PROBLEMS[s][n - 1];
+    return [
+      ['L04-1', Q('L04', 1), [R('AB ∥ CD', 'given'), R('∢AGH = 60', 'given'), R('∢AGH = ∢GHD', 'alt_angles', [1]), R('∢GHD = 60', 'algebra', [2, 3])]],
+      ['L04-2', Q('L04', 2), [R('AB ∥ CD', 'given'), R('∢EGB = 60', 'given'), R('∢EGB = ∢GHD', 'corr_angles', [1]), R('∢GHD = 60', 'algebra', [2, 3]), R('∢CHG + ∢GHD = 180', 'adj_angles'), R('∢CHG = 120', 'algebra', [4, 5])]],
+      ['L04-3', Q('L04', 3), [R('∢BAC = 50', 'given'), R('∢ABC = 60', 'given'), R('∢ACD = ∢BAC + ∢ABC', 'ext_angle'), R('∢ACD = 110', 'algebra', [1, 2, 3])]],
+      ['L04-3 by the angle sum', Q('L04', 3), [R('∢BAC = 50', 'given'), R('∢ABC = 60', 'given'), R('∢BAC + ∢ABC + ∢ACB = 180', 'tri_sum'), R('∢ACB + ∢ACD = 180', 'adj_angles'), R('∢ACD = 110', 'algebra', [1, 2, 3, 4])]],
+      ['L04-4', Q('L04', 4), [R('∢AGE = 120', 'given'), R('∢GHD = 60', 'given'), R('∢AGE = ∢BGH', 'vert_angles'), R('∢BGH + ∢GHD = 180', 'algebra', [1, 2, 3]), R('AB ∥ CD', 'par_converse', [4])]],
+      ['L05-1', Q('L05', 1), [R('AC = 9', 'given'), R('BC = 7', 'given'), R('AC > BC', 'algebra', [1, 2]), R('∢ABC > ∢BAC', 'side_angle', [3])]],
+      ['L05-2', Q('L05', 2), [R('∢BAC = 70', 'given'), R('∢ABC = 50', 'given'), R('∢BAC + ∢ABC + ∢ACB = 180', 'tri_sum'), R('∢ACB = 60', 'algebra', [1, 2, 3]), R('∢BAC > ∢ACB', 'algebra', [1, 4]), R('BC > AB', 'angle_side', [5])]],
+      ['L05-3', Q('L05', 3), [R('AB + AC > BC', 'tri_ineq'), R('AB = 4', 'given'), R('BC = 9', 'given'), R('AC > 5', 'algebra', [1, 2, 3])]],
+      ['L06-1', Q('L06', 1), [R('ABCD מקבילית', 'given'), R('AB = DC', 'para_sides', [1]), R('AD = BC', 'para_sides', [1]), R('AB = 7', 'given'), R('BC = 4', 'given'), R('AB + BC + CD + DA = 22', 'algebra', [2, 3, 4, 5])]],
+      ['L06-2', Q('L06', 2), [R('ABCD מקבילית', 'given'), R('∢DAB = 110', 'given'), R('AD ∥ BC', 'para_def', [1]), R('∢DAB + ∢ABC = 180', 'cointerior', [3]), R('∢ABC = 70', 'algebra', [2, 4])]],
+      ['L06-3', Q('L06', 3), [R('ABCD מקבילית', 'given'), R('AO = OC', 'para_diag', [1]), R('BO = OD', 'para_diag', [1]), R('∢AOB = ∢COD', 'vert_angles'), R('AOB ≅ COD', 'SAS', [2, 3, 4])]],
+      ['L06-4', Q('L06', 4), [R('ABCD מלבן', 'given'), R('AC = BD', 'rect_diag', [1]), R('AO = OC', 'para_diag', [1]), R('BO = OD', 'para_diag', [1]), R('AO + OC = AC', 'segment_add'), R('BO + OD = BD', 'segment_add'), R('AO = BO', 'algebra', [2, 3, 4, 5, 6]), R('∢OAB = ∢OBA', 'iso_base', [7])]],
+      ['L06-5', Q('L06', 5), [R('AB = DC', 'given'), R('AD = BC', 'given'), R('ABCD מקבילית', 'para_test', [1, 2]), R('∢DAB = ∢BCD', 'para_angles', [3])]],
+      ['L07-1', Q('L07', 1), [R('AD = DB', 'given'), R('AE = EC', 'given'), R('2DE = BC', 'midseg_tri', [1, 2]), R('BC = 12', 'given'), R('DE = 6', 'algebra', [3, 4])]],
+      ['L07-2', Q('L07', 2), [R('AD = DB', 'given'), R('AE = EC', 'given'), R('DE ∥ BC', 'midseg_tri', [1, 2]), R('∢ADE = ∢ABC', 'corr_angles', [3])]],
+      ['L07-3', Q('L07', 3), [R('∢ACB = 90', 'given'), R('AM = MB', 'given'), R('CM = AM', 'median_hyp', [1, 2]), R('∢MAC = ∢MCA', 'iso_base', [3]), R('∢BAC = 35', 'given'), R('∢MCA = 35', 'algebra', [4, 5])]],
+      ['L07-4', Q('L07', 4), [R('∢ACB = 90', 'given'), R('∢BAC = 30', 'given'), R('2BC = AB', 'tri_30', [1, 2]), R('AB = 10', 'given'), R('BC = 5', 'algebra', [3, 4])]],
+      ['L07-5', Q('L07', 5), [R('AB ∥ DC', 'given'), R('AE = ED', 'given'), R('BF = FC', 'given'), R('2EF = AB + DC', 'midseg_trap', [1, 2, 3]), R('AB = 10', 'given'), R('DC = 6', 'given'), R('EF = 8', 'algebra', [4, 5, 6])]],
+      ['L08-1', Q('L08', 1), [R('∢ACB = 90', 'given'), R('AC² + BC² = AB²', 'pythagoras', [1]), R('AC = 8', 'given'), R('BC = 6', 'given'), R('AB = 10', 'algebra', [2, 3, 4])]],
+      ['L08-2', Q('L08', 2), [R('AB = AC', 'given'), R('BD = DC', 'given'), R('∢ADB = 90', 'iso_median', [1, 2]), R('AD² + BD² = AB²', 'pythagoras', [3]), R('BC = 10', 'given'), R('BD + DC = BC', 'segment_add'), R('BD = 5', 'algebra', [2, 5, 6]), R('AB = 13', 'given'), R('AD = 12', 'algebra', [4, 7, 8])]],
+      ['L08-3', Q('L08', 3), [R('AC = 12', 'given'), R('BC = 5', 'given'), R('AB = 13', 'given'), R('AC^2 + BC^2 = AB^2', 'algebra', [1, 2, 3]), R('∢ACB = 90', 'pyth_conv', [4])]],
+      ['L09-1', Q('L09', 1), [R('DE ∥ BC', 'given'), R('AD/DB = AE/EC', 'thales', [1]), R('AD = 4', 'given'), R('DB = 2', 'given'), R('AE = 6', 'given'), R('EC = 3', 'algebra', [2, 3, 4, 5])]],
+      ['L09-2', Q('L09', 2), [R('DE ∥ BC', 'given'), R('∢ADE = ∢ABC', 'corr_angles', [1]), R('∢AED = ∢ACB', 'corr_angles', [1]), R('ADE ~ ABC', 'sim_aa', [2, 3]), R('AD/AB = DE/BC', 'sim_parts', [4]),
+        R('AD = 3', 'given'), R('AB = 9', 'given'), R('DE = 4', 'given'), R('BC = 12', 'algebra', [5, 6, 7, 8])]],
+      ['L09-3', Q('L09', 3), [R('∢BAD = ∢DAC', 'given'), R('BD/DC = AB/AC', 'bis_ratio', [1]), R('AB = 6', 'given'), R('AC = 9', 'given'), R('BD + DC = BC', 'segment_add'), R('BC = 10', 'given'), R('BD = 4', 'algebra', [2, 3, 4, 5, 6])]],
+      ['L09-4', Q('L09', 4), [R('AD = 2', 'given'), R('AB = 6', 'given'), R('AE = 3', 'given'), R('AC = 9', 'given'), R('AD/AB = AE/AC', 'algebra', [1, 2, 3, 4]), R('∢DAE = ∢BAC', 'common_angle'),
+        R('ADE ~ ABC', 'sim_sas', [5, 6]), R('∢ADE = ∢ABC', 'sim_parts', [7]), R('DE ∥ BC', 'par_converse', [8])]],
+      ['L10-1', Q('L10', 1), [R('∢AOB = 106', 'given'), R('2∢ACB = ∢AOB', 'inscribed_central'), R('∢ACB = 53', 'algebra', [1, 2])]],
+      ['L10-2', Q('L10', 2), [R('∢ACB = 90', 'semicircle'), R('∢CBA = 37', 'given'), R('∢CAB + ∢ABC + ∢ACB = 180', 'tri_sum'), R('∢CAB = 53', 'algebra', [1, 2, 3])]],
+      ['L10-3', Q('L10', 3), [R('∢OAP = 90', 'tangent_radius'), R('∢AOP = 50', 'given'), R('∢OAP + ∢AOP + ∢APO = 180', 'tri_sum'), R('∢APO = 40', 'algebra', [1, 2, 3])]],
+      ['L10-4', Q('L10', 4), [R('∢DAB + ∢BCD = 180', 'cyclic_quad'), R('∢DAB = 72', 'given'), R('∢BCD = 108', 'algebra', [1, 2])]],
+      ['L10-5', Q('L10', 5), [R('OA = OB', 'radii'), R('∢OAB = ∢OBA', 'iso_base', [1]), R('∢OAB = 37', 'given'), R('∢OAB + ∢OBA + ∢AOB = 180', 'tri_sum'), R('∢AOB = 106', 'algebra', [2, 3, 4])]],
+      ['L10-6', Q('L10', 6), [R('PA = PB', 'tangents_eq'), R('∢PAB = ∢PBA', 'iso_base', [1]), R('∢APB = 60', 'given'), R('∢APB + ∢PAB + ∢PBA = 180', 'tri_sum'), R('∢PAB = 60', 'algebra', [2, 3, 4])]],
+      ['L11-1', Q('L11', 1), [R('∢ACB = 90', 'given'), R('sin∢BAC = BC/AB', 'sin_def', [1]), R('∢BAC = 30', 'given'), R('AB = 12', 'given'), R('BC = 6', 'algebra', [2, 3, 4])]],
+      ['L11-2', Q('L11', 2), [R('∢ACB = 90', 'given'), R('cos∢ABC = BC/AB', 'cos_def', [1]), R('∢ABC = 60', 'given'), R('BC = 5', 'given'), R('AB = 10', 'algebra', [2, 3, 4])]],
+      ['L11-3', Q('L11', 3), [R('BC² = AB² + AC² − 2AB·AC·cos∢BAC', 'law_cosines'), R('AB = 5', 'given'), R('AC = 8', 'given'), R('∢BAC = 60', 'given'), R('BC = 7', 'algebra', [1, 2, 3, 4])]],
+      ['L11-4', Q('L11', 4), [R('BC/sin∢BAC = AC/sin∢ABC', 'law_sines'), R('BC = 6', 'given'), R('∢BAC = 30', 'given'), R('sin∢ABC = 0.8', 'given'), R('AC = 9.6', 'algebra', [1, 2, 3, 4])]],
+      ['L04–L11 wrong rows', Q('L04', 1), [R('AB ∥ CD', 'given'), R('∢AGH = ∢GHC', 'alt_angles', [1]), R('∢AGH = ∢GHD', 'corr_angles', [1]), R('∢AGH + ∢GHD = 180', 'cointerior', [1])]],
+      ['L08 wrong rows', Q('L08', 1), [R('∢ACB = 90', 'given'), R('AB² + BC² = AC²', 'pythagoras', [1]), R('AC² + BC² = AB²', 'pythagoras', [1]), R('AC = 8', 'given'), R('BC = 6', 'given'), R('AB = 11', 'algebra', [3, 4, 5])]],
+      ['L09 wrong rows', Q('L09', 1), [R('DE ∥ BC', 'given'), R('AD/AB = AE/EC', 'thales', [1]), R('AD/AB = AE/AC', 'thales', [1])]],
+      ['L11 wrong rows', Q('L11', 1), [R('∢ACB = 90', 'given'), R('sin∢BAC = AC/AB', 'sin_def', [1]), R('cos∢BAC = AC/AB', 'cos_def', [1])]],
+    ];
+  })(),
 
   // rows that must be rejected by both
   ['wrong rows', P1, [R('AB=AC', 'given'), R('∢BAD=∢CAD', 'given'), R('AD=AD', 'common_side'), R('ABD≅ADC', 'SAS', [1, 2, 3]),

@@ -589,7 +589,7 @@ function viewProblem({ stage, n, problem: p }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', '≅', '⊥', '=', '+', '°'].map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
@@ -984,7 +984,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     const s = b.dataset.sym;
     const a = input.selectionStart ?? input.value.length;
     const e = input.selectionEnd ?? input.value.length;
-    const ins = s === '=' || s === '≅' ? ` ${s} ` : s;
+    const ins = ['=', '≅', '∼', '⊥', '∥', '<', '>'].includes(s) ? ` ${s} ` : s;
     input.value = input.value.slice(0, a) + ins + input.value.slice(e);
     input.focus();
     input.setSelectionRange(a + ins.length, a + ins.length);
