@@ -765,6 +765,10 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .dg-arc.is-goal { stroke: var(--goal); stroke-dasharray: 3 4; }
 .dg-mlabel { font-family: var(--font-math); font-size: 14px; font-weight: 600; fill: var(--pen); text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
 .dg-mlabel.is-goal { fill: var(--goal); }
+/* facts the proof has proven, marked on the diagram as the student goes (provenMarks) */
+.dg-proven .dg-tick, .dg-proven .dg-arc { stroke: var(--ok); }
+.dg-proven .dg-mlabel { fill: var(--ok); }
+.dg-proven > * { animation: fadein .35s ease; }
 .hl-seg { stroke-width: 12; stroke-linecap: round; fill: none; mix-blend-mode: var(--hl-blend); animation: hlin .25s ease; }
 .hl-ang, .hl-tri { stroke: none; mix-blend-mode: var(--hl-blend); animation: hlin .25s ease; }
 .hl-tri { opacity: .8; }

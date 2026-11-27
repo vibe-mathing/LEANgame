@@ -3,7 +3,7 @@
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
 import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList, UNI_SITE } from './data.js';
 import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions, claimKey, findReason } from './geo.js';
-import { renderDiagram, claimToItems } from './diagram.js';
+import { renderDiagram, claimToItems, provenMarks } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
 import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin, fullAccess,
@@ -217,7 +217,21 @@ onToolsChange(() => { if (currentRoute().name === 'topic' && toolSig() !== lastT
 
 // ---------------------------------------------------------------- helpers
 
-const reasonShort = (id) => esc(L(REASONS[id]?.short));
+// A reason as a label: its full name, or, when that is longer than four words, the first three
+// words and "…"; pointing at it shows the full name and the full statement.
+const plainMath = (s) => String(s || '').replace(/\$([^$]*)\$/g, '$1');
+const reasonLabel = (id) => {
+  const r = REASONS[id];
+  if (!r) return '';
+  const name = L(r.name);
+  const words = name.trim().split(/\s+/);
+  const shown = words.length > 4 ? `${words.slice(0, 3).join(' ')}…` : name;
+  const full = plainMath(r.statement && L(r.statement));
+  return `<span class="rname" title="${esc(full ? `${name}: ${full}` : name)}">${esc(shown)}</span>`;
+};
+const reasonShort = reasonLabel;
+// inside a sentence (an error message) the name is never cut short
+const reasonFull = (id) => esc(L(REASONS[id]?.name));
 const reasonsOfStage = (stageId) => Object.entries(REASONS).filter(([, r]) => r.stage === stageId);
 // "a, b and c" / "a, b ו-c"
 const joinList = (items) => (items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + t('pp.and') + items[items.length - 1]);
@@ -226,7 +240,7 @@ const refsText = (refs) => (refs && refs.length ? ` <span class="refs" dir="ltr"
 function msgHTML(msg) {
   if (!msg) return '';
   const vars = { ...(msg.vars || {}) };
-  if (vars.rid) vars.r = reasonShort(vars.rid);
+  if (vars.rid) vars.r = reasonFull(vars.rid);
   return rich(t('err.' + msg.key, vars));
 }
 
@@ -523,7 +537,7 @@ function viewTopic() {
           <div class="stage-top"><span class="stage-label">${t('tp.stage', { n: idx + 1 })}</span><span class="badge b-${open ? 'open' : 'soon'}">${open ? t('status.open') : t('status.soon')}</span></div>
           <h3>${L(s.name)}</h3>
           <p class="stage-blurb">${rich(L(s.blurb))}</p>
-          <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([, r]) => `<span class="chip">${esc(L(r.short))}</span>`).join('')}</div>
+          <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([id]) => `<span class="chip">${reasonLabel(id)}</span>`).join('')}</div>
           ${toolsAfter(s.id).length ? `<div class="unlocks"><span class="unlocks-label">${t('tool.onFinish')}</span>${toolsAfter(s.id).map((id) => `<span class="chip chip-tool" title="${esc(t('tool.' + id + '.title') + ' ' + toolLockText(id))}">${icon(toolOpen(id, isSolved) ? TOOLS[id].icon : 'lock')}${esc(t('tool.' + id))}</span>`).join('')}</div>` : ''}
           ${open ? `<div class="stage-foot">
             <div class="pips" aria-label="${probs.length === 1 ? t('tp.problem1') : t('tp.problems', { n: probs.length })}">
@@ -578,8 +592,8 @@ function viewTopic() {
             <article class="reason-card k-${r.kind}">
               <div class="rc-top"><span class="rc-kind">${t('kind.' + r.kind)}</span>${r.playable ? `<span class="rc-demo">${icon('check')} ${t('tp.demoTag')}</span>` : ''}</div>
               ${PROVED_IN[rid] ? `<p class="rc-proved${reasonEarned(rid, isSolved) ? ' is-done' : ''}">${icon(reasonEarned(rid, isSolved) ? 'check' : 'lock')} ${t(reasonEarned(rid, isSolved) ? 'tool.provedDone' : 'tool.provedIn', { q: provedInLabel(rid) })}</p>` : ''}
-              <h4>${esc(L(r.short))}</h4>
-              <p class="rc-alt">${esc(getLang() === 'he' ? r.short.en : r.short.he)}</p>
+              <h4>${esc(L(r.name))}</h4>
+              <p class="rc-alt">${esc(getLang() === 'he' ? r.name.en : r.name.he)}</p>
               <p>${rich(L(r.statement))}</p>
               <code dir="ltr">${r.lean}</code>
             </article>`).join('')}
@@ -886,6 +900,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     if (lean && lean.key === rowsKey()) applyLean(result, lean.res, state.rows);
     else scheduleLean();
     const { results } = result;
+    dg.setProven(provenMarks(p, results)); // every fact proven so far, marked on the diagram
     rowsEl.innerHTML = results.map((r, i) => {
       const row = state.rows[i];
       const cls = r.ok ? 'ok' : 'bad';
@@ -1140,7 +1155,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     active = options.findIndex((o) => !o.locked);
     sugg.innerHTML = options.length
       ? options.map((o, i) => `<li role="option" id="rs-${i}" class="sugg${o.locked ? ' is-locked' : ''}${i === active ? ' is-active' : ''}" data-i="${i}" aria-disabled="${o.locked}">
-          <span class="sg-name">${esc(L(o.r.short))}</span>
+          <span class="sg-name">${esc(L(o.r.name))}</span>
           <span class="sg-text">${o.locked ? `${icon('lock')} ${p.allowedAll && p.allowedAll.includes(o.id) ? t('tool.proveFirst', { q: provedInLabel(o.id) }) : t('pp.lockedAt', { n: stageNumber(o.r.stage) })}` : rich(L(o.r.statement))}</span>
         </li>`).join('')
       : `<li class="sugg is-empty" aria-disabled="true">${t('pp.reasonNone')}</li>`;

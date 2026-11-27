@@ -100,7 +100,7 @@ export const REASONS = {
 
   // L03 isosceles
   iso_base: R('L03', 'theorem', 1, 'iso_base_angles', ['זוויות הבסיס', 'זוויות הבסיס במשולש שווה שוקיים', 'במשולש שווה שוקיים זוויות הבסיס שוות.'], ['Base angles', 'Base angles of an isosceles triangle', 'The base angles of an isosceles triangle are equal.'], true),
-  iso_converse: R('L03', 'theorem', 1, 'iso_of_angles', ['שתי זוויות שוות', 'משולש עם שתי זוויות שוות', 'משולש שיש בו שתי זוויות שוות הוא שווה שוקיים.'], ['Two equal angles', 'Triangle with two equal angles', 'A triangle with two equal angles is isosceles.'], true),
+  iso_converse: R('L03', 'theorem', 1, 'iso_of_angles', ['מול זוויות שוות צלעות שוות', 'במשולש מול זוויות שוות מונחות צלעות שוות', 'במשולש, מול זוויות שוות מונחות צלעות שוות: משולש שיש בו שתי זוויות שוות הוא שווה שוקיים.'], ['Equal sides opposite equal angles', 'In a triangle, equal sides lie opposite equal angles', 'In a triangle, equal sides lie opposite equal angles: a triangle with two equal angles is isosceles.'], true),
   // An equilateral triangle, both ways (geo.js equi_sides, equi_angles). A row says one equality at
   // a time; "AB = BC = CA" in the composer becomes two rows with the same reason.
   equi_sides: R('L03', 'theorem', 'many', 'equilateral_of_angles', ['שלוש זוויות שוות', 'משולש שכל זוויותיו שוות', 'משולש שכל שלוש זוויותיו שוות הוא שווה צלעות: כל הצלעות שלו שוות.'], ['Three equal angles', 'Triangle with three equal angles', 'A triangle whose three angles are equal is equilateral: all its sides are equal.'], true),

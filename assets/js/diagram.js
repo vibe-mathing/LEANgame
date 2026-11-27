@@ -1,6 +1,8 @@
 // Draws a problem's diagram as SVG from its coordinates, with textbook marks
-// (ticks for equal segments, arcs for equal angles) and a highlighter layer that
-// lights up whatever the current claim talks about.
+// (ticks for equal segments, arcs for equal angles), the facts the proof has proven so far
+// (provenMarks), and a highlighter layer that lights up whatever the current claim talks about.
+
+import { fmtTerm, lineKey } from './geo.js';
 
 const f = (x) => Math.round(x * 10) / 10;
 const pt = (p) => `${f(p[0])} ${f(p[1])}`;
@@ -23,36 +25,14 @@ function arcGeom(V, X, Y, r) {
 
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-// The drawing of a problem's diagram: the SVG's inner markup, and the screen position of every point.
-function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
-  const names = Object.keys(problem.points);
-  const xs = names.map((n) => problem.points[n][0]);
-  const ys = names.map((n) => problem.points[n][1]);
-  // circles of the diagram (config { type: 'circle', o, on }) count toward the frame
-  const circles = (problem.config || []).filter((c) => c.type === 'circle' && c.on && c.on.length)
-    .map((c) => ({ o: c.o, r: dist(problem.points[c.o], problem.points[c.on[0]]) }));
-  for (const c of circles) {
-    const [x, y] = problem.points[c.o];
-    xs.push(x - c.r, x + c.r);
-    ys.push(y - c.r, y + c.r);
-  }
-  const minX = Math.min(...xs); const maxX = Math.max(...xs);
-  const minY = Math.min(...ys); const maxY = Math.max(...ys);
-  const spanX = Math.max(maxX - minX, 1e-6);
-  const spanY = Math.max(maxY - minY, 1e-6);
-  const s = Math.min((width - 2 * pad) / spanX, (height - 2 * pad) / spanY);
-  const ox = (width - spanX * s) / 2 - minX * s;
-  const oy = (height - spanY * s) / 2 + maxY * s;
-  const P = {};
-  for (const n of names) P[n] = [ox + problem.points[n][0] * s, oy - problem.points[n][1] * s];
-  const cx = names.reduce((a, n) => a + P[n][0], 0) / names.length;
-  const cy = names.reduce((a, n) => a + P[n][1], 0) / names.length;
-
-  const angleRadius = (X, V, Y, r) => Math.min(r, 0.42 * Math.min(dist(P[V], P[X]), dist(P[V], P[Y])));
-
-  // ---- static marks from the givens ----
+// Textbook marks as SVG, at screen positions P: ticks on equal segments ({ type: 'tick', seg,
+// n }), arrows on parallel ones ('par'), the right-angle square ('right', ang), an arc with n
+// ticks and an optional value ('arc', ang, n, label), and a length written by a segment ('len',
+// seg, label; on the side away from `center`).
+function marksSVG(list, P, angleRadius, center) {
   let marks = '';
-  for (const m of problem.marks || []) {
+  for (const m of list) {
+    if ((m.seg && m.seg.split('').some((x) => !P[x])) || (m.ang && m.ang.split('').some((x) => !P[x]))) continue;
     if (m.type === 'tick') {
       const [a, b] = m.seg.split('');
       const A = P[a]; const B = P[b];
@@ -101,8 +81,48 @@ function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
         const lp = [P[V][0] + Math.cos(g.mid) * lr, P[V][1] + Math.sin(g.mid) * lr];
         marks += `<text class="dg-mlabel${m.goal ? ' is-goal' : ''}" x="${f(lp[0])}" y="${f(lp[1])}">${m.label}</text>`;
       }
+    } else if (m.type === 'len') {
+      const [a, b] = m.seg.split('');
+      const A = P[a]; const B = P[b];
+      const L = dist(A, B) || 1;
+      const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+      let nrm = [-(B[1] - A[1]) / L, (B[0] - A[0]) / L];
+      if ((M[0] - center[0]) * nrm[0] + (M[1] - center[1]) * nrm[1] < 0) nrm = [-nrm[0], -nrm[1]];
+      marks += `<text class="dg-mlabel" x="${f(M[0] + nrm[0] * 14)}" y="${f(M[1] + nrm[1] * 14)}">${m.label}</text>`;
     }
   }
+  return marks;
+}
+
+// The drawing of a problem's diagram: the SVG's inner markup, and the screen position of every point.
+function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
+  const names = Object.keys(problem.points);
+  const xs = names.map((n) => problem.points[n][0]);
+  const ys = names.map((n) => problem.points[n][1]);
+  // circles of the diagram (config { type: 'circle', o, on }) count toward the frame
+  const circles = (problem.config || []).filter((c) => c.type === 'circle' && c.on && c.on.length)
+    .map((c) => ({ o: c.o, r: dist(problem.points[c.o], problem.points[c.on[0]]) }));
+  for (const c of circles) {
+    const [x, y] = problem.points[c.o];
+    xs.push(x - c.r, x + c.r);
+    ys.push(y - c.r, y + c.r);
+  }
+  const minX = Math.min(...xs); const maxX = Math.max(...xs);
+  const minY = Math.min(...ys); const maxY = Math.max(...ys);
+  const spanX = Math.max(maxX - minX, 1e-6);
+  const spanY = Math.max(maxY - minY, 1e-6);
+  const s = Math.min((width - 2 * pad) / spanX, (height - 2 * pad) / spanY);
+  const ox = (width - spanX * s) / 2 - minX * s;
+  const oy = (height - spanY * s) / 2 + maxY * s;
+  const P = {};
+  for (const n of names) P[n] = [ox + problem.points[n][0] * s, oy - problem.points[n][1] * s];
+  const cx = names.reduce((a, n) => a + P[n][0], 0) / names.length;
+  const cy = names.reduce((a, n) => a + P[n][1], 0) / names.length;
+
+  const angleRadius = (X, V, Y, r) => Math.min(r, 0.42 * Math.min(dist(P[V], P[X]), dist(P[V], P[Y])));
+
+  // ---- static marks from the givens ----
+  const marks = marksSVG(problem.marks || [], P, angleRadius, [cx, cy]);
 
   const circlePaths = circles.map((c, i) => {
     const [x, y] = P[c.o];
@@ -134,7 +154,8 @@ function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
   return {
     P,
     angleRadius,
-    html: `<g class="dg-hl"></g><g class="dg-marks">${marks}</g><g class="dg-lines">${lines}</g>
+    center: [cx, cy],
+    html: `<g class="dg-hl"></g><g class="dg-marks">${marks}</g><g class="dg-proven"></g><g class="dg-lines">${lines}</g>
     <g class="dg-points">${points}</g><g class="dg-labels">${labels}</g><g class="dg-pick"></g>`,
   };
 }
@@ -228,6 +249,18 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
   let sig;
   let model = null; // pickModel, built on the first pick after each paint
   let shown = null;
+  let proven = []; // marks of the facts the proof has proven so far (provenMarks)
+  const drawProven = () => {
+    const g = svg.querySelector('.dg-proven');
+    if (g) g.innerHTML = marksSVG(proven, cur.P, cur.angleRadius, cur.center);
+    // a goal angle's "?" gives way to the value found (the proven mark draws it in its place)
+    const found = new Set(proven.filter((m) => m.replaces).map((m) => m.replaces));
+    const st = svg.querySelector('.dg-marks');
+    if (st && cur.problem) {
+      const marks = (cur.problem.marks || []).map((m) => (found.has(m.ang) && m.label === '?' ? { ...m, label: '' } : m));
+      st.innerHTML = marksSVG(marks, cur.P, cur.angleRadius, cur.center);
+    }
+  };
   const paint = (p) => {
     cur = draw(p, { width, height, pad });
     svg.innerHTML = cur.html;
@@ -235,8 +268,14 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     cur.problem = p;
     model = null;
     shown = null;
+    drawProven();
   };
   paint(problem);
+  // Show what the proof has proven: marks from provenMarks(problem, results).
+  function setProven(marks) {
+    proven = marks || [];
+    drawProven();
+  }
 
   // What is under the pointer: { kind: 'pt' | 'seg' | 'ang', p, text } or null. Tolerances are in
   // screen pixels (wider for a finger), so the diagram picks the same way at any size.
@@ -292,7 +331,120 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     return true;
   }
 
-  return { el: svg, highlight, clear: () => highlight([]), sync, pick, markPick };
+  return { el: svg, highlight, clear: () => highlight([]), sync, pick, markPick, setProven };
+}
+
+// ---- what the proof has proven, drawn on the diagram ----
+// Every correct row adds its fact, the way a student marks a drawing: a length found is written
+// by its segment, an angle found gets an arc with its value (a right angle, the square), equal
+// segments get the same number of ticks and equal angles the same arcs, perpendicular lines the
+// square where they meet, parallel lines arrows. Equalities join into groups, so a segment proven
+// equal to one the question already ticks gets that many ticks; a new group gets a new count.
+export function provenMarks(problem, results) {
+  const pts = problem.points;
+  const rays = problem.rays || {};
+  const segKey = (p) => [...p].sort().join('');
+  const angKey = ([X, V, Y]) => V + [(rays[V] && rays[V][X]) || X, (rays[V] && rays[V][Y]) || Y].sort().join('');
+  const keyOf = (t) => (t.kind === 'seg' ? 's' + segKey(t.p) : 'a' + angKey(t.p));
+  const parent = new Map();
+  const find = (k) => { while (parent.get(k) !== k) k = parent.get(k); return k; };
+  const add = (k) => { if (!parent.has(k)) parent.set(k, k); };
+  const union = (a, b) => { add(a); add(b); parent.set(find(a), find(b)); };
+  const name = new Map(); // key → how the mark names it ('AB', 'ABC')
+  const count = new Map(); // key → the static mark's count
+  const staticKeys = new Set();
+  const labelled = new Set();
+  let maxTick = 0;
+  let maxArc = 0;
+  let maxPar = 0;
+  // the question's own marks: same count = same group
+  const byCount = new Map();
+  for (const m of problem.marks || []) {
+    const k = m.type === 'tick' ? 's' + segKey(m.seg) : m.type === 'arc' ? 'a' + angKey([...m.ang]) : null;
+    if (m.type === 'par') maxPar = Math.max(maxPar, m.n || 1);
+    if (m.type === 'right' || (m.type === 'arc' && m.label)) labelled.add('a' + angKey([...m.ang]));
+    if (!k) continue;
+    add(k);
+    staticKeys.add(k);
+    const n = m.n || (m.type === 'tick' ? 1 : 0);
+    count.set(k, n);
+    if (m.type === 'tick') maxTick = Math.max(maxTick, n); else maxArc = Math.max(maxArc, n);
+    const g = `${m.type}:${n}`;
+    if (n && byCount.has(g)) union(k, byCount.get(g)); else if (n) byCount.set(g, k);
+  }
+  // the question's "?" on its goal angle: the value found replaces it, at the same place
+  const asked = new Map();
+  for (const m of problem.marks || []) if (m.type === 'arc' && m.label === '?') asked.set('a' + angKey([...m.ang]), m);
+  for (const k of asked.keys()) labelled.delete(k);
+  // lines the question already marks parallel
+  const parLines = new Set((problem.marks || []).filter((m) => m.type === 'par').map((m) => lineKey(pts, m.seg[0], m.seg[1])));
+  const out = [];
+  const seen = new Set();
+  const once = (m) => { const s = JSON.stringify(m); if (!seen.has(s)) { seen.add(s); out.push(m); } };
+  const lineCommon = (la, lb) => {
+    const A = (la || '').slice(2).split('');
+    const B = (lb || '').slice(2).split('');
+    const V = A.find((x) => B.includes(x));
+    if (!V) return null;
+    const X = A.find((x) => x !== V); const Y = B.find((x) => x !== V);
+    return X && Y ? X + V + Y : null;
+  };
+  for (const r of results || []) {
+    if (!r || !r.ok || !r.parsed || !r.parsed.ok) continue;
+    const c = r.parsed.claim;
+    if (c.type === 'equi') {
+      const [A, B, C] = c.P;
+      for (const [p, q] of [[A + B, B + C], [B + C, C + A]]) {
+        union('s' + segKey(p), 's' + segKey(q));
+        name.set('s' + segKey(p), p); name.set('s' + segKey(q), q);
+      }
+    } else if (c.type === 'eq' && c.left && c.right) {
+      const L = c.left; const R = c.right;
+      const both = (k) => L.kind === k && R.kind === k;
+      if (both('seg') || both('ang')) {
+        union(keyOf(L), keyOf(R));
+        name.set(keyOf(L), L.p.join('')); name.set(keyOf(R), R.p.join(''));
+      } else {
+        const [t, v] = L.kind === 'num' ? [R, L] : [L, R];
+        if (v.kind !== 'num' || !(t.kind === 'seg' || t.kind === 'ang')) continue;
+        if (t.kind === 'seg') once({ type: 'len', seg: t.p.join(''), label: fmtTerm({ kind: 'num', v: v.v, type: 'len' }) });
+        else if (!labelled.has(keyOf(t))) {
+          labelled.add(keyOf(t));
+          const q = asked.get(keyOf(t));
+          const label = fmtTerm({ kind: 'num', v: v.v, type: 'ang' });
+          if (q) once({ type: 'arc', ang: q.ang, r: q.r, label, replaces: q.ang });
+          else once(Math.abs(v.v - 90) < 1e-9 ? { type: 'right', ang: t.p.join('') } : { type: 'arc', ang: t.p.join(''), label });
+        }
+      }
+    } else if (c.type === 'perp') {
+      const ang = lineCommon(c.la, c.lb);
+      if (ang) once({ type: 'right', ang });
+    } else if (c.type === 'par') {
+      if (parLines.has(c.la) && parLines.has(c.lb)) continue;
+      maxPar += 1;
+      once({ type: 'par', seg: c.a.join(''), n: maxPar });
+      once({ type: 'par', seg: c.b.join(''), n: maxPar });
+    }
+  }
+  // the equal groups: ticks or arcs on every member the question didn't mark itself
+  const groups = new Map();
+  for (const k of parent.keys()) {
+    const g = find(k);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(k);
+  }
+  for (const members of groups.values()) {
+    if (members.length < 2 || members.every((k) => staticKeys.has(k))) continue;
+    const kind = members[0][0];
+    const given = members.find((k) => count.get(k));
+    let n = given ? count.get(given) : 0;
+    if (!n) n = kind === 's' ? ++maxTick : ++maxArc;
+    for (const k of members) {
+      if (staticKeys.has(k) || !name.has(k)) continue;
+      once(kind === 's' ? { type: 'tick', seg: name.get(k), n } : { type: 'arc', ang: name.get(k), n });
+    }
+  }
+  return out.filter((m) => [m.seg, m.ang].filter(Boolean).every((s) => s.split('').every((x) => pts[x])));
 }
 
 // What a claim talks about, as highlight items: left side in one highlighter

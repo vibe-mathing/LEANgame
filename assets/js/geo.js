@@ -130,6 +130,25 @@ function parseQuad(s, points) {
   return null;
 }
 
+// The problem parseClaim is reading (null for a bare list of point names): for ∢A, which needs the
+// drawn segments. parseClaim is synchronous, so this is never stale.
+let parseCtx = null;
+
+// The arms of the drawing at V: one point per ray from V along a drawn segment (the ray's
+// representative, as in angKey).
+function drawnArms(problem, V) {
+  const { rays, points } = problem;
+  const arms = new Set();
+  for (const sg of problem.segments || []) {
+    const [P, Q] = sg.split('');
+    if (!points[P] || !points[Q]) continue;
+    if (V === P) arms.add(rays[V][Q]);
+    else if (V === Q) arms.add(rays[V][P]);
+    else if (strictlyBetween(points, P, V, Q)) { arms.add(rays[V][P]); arms.add(rays[V][Q]); }
+  }
+  return [...arms].sort();
+}
+
 function parseAtom(body, points, rays) {
   let m;
   // The area of a triangle: S△ABC (also S(ABC)). Any order of the letters is the same area.
@@ -159,7 +178,20 @@ function parseAtom(body, points, rays) {
     if (new Set(pts).size < 3) return fail('repeatPoint');
     return { ok: true, term: { kind: 'ang', p: pts, key: angKey(pts[0], pts[1], pts[2], rays) } };
   }
-  if (/^∢[A-Z]{1,2}$/.test(body)) return fail('angle3');
+  // ∢A (typed <A): the angle at A, when exactly two drawn arms leave A and they are not a straight
+  // line. With a third segment from A (a bisector AD), or with A in the middle of a line, ∢A
+  // could be several angles, so the student writes three letters.
+  if ((m = body.match(/^∢([A-Z])$/))) {
+    const V = m[1];
+    if (!points.includes(V)) return fail('unknownPoint', { p: `$${V}$` });
+    const arms = parseCtx ? drawnArms(parseCtx, V) : [];
+    if (arms.length !== 2 || strictlyBetween(parseCtx.points, arms[0], V, arms[1])) {
+      return fail('angleAmbiguous', { v: `$∢${V}$` });
+    }
+    const [X, Y] = arms;
+    return { ok: true, term: { kind: 'ang', p: [X, V, Y], key: angKey(X, V, Y, rays) } };
+  }
+  if (/^∢[A-Z]{2}$/.test(body)) return fail('angle3');
   if ((m = body.match(/^([A-Z])([A-Z])$/))) {
     const pts = [m[1], m[2]];
     const bad = pts.find((x) => !points.includes(x));
@@ -256,6 +288,7 @@ function simpleTerm(side, of) {
 export function parseClaim(input, ctx) {
   const points = Array.isArray(ctx) ? ctx : ctx.pointNames;
   const rays = Array.isArray(ctx) ? null : ctx.rays;
+  parseCtx = Array.isArray(ctx) || !ctx.points || !ctx.rays ? null : ctx;
   const s = normalizeInput(input);
   if (!s) return fail('empty');
   // △ABC ≅ △DEF and △ABC ∼ △DEF: the letter order is the correspondence.
@@ -284,6 +317,8 @@ export function parseClaim(input, ctx) {
     const coords = Array.isArray(ctx) ? null : ctx.points;
     return ok({ type, a, b, la: lineKey(coords, a[0], a[1]), lb: lineKey(coords, b[0], b[1]) });
   }
+  const tri = parseTri(s, ctx);
+  if (tri) return tri;
   if (!/[=<>]/.test(s)) {
     const q = parseQuad(s, points);
     if (q) return q;
@@ -309,7 +344,101 @@ export function parseClaim(input, ctx) {
   if (types.size > 1) return fail('mixedTypes');
   const of = [...types][0] === 'ang' ? 'ang' : 'len';
   if (op !== '=') return ok({ type: 'ineq', op, L, R, of });
-  return ok({ type: 'eq', L, R, of, left: simpleTerm(L, of), right: simpleTerm(R, of) });
+  let left = simpleTerm(L, of);
+  let right = simpleTerm(R, of);
+  if (!left || !right) [left, right] = canonicalSides(L, R, of) || [left, right];
+  return ok({ type: 'eq', L, R, of, left, right });
+}
+
+// "△ABC שווה שוקיים" / "△ABC is isosceles" and "△ABC שווה צלעות" / "△ABC is equilateral".
+// An isosceles triangle is the equation of its legs, AB = AC, marked `tri` so that it is shown
+// as written; every check, key and the Lean checker read the equation. The apex is the one
+// written in brackets ("△ABC שווה שוקיים (AB = AC)", as fmtClaim shows it), else the vertex
+// whose two sides are equal in the drawing, else the first letter. An equilateral triangle is
+// { type: 'equi', P }: AB = BC, BC = CA and CA = AB (claimEqs).
+const TRI_WORDS = { iso: ['שווהשוקיים', 'ש"ש', 'ש״ש', 'ISOSCELES'], equi: ['שווהצלעות', 'EQUILATERAL'] };
+function parseTri(s0, ctx) {
+  const points = Array.isArray(ctx) ? ctx : ctx.pointNames;
+  const br = s0.match(/^(.*)\(([^()]*)\)$/);
+  const s = (br ? br[1] : s0).replace(/(TRIANGLE)$/, '');
+  for (const [kind, words] of Object.entries(TRI_WORDS)) {
+    for (const w of words) {
+      let rest = null;
+      if (s.endsWith(w)) rest = s.slice(0, -w.length).replace(/(הוא|IS(AN?)?)$/, '');
+      else if (s.startsWith(w)) rest = s.slice(w.length);
+      if (rest === null) continue;
+      rest = rest.replace(/^(המשולש|משולש|TRIANGLE)/, '').replace(/^△/, '');
+      if (!/^[A-Z]{3}$/.test(rest)) return null; // a trapezoid, or no triangle named
+      const P = [...rest];
+      const bad = P.find((x) => !points.includes(x));
+      if (bad) return fail('unknownPoint', { p: `$${bad}$` });
+      if (new Set(P).size < 3) return fail('repeatPoint');
+      if (kind === 'equi') return ok({ type: 'equi', P });
+      let A = null;
+      if (br) {
+        const legs = parseClaim(br[2], ctx);
+        const ap = legs.ok ? apexOf(legs.claim) : null;
+        if (ap && [ap.A, ap.B, ap.C].every((x) => P.includes(x))) A = ap.A;
+      }
+      A = A || isoApex(ctx, P);
+      const [B, C] = P.filter((x) => x !== A);
+      const r = parseClaim(`${A}${B}=${A}${C}`, ctx);
+      if (!r.ok) return r;
+      r.claim.tri = { kind: 'iso', P };
+      return r;
+    }
+  }
+  return null;
+}
+
+// The apex of isosceles △P in the drawing: the vertex whose two sides are equal (the first
+// letter when it is one of them, as in an equilateral drawing); the first letter otherwise.
+function isoApex(ctx, P) {
+  const pts = !Array.isArray(ctx) && ctx.points;
+  if (!pts) return P[0];
+  const d = (a, b) => Math.hypot(pts[a][0] - pts[b][0], pts[a][1] - pts[b][1]);
+  const apex = P.filter((v) => {
+    const [b, c] = P.filter((x) => x !== v);
+    return Math.abs(d(v, b) - d(v, c)) <= 0.02 * Math.max(d(v, b), d(v, c));
+  });
+  return apex.includes(P[0]) ? P[0] : apex[0] || P[0];
+}
+
+// The equations a claim stands for: an equilateral triangle's three, else the claim itself.
+export function claimEqs(c) {
+  if (!c || c.type !== 'equi') return [c];
+  const [A, B, C] = c.P;
+  const seg = (p, q) => ({ kind: 'seg', p: [p, q] });
+  const eq = (x, y) => ({ type: 'eq', of: 'len', L: { terms: [{ c: 1, t: x }], k: 0 }, R: { terms: [{ c: 1, t: y }], k: 0 }, left: x, right: y });
+  return [eq(seg(A, B), seg(B, C)), eq(seg(B, C), seg(C, A)), eq(seg(C, A), seg(A, B))];
+}
+
+// Every arrangement of an equation is the same claim: "∢ABD − ∢ACD = 0°", "∢ABD = ∢ACD" and
+// "−∢ACD = −∢ABD" all say one angle equals another. With everything moved to the left
+// (left − right = 0, like claimKey), an equation that is "one term = another" or "one term = a
+// number" gets those two sides, which the theorem checks read; the claim is still shown as
+// written. Not multiplied through: "2∢A − 2∢B = 0" stays a sum, as in claimKey.
+function canonicalSides(L, R, of) {
+  const m = new Map();
+  for (const [side, sg] of [[L, 1], [R, -1]]) {
+    for (const { c, t } of side.terms) {
+      const k = termKey(t);
+      const cur = m.get(k) || { c: 0, t };
+      cur.c += sg * c;
+      m.set(k, cur);
+    }
+  }
+  const terms = [...m.values()].filter((x) => Math.abs(x.c) > EPS);
+  const k = L.k - R.k;
+  if (terms.length === 2 && Math.abs(k) < EPS && Math.abs(Math.abs(terms[0].c) - 1) < EPS
+      && Math.abs(terms[0].c + terms[1].c) < EPS) {
+    const [pos, neg] = terms[0].c > 0 ? terms : [terms[1], terms[0]];
+    return [pos.t, neg.t];
+  }
+  if (terms.length === 1 && Math.abs(Math.abs(terms[0].c) - 1) < EPS) {
+    return [terms[0].t, { kind: 'num', v: -k / terms[0].c, type: of }];
+  }
+  return null;
 }
 
 // ---------- linear algebra over the cited rows ----------
@@ -358,6 +487,7 @@ export function claimKey(c) {
   if (!c) return '';
   if (c.type === 'perp' || c.type === 'par') return c.type + ':' + [c.la, c.lb].sort().join('|');
   if (c.type === 'drawn') return 'drawn:' + [...c.a].sort().join('');
+  if (c.type === 'equi') return 'equi:' + [...c.P].sort().join('');
   if (c.type === 'quad') return `quad:${c.kind}:${quadKey(c.kind, c.P)}`;
   if (c.type === 'ineq') {
     // larger − smaller > 0, never rescaled: "2AB > 2CD" is not "AB > CD"
@@ -423,17 +553,19 @@ export function fmtTerm(t) {
   return atomStr(t);
 }
 
+// One side, the number first: 180° − ∢BCA rather than −∢BCA + 180°.
 function fmtSide(side, of) {
   const unit = of === 'ang' ? '°' : '';
   const parts = [];
+  const hasK = Math.abs(side.k) > EPS || !side.terms.length;
+  if (hasK) parts.push((side.k < 0 ? '−' : '') + fmtNum(Math.abs(side.k)) + unit);
   side.terms.forEach(({ c, t }, i) => {
     const a = Math.abs(c);
     const s = atomStr(t);
     const body = Math.abs(a - 1) < EPS ? s : fmtNum(a) + (s.startsWith('1/') ? s.slice(1) : s);
-    parts.push(i === 0 ? (c < 0 ? '−' : '') + body : (c < 0 ? ' − ' : ' + ') + body);
+    const first = i === 0 && !hasK;
+    parts.push(first ? (c < 0 ? '−' : '') + body : (c < 0 ? ' − ' : ' + ') + body);
   });
-  if (!side.terms.length) parts.push(fmtNum(side.k) + unit);
-  else if (Math.abs(side.k) > EPS) parts.push((side.k < 0 ? ' − ' : ' + ') + fmtNum(Math.abs(side.k)) + unit);
   return parts.join('');
 }
 
@@ -447,6 +579,11 @@ export function fmtClaim(c) {
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
   if (c.type === 'sim') return `△${c.P.join('')} ∼ △${c.Q.join('')}`;
   if (c.type === 'drawn') return c.a.join('');
+  if (c.type === 'equi') return getLang() === 'en' ? `△${c.P.join('')} is equilateral` : `△${c.P.join('')} שווה צלעות`;
+  if (c.tri && c.tri.kind === 'iso') {
+    const legs = `${fmtTerm(c.left)} = ${fmtTerm(c.right)}`;
+    return getLang() === 'en' ? `△${c.tri.P.join('')} is isosceles (${legs})` : `△${c.tri.P.join('')} שווה שוקיים (${legs})`;
+  }
   if (c.type === 'perp') return `${c.a.join('')} ⊥ ${c.b.join('')}`;
   if (c.type === 'par') return `${c.a.join('')} ∥ ${c.b.join('')}`;
   if (c.type === 'quad') {
@@ -483,6 +620,7 @@ export function leanClaim(c) {
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'sim') return `Sim ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'drawn') return 'True';
+  if (c.type === 'equi') return claimEqs(c).map(leanClaim).join(' ∧ ');
   if (c.type === 'perp') return `Perp ${c.a.join(' ')} ${c.b.join(' ')}`;
   if (c.type === 'par') return `Par ${c.a.join(' ')} ${c.b.join(' ')}`;
   if (c.type === 'quad') return `${QUADS[c.kind].lean} ${c.P.join(' ')}`;
@@ -1891,11 +2029,33 @@ export function checkProof(problem0, rows) {
     // A given stated in words ("AD bisects ∠BAC") may also be cited through its definition.
     const gi = problem.givens.findIndex((g, j) => (g.also || []).includes(rid) && claimKey(problem.givensParsed[j]) === key);
     if (gi >= 0) { res.ok = true; res.lean = `${head} ${REASONS[rid].lean} g${gi + 1}`; return; }
-    const refRows = refs.map((r) => ({ n: r, claim: results[r - 1].parsed.claim }));
+    // A cited equilateral triangle is its three equations (claimEqs): all of them (for
+    // calculation), or one of them as the row cited (base angles need one AB = AC).
+    const expand = (r) => claimEqs(results[r - 1].parsed.claim).map((c) => ({ n: r, claim: c }));
+    const refRows = refs.flatMap(expand);
+    const readings = [refRows];
+    if (refs.some((r) => results[r - 1].parsed.claim.type === 'equi')) {
+      let combos = [[]];
+      for (const r of refs) combos = combos.flatMap((rr) => expand(r).map((x) => [...rr, x]));
+      readings.push(...combos.slice(0, 27));
+    }
     const check = CHECKS[rid];
-    const out = check
-      ? check(claim, refRows, problem)
-      : { ok: false, msg: { key: 'reasonNoFit', vars: { rid } }, proof: `${REASONS[rid].lean} ${refNames(refRows)}`.trim() };
+    // an equilateral claim by a theorem or by calculation: each of its equations, same reason
+    const parts = claim.type === 'equi' && rid !== 'given' ? claimEqs(claim) : [claim];
+    let out = null;
+    for (const part of parts) {
+      let first = null;
+      out = null;
+      for (const rr of readings) {
+        const o = check
+          ? check(part, rr, problem)
+          : { ok: false, msg: { key: 'reasonNoFit', vars: { rid } }, proof: `${REASONS[rid].lean} ${refNames(rr)}`.trim() };
+        first = first || o;
+        if (o.ok) { out = o; break; }
+      }
+      out = out || first;
+      if (!out.ok) break;
+    }
     res.ok = out.ok;
     res.msg = out.msg || null;
     res.lean = `${head} ${out.proof}`;
