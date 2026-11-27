@@ -44,27 +44,10 @@ export const TOPICS = [
     name: { he: 'חשבון דיפרנציאלי ואינטגרלי', en: 'Calculus' },
     blurb: { he: 'גבולות, נגזרות ואינטגרלים ברמת 5 יחידות.', en: 'Limits, derivatives and integrals at the 5-unit level.' },
   },
-  {
-    id: 'linear-algebra', track: 'uni', status: 'planned', glyph: 'matrix',
-    name: { he: 'אלגברה לינארית', en: 'Linear algebra' },
-    blurb: { he: 'מרחבים וקטוריים, מטריצות, דטרמיננטות וערכים עצמיים.', en: 'Vector spaces, matrices, determinants and eigenvalues.' },
-  },
-  {
-    id: 'calculus-uni', track: 'uni', status: 'planned', glyph: 'integral',
-    name: { he: 'חדו״א', en: 'Calculus' },
-    blurb: { he: 'גבולות, רציפות, נגזרות ואינטגרלים, בהוכחות מלאות.', en: 'Limits, continuity, derivatives and integrals, fully proved.' },
-  },
-  {
-    id: 'abstract-algebra', track: 'uni', status: 'planned', glyph: 'hexagon',
-    name: { he: 'מבנים אלגבריים', en: 'Abstract algebra' },
-    blurb: { he: 'חבורות, חוגים ושדות.', en: 'Groups, rings and fields.' },
-  },
-  {
-    id: 'discrete', track: 'uni', status: 'planned', glyph: 'graph',
-    name: { he: 'מתמטיקה בדידה', en: 'Discrete math' },
-    blurb: { he: 'לוגיקה, קבוצות, קומבינטוריקה וגרפים.', en: 'Logic, sets, combinatorics and graphs.' },
-  },
 ];
+
+// The university courses live on their own site (linear algebra, calculus, …).
+export const UNI_SITE = 'https://vibe-mathing.github.io/uni/';
 
 // ---------------------------------------------------------------- reason catalog
 // Each reason: kind, the stage that unlocks it (null = always open), how many rows it

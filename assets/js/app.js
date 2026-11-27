@@ -1,7 +1,7 @@
 // LEANgame website: hash router and the three views (home, topic, problem).
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
-import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList } from './data.js';
+import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList, UNI_SITE } from './data.js';
 import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions } from './geo.js';
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
@@ -341,13 +341,12 @@ function viewHome() {
         </div>
         <div class="tabs" role="tablist">
           <button type="button" role="tab" class="tab" aria-selected="true" data-track="hs">${L({ he: 'תיכון', en: 'High school' })}</button>
-          <button type="button" role="tab" class="tab" aria-selected="false" data-track="uni">${L({ he: 'אוניברסיטה', en: 'University' })} <span class="tab-soon">${t('status.later')}</span></button>
+          <button type="button" role="tab" class="tab" aria-selected="false" data-track="uni">${L({ he: 'אוניברסיטה', en: 'University' })}</button>
         </div>
       </div>
       <div class="topic-grid" data-panel="hs">${TOPICS.filter((x) => x.track === 'hs').map(topicCard).join('')}</div>
       <div class="topic-grid" data-panel="uni" hidden>
-        ${TOPICS.filter((x) => x.track === 'uni').map(topicCard).join('')}
-        <p class="uni-note">${icon('info')} ${t('topics.uniNote')}</p>
+        <p class="uni-note">${icon('info')} <span>${t('topics.uniNote')} <a href="${UNI_SITE}">vibe-mathing.github.io/uni ↗</a></span></p>
       </div>
     </div>
   </section>
