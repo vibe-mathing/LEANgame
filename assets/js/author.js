@@ -72,6 +72,13 @@ const S = {
     'tool.seg': 'קטע',
     'tool.circ': 'מעגל',
     'tool.del': 'מחיקה',
+    'tool.ang': 'זווית',
+    'tool.len': 'אורך',
+    'hint.ang': 'לחצו על שלוש נקודות: שוק, קודקוד, שוק. אחר כך כתבו את גודל הזווית, או בחרו שאותה צריך לחשב.',
+    'hint.len': 'לחצו על קטע. אחר כך כתבו את האורך שלו, או בחרו שאותו צריך לחשב.',
+    'sel.askIt': 'חשבו את {x}',
+    'sel.addIt': 'הוספה',
+    'sel.cancel': 'ביטול',
     'tool.undo': 'ביטול',
     'tool.clear': 'ניקוי',
     'tool.grid': 'הצמדה לרשת',
@@ -290,6 +297,13 @@ const S = {
     'tool.seg': 'Segment',
     'tool.circ': 'Circle',
     'tool.del': 'Delete',
+    'tool.ang': 'Angle',
+    'tool.len': 'Length',
+    'hint.ang': 'Click three points: arm, vertex, arm. Then type the angle’s size, or choose to have it calculated.',
+    'hint.len': 'Click a segment. Then type its length, or choose to have it calculated.',
+    'sel.askIt': 'Find {x}',
+    'sel.addIt': 'Add',
+    'sel.cancel': 'Cancel',
     'tool.undo': 'Undo',
     'tool.clear': 'Clear',
     'tool.grid': 'Snap to grid',
@@ -489,12 +503,44 @@ const TOOL_IC = {
   point: '<circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/>',
   seg: '<path d="M5 18L19 6"/><circle cx="5" cy="18" r="2" fill="currentColor"/><circle cx="19" cy="6" r="2" fill="currentColor"/>',
   circ: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>',
+  ang: '<path d="M4 19h16M4 19L15 5"/><path d="M10 19a6 6 0 0 0-2.2-4.7"/>',
+  len: '<path d="M4 17h16M4 14v6M20 14v6"/><path d="M8 9h8M8 9l2-2M8 9l2 2M16 9l-2-2M16 9l-2 2"/>',
   grid: '<path d="M4 9h16M4 15h16M9 4v16M15 4v16"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
   back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   wand: '<path d="M4 20L15 9"/><path d="M15 4v3M19 9h-3M18.2 5.8l-2 2M13 4.5l.6 1.6M20 11l-1.6-.6"/>',
 };
+// The angle and length tools: arcs for the angles the question names, and the value field of the
+// selection bar (instead of a browser prompt). Styled here so author.css stays as it is.
+function angStyle() {
+  if (document.getElementById('au-ang-style')) return;
+  const st = document.createElement('style');
+  st.id = 'au-ang-style';
+  st.textContent = `
+.au-svg .au-arc { fill: none; stroke: var(--pen); stroke-width: 2; }
+.au-svg .au-arc.is-goal { stroke: var(--amber); stroke-dasharray: 4 3; }
+.au-svg .au-arc.is-sel { stroke: var(--pen); stroke-width: 3.5; opacity: .55; }
+.au-svg .au-arclabel { font: 700 13px var(--font-math); fill: var(--pen); text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
+.au-svg .au-arclabel.is-goal { fill: var(--amber); }
+.au-askrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.au-askrow label { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-math); font-size: 1.05rem; direction: ltr; }
+.au-askrow input { width: 84px; height: 36px; border-radius: 8px; border: 1.5px solid var(--pen); background: var(--paper); color: var(--ink); font: inherit; text-align: center; }
+.au-askrow input:focus-visible { outline: 2.5px solid var(--pen); outline-offset: 1px; }
+`;
+  document.head.append(st);
+}
+// The arc of angle XVY in pixels, and where its label goes.
+function arcAt(V, X, Y, r) {
+  const a1 = Math.atan2(X[1] - V[1], X[0] - V[0]);
+  let d = Math.atan2(Y[1] - V[1], Y[0] - V[0]) - a1;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d <= -Math.PI) d += 2 * Math.PI;
+  const p = (t, rr = r) => [V[0] + rr * Math.cos(t), V[1] + rr * Math.sin(t)];
+  const [p1, p2] = [p(a1), p(a1 + d)];
+  return { path: `M${p1[0].toFixed(1)} ${p1[1].toFixed(1)}A${r} ${r} 0 0 ${d > 0 ? 1 : 0} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`, label: p(a1 + d / 2, r + 15) };
+}
+
 const tic = (name) => `<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${TOOL_IC[name]}</svg></span>`;
 
 // ---------------------------------------------------------------- routes
@@ -785,7 +831,7 @@ function stepWrite(body, alive, redraw) {
       <section class="au-draw paper">
         <div class="au-sec-h"><h2 class="acct-h2">${esc(tt('ed.draw.h'))}</h2></div>
         <div class="au-dtools" role="toolbar">
-          ${['move', 'point', 'seg', 'circ'].map((x) => `<button type="button" class="au-tool" data-tool="${x}" title="${esc(tt('tool.' + x))}" aria-label="${esc(tt('tool.' + x))}" aria-pressed="false">${tic(x)}<span>${esc(tt('tool.' + x))}</span></button>`).join('')}
+          ${['move', 'point', 'seg', 'circ', 'ang', 'len'].map((x) => `<button type="button" class="au-tool" data-tool="${x}" title="${esc(tt('tool.' + x))}" aria-label="${esc(tt('tool.' + x))}" aria-pressed="false">${tic(x)}<span>${esc(tt('tool.' + x))}</span></button>`).join('')}
           <button type="button" class="au-tool" data-tool="del" title="${esc(tt('tool.del'))}" aria-label="${esc(tt('tool.del'))}" aria-pressed="false">${icon('trash')}<span>${esc(tt('tool.del'))}</span></button>
           <span class="au-tsep"></span>
           <button type="button" class="au-tool" id="auUndo" title="${esc(tt('tool.undo'))}" aria-label="${esc(tt('tool.undo'))}">${icon('reset')}</button>
@@ -796,7 +842,7 @@ function stepWrite(body, alive, redraw) {
           <svg class="au-svg" id="auSvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(tt('ed.draw.h'))}">
             <defs><pattern id="auGridP" width="${U / 2}" height="${U / 2}" patternUnits="userSpaceOnUse" x="${W / 2}" y="${H / 2}"><path d="M${U / 2} 0H0V${U / 2}" class="au-gridline"/></pattern></defs>
             <rect class="au-bg" width="${W}" height="${H}" fill="url(#auGridP)"/>
-            <g class="au-circs"></g><g class="au-segs"></g><g class="au-ghost"></g><g class="au-pts"></g>
+            <g class="au-circs"></g><g class="au-segs"></g><g class="au-angs"></g><g class="au-ghost"></g><g class="au-pts"></g>
           </svg>
           <div class="au-rename" id="auRename" hidden><label><span id="auRenameL"></span><input id="auRenameI" maxlength="1" dir="ltr" autocomplete="off"></label><span class="au-rename-err" id="auRenameE"></span></div>
         </div>
@@ -811,9 +857,10 @@ function stepWrite(body, alive, redraw) {
 
   const $ = (s) => body.querySelector(s);
   const svg = $('#auSvg');
-  const G = { circs: svg.querySelector('.au-circs'), segs: svg.querySelector('.au-segs'), ghost: svg.querySelector('.au-ghost'), pts: svg.querySelector('.au-pts') };
+  const G = { circs: svg.querySelector('.au-circs'), segs: svg.querySelector('.au-segs'), angs: svg.querySelector('.au-angs'), ghost: svg.querySelector('.au-ghost'), pts: svg.querySelector('.au-pts') };
+  angStyle();
   const textEl = $('#auText');
-  const ui = { tool: 'move', pending: null, hover: null, cursor: null, drag: null, sel: [], grid: false, target: 'given', clearArmed: false };
+  const ui = { tool: 'move', pending: null, hover: null, cursor: null, drag: null, sel: [], grid: false, target: 'given', clearArmed: false, asking: null };
   const history = [];
   const pushHistory = () => { history.push(JSON.stringify(ED.drawing)); if (history.length > 60) history.shift(); };
   const changed = () => { persist(); draw(); live(); };
@@ -954,6 +1001,31 @@ function stepWrite(body, alive, redraw) {
     ui.sel = ui.sel.map((x) => (x.kind === 'pt' && x.id === old ? { ...x, id: nu } : x));
   }
 
+  // The angles the words name, for the arcs: [{ ang: 'ABC', label: '40°' | '?' | '', cls }]. Read again only
+  // when the words or the point names change.
+  let angCache = { key: null, list: [] };
+  function angMarks() {
+    const d = ED.drawing;
+    const key = `${ED.text}|${d.pts.map((p) => p.id).join('')}`;
+    if (angCache.key !== key) {
+      const list = [];
+      const seen = new Set();
+      const add = (ang, label, cls) => { const k = ang[1] + [ang[0], ang[2]].sort().join(''); if (!seen.has(k)) { seen.add(k); list.push({ ang, label, cls }); } };
+      try {
+        const r = Q.parseText(ED.text, { pos: Q.solveDrawing(d), segs: d.segs });
+        if (r.goal && r.goal.ask && /^∢[A-Z]{3}$/.test(r.goal.ask)) add(r.goal.ask.slice(1), '?', 'is-goal');
+        for (const g of r.givens) {
+          const m = g.claim.replace(/\s/g, '').match(/^∢([A-Z]{3})=(\d+(?:[.,]\d+)?)°?$/);
+          if (m) add(m[1], `${m[2]}°`, '');
+          else for (const a of g.claim.matchAll(/∢([A-Z]{3})/g)) add(a[1], '', '');
+        }
+        if (r.goal && r.goal.claim) for (const a of r.goal.claim.matchAll(/∢([A-Z]{3})/g)) add(a[1], '', 'is-goal');
+      } catch { /* half-written words */ }
+      angCache = { key, list };
+    }
+    return angCache.list.map((a) => ({ ...a }));
+  }
+
   // ---- drawing
   function draw() {
     const P = posPx();
@@ -965,6 +1037,16 @@ function stepWrite(body, alive, redraw) {
       return `<circle class="au-c${isSel('circ', c.o + c.r) ? ' is-sel' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dist(P[c.o], P[c.r]).toFixed(1)}"/>`;
     }).join('');
     G.segs.innerHTML = d.segs.filter(([a, b]) => P[a] && P[b]).map(([a, b]) => `<line class="au-s${isSel('seg', sk(a + b)) ? ' is-sel' : ''}" x1="${P[a][0].toFixed(1)}" y1="${P[a][1].toFixed(1)}" x2="${P[b][0].toFixed(1)}" y2="${P[b][1].toFixed(1)}"/>`).join('');
+    // arcs: the angles the words name (with their size, "?" for the one to find), and the angle being picked
+    const arcs = angMarks();
+    const selPts = ui.sel.filter((x) => x.kind === 'pt').map((x) => x.k);
+    if (ui.tool === 'ang' && selPts.length === 3) arcs.push({ ang: selPts.join(''), label: '', cls: 'is-sel' });
+    G.angs.innerHTML = arcs.filter((a) => [...a.ang].every((x) => P[x])).map((a) => {
+      const [X, V, Y] = [...a.ang].map((x) => P[x]);
+      const r = Math.max(12, Math.min(26, 0.4 * Math.min(dist(V, X), dist(V, Y))));
+      const g = arcAt(V, X, Y, r);
+      return `<path class="au-arc ${a.cls}" d="${g.path}"/>${a.label ? `<text class="au-arclabel ${a.cls}" x="${g.label[0].toFixed(1)}" y="${g.label[1].toFixed(1)}">${esc(a.label)}</text>` : ''}`;
+    }).join('');
     const offs = Q.labelOffsets(Q.solveDrawing(d), d.segs, d.circs);
     G.pts.innerHTML = d.pts.map((p) => {
       const [x, y] = P[p.id];
@@ -1014,25 +1096,28 @@ function stepWrite(body, alive, redraw) {
       const [s1, s2] = segs;
       out.push({ label: `${s1} = ${s2}`, text: `${s1} = ${s2}`, hint: tt('sel.eq') }, { label: `${s1} ∥ ${s2}`, text: `${s1} ∥ ${s2}`, hint: tt('sel.par') }, { label: `${s1} ⊥ ${s2}`, text: `${s1} ⊥ ${s2}`, hint: tt('sel.perp') });
     } else if (segs.length === 1 && !pts.length) {
-      out.push({ label: `${segs[0]} = …`, ask: tt('sel.askLen', { s: segs[0] }), make: (v) => `${segs[0]} = ${v}`, hint: tt('sel.len') });
+      out.push({ label: `${segs[0]} = …`, ask: tt('sel.askLen', { s: segs[0] }), pre: `${segs[0]} =`, unit: '', make: (v) => `${segs[0]} = ${v}`, hint: tt('sel.len') },
+        { label: tt('sel.askIt', { x: segs[0] }), goalAsk: segs[0] });
     } else if (segs.length === 1 && pts.length === 1 && !segs[0].includes(pts[0])) {
       out.push({ label: `${pts[0]} ${tt('sel.mid')} ${segs[0]}`, text: `${pts[0]} אמצע ${segs[0]}`, hint: tt('sel.mid') });
     } else if (pts.length === 3 && !segs.length) {
       const a = `∢${pts.join('')}`;
-      out.push({ label: `${a} = …°`, ask: tt('sel.askAng', { a }), make: (v) => `${a} = ${String(v).replace(/°$/, '')}°`, hint: tt('sel.ang') }, { label: `${a} = 90°`, text: `${a} = 90°`, hint: tt('sel.right') });
+      out.push({ label: `${a} = …°`, ask: tt('sel.askAng', { a }), pre: `${a} =`, unit: '°', make: (v) => `${a} = ${String(v).replace(/°$/, '')}°`, hint: tt('sel.ang') }, { label: `${a} = 90°`, text: `${a} = 90°`, hint: tt('sel.right') },
+        { label: tt('sel.askIt', { x: a }), goalAsk: a });
     } else if (pts.length === 4 && !segs.length) {
       const q = pts.join('');
       for (const w of ['מקבילית', 'מלבן', 'מעוין', 'ריבוע', 'דלתון', 'טרפז']) out.push({ label: `${q} ${w}`, text: `${q} ${w}` });
     }
     return out;
   }
+  let selHTML = '';
   function drawSel() {
     const el = $('#auSel');
-    if (!ui.sel.length) { el.innerHTML = ''; el.hidden = true; return; }
+    if (!ui.sel.length) { el.innerHTML = ''; selHTML = ''; el.hidden = true; return; }
     el.hidden = false;
     const rels = relations();
     const one = ui.sel.length === 1 && ui.sel[0].kind === 'pt' ? ui.sel[0].k : null;
-    el.innerHTML = `
+    const html = `
       <div class="au-selhead">
         <span class="au-selwhat" dir="ltr">${ui.sel.map((x) => esc(x.kind === 'pt' ? x.k : x.kind === 'seg' ? x.name : '◯' + x.o)).join(' · ')}</span>
         ${rels.length ? `<span class="au-seg2" role="group" aria-label="${esc(tt('sel.lead'))}">
@@ -1043,7 +1128,41 @@ function stepWrite(body, alive, redraw) {
       </div>
       ${rels.length ? `<div class="au-rels">${rels.map((r, i) => `<button type="button" class="au-rel" data-rel="${i}" title="${esc(r.hint || '')}"><span dir="ltr">${esc(r.label)}</span></button>`).join('')}</div>`
         : one ? '' : `<p class="acct-hint">${esc(tt('sel.none'))}</p>`}
+      ${ui.asking != null && rels[ui.asking] && rels[ui.asking].ask ? `<div class="au-askrow">
+        <label for="auAskI"><span>${esc(rels[ui.asking].pre)}</span><input id="auAskI" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="${esc(rels[ui.asking].ask)}" placeholder="${rels[ui.asking].unit ? '40' : '5'}"><span>${esc(rels[ui.asking].unit)}</span></label>
+        <button type="button" class="btn btn-primary btn-small" id="auAskOk">${esc(tt('sel.addIt'))}</button>
+        <button type="button" class="linkish" id="auAskX">${esc(tt('sel.cancel'))}</button>
+      </div>` : ''}
       ${one ? `<button type="button" class="tool-btn" id="auSelRename">${icon('edit')} ${esc(tt('sel.rename'))} ${esc(one)}</button>` : ''}`;
+    // redraws (dragging, the live summary) leave the bar alone unless it changed, so a value
+    // being typed in its field keeps its text and focus
+    if (html === selHTML) return;
+    selHTML = html;
+    el.innerHTML = html;
+  }
+  function focusAsk() {
+    const inp = $('#auAskI');
+    if (inp) inp.focus();
+  }
+  function submitAsk() {
+    const r = relations()[ui.asking];
+    const inp = $('#auAskI');
+    const v = inp ? inp.value.trim() : '';
+    if (!r || !r.make || !v) { if (inp) inp.focus(); return; }
+    addStatement(r.make(v));
+    ui.sel = [];
+    ui.asking = null;
+    draw();
+  }
+  // "חשבו את ∢ABC": the question's goal becomes finding this angle or length
+  function addAskGoal(x) {
+    const lines = ED.text.split('\n');
+    const gi = lines.findIndex((l) => /^\s*(?:ו)?(?:הוכיחו|הוכח|הוכיחי|צ["״]ל|חשבו|מצאו)/.test(l));
+    if (gi >= 0) lines[gi] = `חשבו את ${x}.`; else lines.push(`חשבו את ${x}.`);
+    ED.text = lines.filter((l, i) => l.trim() || i < lines.length - 1).join('\n').replace(/^\n+/, '');
+    textEl.value = ED.text;
+    persist();
+    live();
   }
 
   // Add a claim to the words: to the "נתון:" line, or as the "הוכיחו:" line.
@@ -1087,6 +1206,7 @@ function stepWrite(body, alive, redraw) {
       const nx = nextName();
       if (nx && (ui.tool === 'point' || ui.tool === 'seg' || ui.tool === 'circ')) chips.push(`<span class="au-pill is-soft">${tt('ed.live.next', { p: mathSpan(nx) })}</span>`);
       $('#auLive').innerHTML = chips.join('');
+      draw(); // the arcs follow the words
     }, 200);
   }
 
@@ -1161,6 +1281,26 @@ function stepWrite(body, alive, redraw) {
       return;
     }
     if (ui.tool === 'del') { if (deleteAt(px)) changed(); return; }
+    // the angle tool: three points (arm, vertex, arm), then its size in the bar under the drawing
+    if (ui.tool === 'ang') {
+      const id = hitPoint(px, P);
+      if (!id) { ui.sel = []; ui.asking = null; draw(); return; }
+      if (ui.sel.length >= 3 || ui.sel.some((x) => x.kind !== 'pt')) ui.sel = [];
+      if (!ui.sel.some((x) => x.k === id)) ui.sel.push({ kind: 'pt', k: id });
+      ui.asking = ui.sel.length === 3 ? 0 : null;
+      draw();
+      focusAsk();
+      return;
+    }
+    // the length tool: a segment, then its length
+    if (ui.tool === 'len') {
+      const s = hitSeg(px, P);
+      ui.sel = s ? [{ kind: 'seg', k: [...s].sort().join(''), name: s.join('') }] : [];
+      ui.asking = s ? 0 : null;
+      draw();
+      focusAsk();
+      return;
+    }
     if (ui.tool === 'point') {
       const s = snap(px);
       if (s.id) { toggleSel({ kind: 'pt', k: s.id }); draw(); return; }
@@ -1249,6 +1389,11 @@ function stepWrite(body, alive, redraw) {
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
   };
   document.addEventListener('keydown', onKey);
+  // the value field of the selection bar: Enter adds, Esc closes
+  $('#auSel').addEventListener('keydown', (e) => {
+    if (e.target.id !== 'auAskI') return;
+    if (e.key === 'Enter') { e.preventDefault(); submitAsk(); } else if (e.key === 'Escape') { e.preventDefault(); ui.asking = null; drawSel(); }
+  });
   function undo() {
     const last = history.pop();
     if (!last) return;
@@ -1263,7 +1408,7 @@ function stepWrite(body, alive, redraw) {
   body.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.tool) { ui.tool = b.dataset.tool; ui.pending = null; draw(); live(); return; }
+    if (b.dataset.tool) { ui.tool = b.dataset.tool; ui.pending = null; ui.asking = null; if (ui.tool === 'ang' || ui.tool === 'len') ui.sel = []; draw(); live(); return; }
     if (b.dataset.ins) {
       const ins = b.dataset.ins;
       const s = textEl.selectionStart ?? textEl.value.length;
@@ -1279,17 +1424,16 @@ function stepWrite(body, alive, redraw) {
     if (b.dataset.rel) {
       const r = relations()[+b.dataset.rel];
       if (!r) return;
-      let text = r.text;
-      if (r.ask) {
-        const v = window.prompt(r.ask);
-        if (v == null || !String(v).trim()) return;
-        text = r.make(String(v).trim());
-      }
-      addStatement(text);
+      // a value to type: a field opens in the bar (no browser prompt)
+      if (r.ask) { ui.asking = +b.dataset.rel; drawSel(); focusAsk(); return; }
+      if (r.goalAsk) addAskGoal(r.goalAsk); else addStatement(r.text);
       ui.sel = [];
+      ui.asking = null;
       draw();
       return;
     }
+    if (b.id === 'auAskOk') { submitAsk(); return; }
+    if (b.id === 'auAskX') { ui.asking = null; drawSel(); return; }
     switch (b.id) {
       case 'auUndo': undo(); break;
       case 'auGrid': ui.grid = !ui.grid; draw(); break;

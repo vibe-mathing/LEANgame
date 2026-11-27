@@ -185,6 +185,17 @@ export function normalizeText(text) {
   s = s.replace(new RegExp(`${PF}זוו?ית\\s*(?=[A-Z]{1,3}(?![A-Z]))`, 'g'), '∢');
   s = s.replace(/∢\s+(?=[A-Z])/g, '∢').replace(/△\s+(?=[A-Z])/g, '△');
   s = s.replace(/(\d+(?:[.,]\d+)?)\s*(?:מעלות|מעלה|°)/g, '$1°');
+  // "הזווית ∢COB": the word goes, the sign stays
+  s = s.replace(new RegExp(`${PF}זוו?ית\\s*∢`, 'g'), '∢');
+  // "X גדולה פי 2 מ-Y" → X = 2Y; "X קטנה פי 2 מ-Y" → 2X = Y; "X גדולה ב-20° מ-Y" → X − 20° = Y
+  const TIMES = { 'שניים': 2, 'שתיים': 2, 'שלושה': 3, 'שלוש': 3, 'ארבעה': 4, 'ארבע': 4, 'חמישה': 5, 'חמש': 5 };
+  const num = `(\\d+(?:[.,]\\d+)?|${Object.keys(TIMES).join('|')})`;
+  const k = (w) => TIMES[w] || w;
+  const term = '((?:∢|sin∢|cos∢|tan∢)?[A-Z]{1,3})';
+  s = s.replace(new RegExp(`${term}\\s+(?:גדול|גדולה|גדולים|גדולות)\\s+פי\\s+${num}\\s+מ-?\\s*`, 'g'), (m, X, n) => `${X} = ${k(n)}`);
+  s = s.replace(new RegExp(`${term}\\s+(?:קטן|קטנה|קטנים|קטנות)\\s+פי\\s+${num}\\s+מ-?\\s*`, 'g'), (m, X, n) => `${k(n)}${X} = `);
+  s = s.replace(new RegExp(`${term}\\s+(?:גדול|גדולה|גדולים|גדולות)\\s+ב-?\\s*(\\d+(?:[.,]\\d+)?°?)\\s+מ-?\\s*`, 'g'), (m, X, d) => `${X} - ${d} = `);
+  s = s.replace(new RegExp(`${term}\\s+(?:קטן|קטנה|קטנים|קטנות)\\s+ב-?\\s*(\\d+(?:[.,]\\d+)?°?)\\s+מ-?\\s*`, 'g'), (m, X, d) => `${X} + ${d} = `);
   s = s.replace(/\s*(?:שווה|שווים|שוות)\s+ל-?\s*/g, ' = ');
   s = s.replace(/\s*(?:גדול|גדולה|גדולים|גדולות)\s+מ-?\s*/g, ' > ');
   s = s.replace(/\s*(?:קטן|קטנה|קטנים|קטנות)\s+מ-?\s*/g, ' < ');
@@ -244,6 +255,56 @@ const MULTI = [
       { kind: 'fact', fact: 'online', p: m[4], line: m[1] }, { kind: 'fact', fact: 'online', p: m[5], line: m[1] },
       ...(m[2] ? [{ kind: 'fact', fact: 'online', p: m[4], line: m[2] }, { kind: 'fact', fact: 'online', p: m[5], line: m[3] }] : []),
     ],
+    setup: true,
+  },
+  { // הקטעים AB ו-CD חוצים זה את זה בנקודה O: they cross at O, and O is the midpoint of both
+    re: /(?:ה?(?:ישרים|קטעים|אלכסונים)\s+)?([A-Z])([A-Z])\s*ו-?\s*([A-Z])([A-Z])\s+(?:חוצים|חוצות)\s+(?:זה\s+את\s+זה|זו\s+את\s+זו)\s+ב(?:נקודה\s+)?-?\s*([A-Z])(?![A-Z])/g,
+    fn: (m) => [
+      { kind: 'fact', fact: 'cross', o: m[5], l1: m[1] + m[2], l2: m[3] + m[4] },
+      ...[[m[1], m[2]], [m[3], m[4]]].map(([a, b]) => claimItem(`${a}${m[5]} = ${m[5]}${b}`, m[0], {
+        also: ['midpoint_def'], text: H(`$${m[5]}$ אמצע $${a}${b}$`, `$${m[5]}$ is the midpoint of $${a}${b}$`), foot: { p: m[5], a, b },
+      })),
+    ],
+    setup: true,
+  },
+  { // D, E ו-F הן אמצעי הצלעות AB, BC ו-CA
+    re: /(?:ה?נקודות\s+)?([A-Z](?:\s*,\s*[A-Z])*\s*ו-?\s*[A-Z])\s+(?:הן\s+|הם\s+)?(?:ה)?אמצעי\s+(?:ה?(?:צלעות|קטעים|שוקיים)\s+)?([A-Z]{2}(?:\s*,\s*[A-Z]{2})*\s*ו-?\s*[A-Z]{2})(?:\s+(?:של\s+)?(?:ה?משולש\s+)?△?[A-Z]{3})?(?![A-Z])/g,
+    fn: (m) => {
+      const ps = m[1].match(/[A-Z]/g);
+      const segs = m[2].match(/[A-Z]{2}/g);
+      if (ps.length !== segs.length) return [{ kind: 'unknown', src: m[0] }];
+      return ps.map((M, i) => {
+        const [a, b] = segs[i];
+        return claimItem(`${a}${M} = ${M}${b}`, m[0], {
+          also: ['midpoint_def'], text: H(`$${M}$ אמצע $${a}${b}$`, `$${M}$ is the midpoint of $${a}${b}$`), foot: { p: M, a, b },
+        });
+      });
+    },
+  },
+  { // מהנקודה P יוצאים שני משיקים למעגל (שמרכזו O), ונוגעים בו ב-A וב-B
+    re: /מ(?:ה)?(?:נקודה\s+)?-?\s*([A-Z])\s+(?:יוצאים|יוצאות|עוברים|מעבירים|הועברו|העבירו)\s+(?:שני\s+)?משיקים(?:\s+ל(?:ה)?מעגל)?(?:\s+(?:ש)?מרכזו\s+(?:הוא\s+)?([A-Z])(?![A-Z]))?[\s,]*(?:ו)?(?:ה(?:ם|ן)\s+)?(?:נוגעים|נוגעות|משיקים)\s+(?:בו\s+|בו\s+)?ב(?:נקודות\s+)?-?\s*([A-Z])\s*ו-?\s*(?:ב-?)?\s*([A-Z])(?![A-Z])/g,
+    fn: (m) => [
+      { kind: 'fact', fact: 'tangent', a: m[1], b: m[3], t: m[3] }, { kind: 'fact', fact: 'tangent', a: m[1], b: m[4], t: m[4] },
+      { kind: 'fact', fact: 'circle', pts: [m[3], m[4]], o: m[2] || null },
+    ],
+    setup: true,
+  },
+  { // דרך הקודקוד A (של המשולש ABC) עובר הישר DE, המקביל ל-BC
+    re: /דרך\s+(?:ה?(?:נקודה|קודקוד)\s+)?([A-Z])(?![A-Z])(?:\s+של\s+(?:ה?משולש\s+)?△?[A-Z]{3})?\s+(?:עובר|העובר|מעבירים|הועבר|העבירו|נעביר)\s+(?:(?:את\s+)?ה?ישר\s+)?([A-Z]{2})\s*,?\s*(?:ה|ש|ו)?\s*∥\s*([A-Z]{2})(?![A-Z])/g,
+    fn: (m) => [claimItem(`${m[2]} ∥ ${m[3]}`, m[0]), { kind: 'fact', fact: 'online', p: m[1], line: m[2] }],
+  },
+  { // הישר DE עובר דרך A ומקביל ל-BC
+    re: /(?:ה?ישר\s+)?([A-Z]{2})\s+(?:עובר|העובר)\s+דרך\s+(?:ה?(?:נקודה|קודקוד)\s+)?([A-Z])(?![A-Z])\s*,?\s*(?:ו|ה)?\s*∥\s*([A-Z]{2})(?![A-Z])/g,
+    fn: (m) => [claimItem(`${m[1]} ∥ ${m[3]}`, m[0]), { kind: 'fact', fact: 'online', p: m[2], line: m[1] }],
+  },
+  { // (ו)הבסיסים שלו AB ו-DC: the bases of a trapezoid are parallel
+    re: /(?:ו)?(?:ה)?בסיסים(?:\s+(?:שלו|שלה|של\s+ה?טרפז(?:\s+[A-Z]{4})?))?\s+(?:הם\s+|הן\s+)?([A-Z]{2})\s*ו-?\s*([A-Z]{2})(?![A-Z])/g,
+    fn: (m) => [claimItem(`${m[1]} ∥ ${m[2]}`, m[0], { text: H(`הבסיסים הם $${m[1]}$ ו-$${m[2]}$`, `The bases are $${m[1]}$ and $${m[2]}$`) })],
+  },
+  { // descriptions the drawing already shows: "הצלע BC מוארכת (לשני הצדדים) עד D ועד E",
+    // "הקרניים OC ו-OD באותו צד שלו"
+    re: /(?:ה?(?:צלע|קטע|ישר)\s+)?[A-Z]{2}\s+(?:מוארכת|מוארך|מוארכים|הוארכה|הוארך)[^.\n]*?עד\s+(?:ה?נקודה\s+)?[A-Z](?![A-Z])(?:\s*ו(?:עד\s+)?-?\s*[A-Z](?![A-Z]))?|(?:ו)?(?:ה)?(?:קרניים|קרנות|נקודות)\s+[A-Z]{1,2}\s*ו-?\s*[A-Z]{1,2}\s+(?:נמצאות\s+|נמצאים\s+)?(?:באותו\s+צד|משני\s+צדי|בצדדים\s+שונים)(?:\s+(?:של\s+)?(?:ה?ישר\s+)?(?:[A-Z]{2}(?![A-Z])|שלו|שלה))?/g,
+    fn: () => [],
     setup: true,
   },
   { // AC ו-BD נחתכים בנקודה O
@@ -356,6 +417,15 @@ const SINGLE = [
     setup: true,
   },
   { re: /(∢[A-Z]{1,3})\s+(?:היא\s+|הוא\s+)?ישרה/g, fn: (m) => [claimItem(`${m[1]} = 90°`, m[0])] },
+  { // (ש)זוויות הבסיס (של המשולש ABC) שוות: resolved with the triangle's apex (parseText)
+    re: new RegExp(`${PF}זוו?יות\\s+(?:ה)?בסיס(?:\\s+(?:של\\s+)?(?:ה?משולש\\s+)?△?([A-Z]{3}))?\\s+(?:שוות|שווים)(?:\\s+זו\\s+לזו)?`, 'g'),
+    fn: (m) => [{ kind: 'baseAngles', tri: m[1] || null, src: m[0] }],
+  },
+  { // "והנקודה E ביניהם": the drawing shows it, nothing to prove
+    re: /(?:ו)?(?:ה?נקודה\s+)?([A-Z])\s+(?:נמצאת\s+|נמצא\s+)?(?:ביניהם|ביניהן|בין\s+(?:ה?ישרים|ה?קטעים|ה?מקבילים))/g,
+    fn: () => [],
+    setup: true,
+  },
   { // "הקרן OC", "האלכסון AC", "הקטע AD": names what is drawn, says nothing to prove
     re: /(?:ה)?(?:קרן|קטע|ישר|אלכסון|צלע)\s+([A-Z]{2})(?![A-Z])(?!\s*[=<>∥⊥≅∼+\-*/])/g,
     fn: () => [],
@@ -523,6 +593,8 @@ function analyzePart(part, ctx) {
   for (let c of clauses) {
     if (!c || !c.trim()) continue;
     c = c.replace(new RegExp(LIST, 'g'), ', ');
+    // a clause that starts with "ו-" before math ("ו-AD ⊥ BC" after a comma): the "ו" is a word, not a minus
+    c = c.replace(new RegExp(`^\\s*ו-?\\s*(?=[A-Z∢△${SLOT}]|sin|cos|tan)`), '');
     c = c.replace(new RegExp(`${SLOT}(\\d+)${SLOT_END}`, 'g'), (m, i) => {
       const s = stash[+i];
       pieces.push({ text: s.text, items: s.items, setup: s.setup ? s.text : '' });
@@ -591,6 +663,10 @@ export function parseText(text, drawingCtx = {}) {
           } else out.facts.push(it);
         } else if (it.kind === 'unknown') out.unknown.push({ ...it, role });
         else if (it.kind === 'iso' || it.kind === 'equi' || it.kind === 'rightTri') shapes.push(it);
+        else if (it.kind === 'baseAngles') {
+          const claim = baseAngles(it, ctx, [...out.givens, ...list]);
+          if (claim) list.push(claimItem(claim, it.src)); else out.unknown.push({ kind: 'unknown', src: it.src, role });
+        }
       }
     }
     // shapes last, so "משולש ABC שווה שוקיים (AB = AC)" doesn't state AB = AC twice
@@ -613,6 +689,23 @@ export function parseText(text, drawingCtx = {}) {
   out.center = ctx.center || (out.facts.find((f) => f.fact === 'circle' && f.o) || {}).o || null;
   out.ctx = ctx;
   return out;
+}
+
+// "זוויות הבסיס שוות": the two angles of the triangle at the ends of its base. The apex is the vertex
+// of a stated equality of two sides (AB = AC), else the one an "isosceles" phrase named.
+function baseAngles(it, ctx, existing) {
+  const tri = it.tri || ctx.tris[ctx.tris.length - 1];
+  if (!tri) return null;
+  let apex = null;
+  for (const x of existing) {
+    const m = x.claim.replace(/\s/g, '').match(/^([A-Z])([A-Z])=([A-Z])([A-Z])$/);
+    if (!m) continue;
+    const common = [m[1], m[2]].find((p) => p === m[3] || p === m[4]);
+    if (common && tri.includes(common) && [m[1], m[2], m[3], m[4]].every((p) => tri.includes(p))) { apex = common; break; }
+  }
+  if (!apex) return null;
+  const [p, q] = triOthers(tri, apex);
+  return `∢${apex}${p}${q} = ∢${apex}${q}${p}`;
 }
 
 // "משולש ABC שווה שוקיים" and friends become claims, unless the question already states one.

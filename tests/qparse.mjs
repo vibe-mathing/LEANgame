@@ -108,6 +108,22 @@ check('phrase: isosceles without base is flagged', iso.givens[0] && iso.givens[0
 sameAs('AB מקביל ל-CD', ['AB ∥ CD']);
 sameAs('AB מקבילה לCD', ['AB ∥ CD']);
 sameAs('AD מאונך ל BC', ['AD ⊥ BC']);
+// phrasings found by writing the stage 1–11 problems out in words
+sameAs('הקרן AD חוצה את הזווית ∢BAC', ['∢BAD = ∢DAC']);
+sameAs('∢BAC גדולה פי 2 מ-∢ABC', ['∢BAC = 2∢ABC']);
+sameAs('∢BAC גדולה פי שלוש מ-∢ABC', ['∢BAC = 3∢ABC']);
+sameAs('∢BAC קטנה פי 2 מ-∢ABC', ['2∢BAC = ∢ABC']);
+sameAs('∢BAC גדולה ב-20° מ-∢ABC', ['∢BAC - 20° = ∢ABC']);
+sameAs('הנקודה D על BC, ו-AD ⊥ BC', ['AD ⊥ BC']);
+sameAs('הקטעים BC ו-AD חוצים זה את זה בנקודה M', ['BM = MC', 'AM = MD']);
+sameAs('E ו-F הן אמצעי הצלעות AB ו-AC', ['AE = EB', 'AF = FC']);
+sameAs('דרך הקודקוד A של המשולש ABC עובר הישר EF, המקביל ל-BC', ['EF ∥ BC']);
+sameAs('המרובע ABCD טרפז, והבסיסים שלו AB ו-CD', ['ABCD טרפז', 'AB ∥ CD']);
+sameAs('AB = AC, והנקודה E ביניהם', ['AB = AC']);
+{
+  const r = parseText('במשולש ABC מתקיים AB = AC. הוכיחו שזוויות הבסיס שוות.', { pos, segs: tri.segs });
+  check('phrase: base angles as the goal', r.goal && keys([r.goal.claim], ctx)[0] === keys(['∢ABC = ∢ACB'], ctx)[0], r.goal ? r.goal.claim : 'no goal');
+}
 sameAs('AD גובה לצלע BC', ['AD ⊥ BC']);
 sameAs('AD תיכון לצלע BC', ['BD = DC']);
 sameAs('AD תיכון במשולש ABC', ['BD = DC']);
