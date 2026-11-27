@@ -7,7 +7,7 @@ import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
 import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin,
-  onToolsChange, specialOn, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
+  onToolsChange, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress } from './auth.js';
 
@@ -451,7 +451,7 @@ function viewTopic() {
           <h3>${L(s.name)}</h3>
           <p class="stage-blurb">${rich(L(s.blurb))}</p>
           <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([, r]) => `<span class="chip">${esc(L(r.short))}</span>`).join('')}</div>
-          ${toolsAfter(s.id).length ? `<div class="unlocks"><span class="unlocks-label">${t('tool.onFinish')}</span>${toolsAfter(s.id).map((id) => `<span class="chip chip-tool" title="${esc(t('tool.' + id + '.title'))}">${icon(toolOpen(id, isSolved) ? TOOLS[id].icon : 'lock')}${esc(t('tool.' + id))}</span>`).join('')}</div>` : ''}
+          ${toolsAfter(s.id).length ? `<div class="unlocks"><span class="unlocks-label">${t('tool.onFinish')}</span>${toolsAfter(s.id).map((id) => `<span class="chip chip-tool" title="${esc(t('tool.' + id + '.title') + ' ' + toolLockText(id))}">${icon(toolOpen(id, isSolved) ? TOOLS[id].icon : 'lock')}${esc(t('tool.' + id))}</span>`).join('')}</div>` : ''}
           ${open ? `<div class="stage-foot">
             <div class="pips" aria-label="${probs.length === 1 ? t('tp.problem1') : t('tp.problems', { n: probs.length })}">
               ${probs.map((p) => `<a class="pip${isSolved(s.id, p.n) ? ' done' : ''}" href="#/hs/geometry/${s.id}/${p.n}" title="${esc(L(p.title))}${isSolved(s.id, p.n) ? ' · ' + t('tp.solved') : ''}">${isSolved(s.id, p.n) ? icon('check') : p.n}</a>`).join('')}
@@ -1108,7 +1108,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     autoRefsBtn.hidden = !toolOpen('autoRefs', solvedNow);
     autoRefsBtn.title = t('tool.autoRefs.title');
     // A special feature: clicking a given or the goal copies it into the claim field.
-    const click = specialOn('clickFacts');
+    const click = toolOpen('clickFacts', solvedNow);
     factsEl.classList.toggle('facts-click', click);
     $$('.fact-group:not(.diag) li[data-claim]', factsEl).forEach((li) => { li.title = click ? t('tool.clickFacts.title') : ''; });
     viewAsWrap.hidden = !realAdmin();
@@ -1218,7 +1218,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
   }
-  const factOf = (e) => (specialOn('clickFacts') ? e.target.closest('.fact-group:not(.diag) li[data-claim]') : null);
+  const factOf = (e) => (toolOpen('clickFacts', solvedNow) ? e.target.closest('.fact-group:not(.diag) li[data-claim]') : null);
   factsEl.addEventListener('click', (e) => { const li = factOf(e); if (li) copyFact(li); });
   factsEl.addEventListener('keydown', (e) => {
     const li = e.key === 'Enter' ? factOf(e) : null;

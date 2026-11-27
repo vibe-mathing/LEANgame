@@ -9,27 +9,34 @@
 
 import { STAGES, PROBLEMS, REASONS, stageNumber } from './data.js';
 import { parseClaim, claimKey, fmtClaim, checkProof, termKey } from './geo.js';
-import { t, esc } from './i18n.js';
+import { t, L, esc } from './i18n.js';
 
 // ---------------------------------------------------------------- the tools
-// open: 'start', a stage id (the tool opens once every problem of that stage is solved,
-// so it follows the student's progress to any device), or 'never'.
+// open: 'start', a problem ('L01-2': the tool opens once the student solves it, so it
+// follows their progress to any device), or 'never'. A stage id ('L01': every problem
+// of the stage) still works, for settings saved before problems were the rule.
+// For now every tool is open from the start (the user's choice); the admin page can
+// change that per track, and per student.
 // hintWait: seconds of black screen before hint 1, 2, 3…; the last value repeats.
 // tryFirst: the hint opens after the student's first row of their own (rows a tool
 // wrote don't count) or after this many seconds on the problem; 0 = no condition.
-// `special` tools are not part of progress: they are on for the admin, and for users
-// whose profile lists them in `features`.
 
 export const TOOLS = {
-  fillGivens: { open: 'L01', icon: 'enter' },
-  autoRefs: { open: 'L02', icon: 'search' },
-  cpctList: { open: 'L02', icon: 'spark' },
+  fillGivens: { open: 'start', icon: 'enter' },
+  autoRefs: { open: 'start', icon: 'search' },
+  cpctList: { open: 'start', icon: 'spark' },
+  clickFacts: { open: 'start', icon: 'enter' },
   hint: { open: 'start', icon: 'bulb' },
-  clickFacts: { special: true, icon: 'enter' },
 };
-const SETTABLE = Object.keys(TOOLS).filter((id) => !TOOLS[id].special);
+const SETTABLE = Object.keys(TOOLS);
 const DEFAULTS = { ...Object.fromEntries(SETTABLE.map((id) => [id, TOOLS[id].open])), hintWait: [10, 30, 60], tryFirst: 120 };
 const TRACKS = ['default', '3', '4', '5', 'uni'];
+
+// Problems as 'L01-2' keys, and their site label "1.2".
+const problemKey = (stage, n) => `${stage}-${n}`;
+const splitKey = (k) => { const m = /^(L\d\d)-(\d+)$/.exec(k || ''); return m ? { stage: m[1], n: +m[2] } : null; };
+const problemLabel = (k) => { const s = splitKey(k); return s ? `${stageNumber(s.stage)}.${s.n}` : ''; };
+const problemExists = (k) => { const s = splitKey(k); return !!(s && (PROBLEMS[s.stage] || []).some((p) => p.n === s.n)); };
 
 // ---------------------------------------------------------------- who is playing, and the settings
 
@@ -68,11 +75,12 @@ export const isAdmin = () => realAdmin() && !preview;
 const currentUser = () => (auth && auth.currentUser ? auth.currentUser() : null);
 
 // Keep only well-formed values, so a bad document can't break the game.
-const OPEN_VALUES = new Set(['start', 'never', ...STAGES.map((s) => s.id)]);
+const STAGE_IDS = new Set(STAGES.map((s) => s.id));
+const validOpen = (v) => v === 'start' || v === 'never' || STAGE_IDS.has(v) || problemExists(v);
 function clean(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const id of SETTABLE) if (OPEN_VALUES.has(s[id])) out[id] = s[id];
+  for (const id of SETTABLE) if (validOpen(s[id])) out[id] = s[id];
   if (Array.isArray(s.hintWait) && s.hintWait.length && s.hintWait.every((x) => Number.isInteger(x) && x >= 0 && x <= 600)) out.hintWait = s.hintWait.slice(0, 10);
   if (Number.isInteger(s.tryFirst) && s.tryFirst >= 0 && s.tryFirst <= 1800) out.tryFirst = s.tryFirst;
   return out;
@@ -86,41 +94,45 @@ const current = () => settingsFor(viewAs() || (currentUser() && currentUser().tr
 
 // ---------------------------------------------------------------- opening rules
 // Per-student settings live in the profile's `features`, which only an admin can write:
-// a special tool's id turns it on, 'open:<tool>' opens a tool whatever the track says,
-// and 'lock:<tool>' closes it (lock wins). While an admin views as a student, their own
-// list is ignored.
+// 'open:<tool>' opens a tool whatever the track says, and 'lock:<tool>' closes it (lock
+// wins). A bare tool id (the old way "click a fact" was given) counts as 'open:'.
+// While an admin views as a student, their own list is ignored.
 
 const myFeatures = () => {
   const u = viewAs() ? null : currentUser();
   return u && Array.isArray(u.features) ? u.features : [];
 };
-const override = (id) => (myFeatures().includes('lock:' + id) ? 'lock' : myFeatures().includes('open:' + id) ? 'open' : null);
-
-export function specialOn(id) {
-  if (isAdmin()) return true;
-  return myFeatures().includes(id);
-}
+const override = (id) => {
+  const f = myFeatures();
+  return f.includes('lock:' + id) ? 'lock' : f.includes('open:' + id) || f.includes(id) ? 'open' : null;
+};
 
 export function toolOpen(id, isSolved) {
-  if (TOOLS[id].special) return specialOn(id);
   if (isAdmin()) return true;
   const o = override(id);
   if (o) return o === 'open';
   const open = current()[id];
   if (open === 'start') return true;
   if (open === 'never') return false;
+  const k = splitKey(open);
+  if (k) return isSolved(k.stage, k.n);
   const probs = PROBLEMS[open] || [];
   return probs.length > 0 && probs.every((p) => isSolved(open, p.n));
 }
 
+// When a locked tool opens, for its lock icon's title.
 export function toolLockText(id) {
   if (override(id) === 'lock') return t('tool.lockedForYou');
-  const n = stageNumber(current()[id]);
+  const open = current()[id];
+  if (splitKey(open)) return t('tool.lockedQ', { q: problemLabel(open) });
+  const n = stageNumber(open);
   return n > 0 ? t('tool.locked', { n }) : t('tool.closed');
 }
 
-// Tools that open when every problem of `stageId` is solved.
-export const toolsAfter = (stageId) => SETTABLE.filter((id) => current()[id] === stageId);
+// Tools set to open after a problem of `stageId` (or after the whole stage), for the
+// level map.
+const stageOf = (open) => (splitKey(open) ? splitKey(open).stage : STAGE_IDS.has(open) ? open : null);
+export const toolsAfter = (stageId) => SETTABLE.filter((id) => stageOf(current()[id]) === stageId);
 
 // ---------------------------------------------------------------- theorems the student proves
 // A problem with `proves: '<reason id>'` is where the student proves that theorem. Until
@@ -332,14 +344,25 @@ export function hintWait({ seconds = hintSeconds(0), signal } = {}) {
 const trackLabel = (tr) => t('tool.set.track.' + tr);
 const trackHead = (tr) => (tr === 'default' ? `<b>${trackLabel(tr)}</b>` : `<span class="track-pill t-${tr}">${trackLabel(tr)}</span>`);
 
+// The choices for when a tool opens: from the start, after one problem (grouped by
+// stage), or closed. A stage value saved under the old rule shows as its own choice.
 function openOptions(value, inherit) {
-  const opts = [
-    ...(inherit ? [['', t('tool.set.inherit')]] : []),
-    ['start', t('tool.set.start')],
-    ...STAGES.map((s, i) => [s.id, t('tool.set.after', { n: i + 1 }) + ((PROBLEMS[s.id] || []).length ? '' : ' ' + t('tool.set.noProblems'))]),
-    ['never', t('tool.set.never')],
-  ];
-  return opts.map(([v, label]) => `<option value="${v}"${v === (value ?? '') ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const v0 = value ?? '';
+  const opt = (v, label) => `<option value="${v}"${v === v0 ? ' selected' : ''}>${esc(label)}</option>`;
+  const legacy = STAGE_IDS.has(v0) ? opt(v0, t('tool.set.after', { n: stageNumber(v0) })) : '';
+  const groups = STAGES.filter((s) => (PROBLEMS[s.id] || []).length).map((s, i) => `
+    <optgroup label="${esc(t('tp.stage', { n: stageNumber(s.id) }))}">
+      ${PROBLEMS[s.id].map((p) => opt(problemKey(s.id, p.n), t('tool.set.afterQ', { q: problemLabel(problemKey(s.id, p.n)), title: L(p.title) }))).join('')}
+    </optgroup>`).join('');
+  return `${inherit ? opt('', t('tool.set.inherit')) : ''}${opt('start', t('tool.set.start'))}${legacy}${groups}${opt('never', t('tool.set.never'))}`;
+}
+
+// "From the start", "after problem 1.2", "closed": a setting in words.
+function openText(v) {
+  if (v === 'start') return t('tool.set.start');
+  if (v === 'never') return t('tool.set.never');
+  if (splitKey(v)) return t('tool.set.afterQShort', { q: problemLabel(v) });
+  return t('tool.set.after', { n: stageNumber(v) });
 }
 
 export function mountToolSettings(el) {
@@ -448,24 +471,18 @@ export function mountToolSettings(el) {
 
 // ---------------------------------------------------------------- the admin page: one student's tools
 // account.js mounts this in a student's expanded row (u: the listUsers() entry). Each
-// tool can follow the track, be always open, or be locked for this student; special
-// features are on or off. Saved in the profile's `features`; entries this panel doesn't
-// know are kept as they are.
+// tool can follow the track, be always open, or be locked for this student. Saved in the
+// profile's `features`; entries this panel doesn't know are kept as they are.
 
 export function mountStudentTools(el, u) {
   if (!el || !u) return;
   const feats = () => (Array.isArray(u.features) ? u.features : []);
-  const special = Object.keys(TOOLS).filter((id) => TOOLS[id].special);
-  const ours = (x) => /^(open|lock):/.test(x) || special.includes(x);
-
-  function trackText(id) {
-    const v = settingsFor(u.track)[id];
-    return v === 'start' ? t('tool.set.start') : v === 'never' ? t('tool.set.never') : t('tool.set.after', { n: stageNumber(v) });
-  }
+  const ours = (x) => /^(open|lock):/.test(x) || SETTABLE.includes(x);
+  const trackText = (id) => openText(settingsFor(u.track)[id]);
 
   function draw(msg) {
     const f = feats();
-    const now = (id) => (f.includes('lock:' + id) ? 'lock' : f.includes('open:' + id) ? 'open' : '');
+    const now = (id) => (f.includes('lock:' + id) ? 'lock' : f.includes('open:' + id) || f.includes(id) ? 'open' : '');
     const opt = (id, v, label) => `<option value="${v}"${now(id) === v ? ' selected' : ''}>${esc(label)}</option>`;
     el.innerHTML = `
       <div class="stools">
@@ -476,10 +493,6 @@ export function mountStudentTools(el, u) {
               <select class="adm-select small" data-tool="${id}">
                 ${opt(id, '', t('tool.st.byTrack', { v: trackText(id) }))}${opt(id, 'open', t('tool.st.open'))}${opt(id, 'lock', t('tool.st.lock'))}
               </select>
-            </label>`).join('')}
-          ${special.map((id) => `
-            <label class="stools-item stools-check"><input type="checkbox" data-special="${id}"${f.includes(id) ? ' checked' : ''}>
-              <span>${esc(t('tool.' + id))}</span><small>${esc(t('tool.' + id + '.title'))}</small>
             </label>`).join('')}
         </div>
         <div class="tset-actions">
@@ -495,7 +508,6 @@ export function mountStudentTools(el, u) {
     if (!btn) return;
     const list = feats().filter((x) => !ours(x));
     el.querySelectorAll('[data-tool]').forEach((s) => { if (s.value) list.push(`${s.value}:${s.dataset.tool}`); });
-    el.querySelectorAll('[data-special]').forEach((c) => { if (c.checked) list.push(c.dataset.special); });
     btn.disabled = true;
     try {
       if (!auth || !auth.admin || !auth.admin.setFeatures) throw new Error('accounts unavailable');
