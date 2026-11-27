@@ -1037,7 +1037,7 @@ function legPairs(problem, t) {
   return out;
 }
 
-const rightRef = (refRows) => refRows.map((r) => ({ r, t: rightAngle(r.claim) })).find((x) => x.t) || null;
+const rightRefs = (refRows) => refRows.map((r) => ({ r, t: rightAngle(r.claim) })).filter((x) => x.t);
 
 const STAGE_CHECKS = {
   // ---- basics: from the diagram
@@ -1221,6 +1221,7 @@ const STAGE_CHECKS = {
   midseg_tri(claim, refRows, problem) {
     const proof = `midseg_tri ${refNames(refRows)}`.trim();
     const mids = refRows.map((r) => midOf(problem, r.claim)).filter(Boolean);
+    const strs = [];
     for (const m1 of mids) {
       for (const m2 of mids) {
         if (m1 === m2) continue;
@@ -1229,13 +1230,13 @@ const STAGE_CHECKS = {
           const B = A === m1.A ? m1.B : m1.A;
           const C = A === m2.A ? m2.B : m2.A;
           if (B === C || degenerate(problem, [A, B, C])) continue;
-          const strs = [`${m1.M}${m2.M}∥${B}${C}`, `2${m1.M}${m2.M}=${B}${C}`];
-          if (matches(problem, claim, strs)) return { ok: true, proof };
-          return gives('midseg_tri', strs[1], proof);
+          strs.push(`2${m1.M}${m2.M}=${B}${C}`, `${m1.M}${m2.M}∥${B}${C}`);
         }
       }
     }
-    return fail2('needTwoMids', proof);
+    if (!strs.length) return fail2('needTwoMids', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('midseg_tri', strs[0], proof);
   },
   midseg_trap(claim, refRows, problem) {
     const proof = `midseg_trap ${refNames(refRows)}`.trim();
@@ -1248,65 +1249,68 @@ const STAGE_CHECKS = {
       bases = [lineKey(problem.points, A, B), lineKey(problem.points, D, C)];
     } else if (parRow) bases = [parRow.claim.la, parRow.claim.lb];
     if (!bases) return fail2('trapNeedBases', proof);
+    const strs = [];
+    // each midpoint on a leg: one end on each base
+    const ends = (m) => (onLine(bases[0], m.A) && onLine(bases[1], m.B) ? [m.A, m.B] : onLine(bases[0], m.B) && onLine(bases[1], m.A) ? [m.B, m.A] : null);
     for (const m1 of mids) {
       for (const m2 of mids) {
         if (m1 === m2) continue;
-        // each midpoint on a leg: one end on each base
-        const ends = (m) => (onLine(bases[0], m.A) && onLine(bases[1], m.B) ? [m.A, m.B] : onLine(bases[0], m.B) && onLine(bases[1], m.A) ? [m.B, m.A] : null);
         const e1 = ends(m1);
         const e2 = ends(m2);
         if (!e1 || !e2 || e1[0] === e2[0] || e1[1] === e2[1]) continue;
-        const strs = [`${m1.M}${m2.M}∥${e1[0]}${e2[0]}`, `${m1.M}${m2.M}∥${e1[1]}${e2[1]}`, `2${m1.M}${m2.M}=${e1[0]}${e2[0]}+${e1[1]}${e2[1]}`];
-        if (matches(problem, claim, strs)) return { ok: true, proof };
-        return gives('midseg_trap', strs[2], proof);
+        strs.push(`2${m1.M}${m2.M}=${e1[0]}${e2[0]}+${e1[1]}${e2[1]}`, `${m1.M}${m2.M}∥${e1[0]}${e2[0]}`, `${m1.M}${m2.M}∥${e1[1]}${e2[1]}`);
       }
     }
-    return fail2('needTwoMids', proof);
+    if (!strs.length) return fail2('needTwoMids', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('midseg_trap', strs[0], proof);
   },
   median_hyp(claim, refRows, problem) {
     const proof = `median_hyp ${refNames(refRows)}`.trim();
-    const ra = rightRef(refRows);
-    if (!ra) return fail2('needRightRef', proof);
-    for (const r of refRows) {
-      const m = midOf(problem, r.claim);
-      if (!m) continue;
-      const C = ra.t.p[1];
-      const ok1 = legPairs(problem, ra.t).some(([P, , Q]) => (P === m.A && Q === m.B) || (P === m.B && Q === m.A));
-      if (!ok1) continue;
-      const strs = [`${C}${m.M}=${m.A}${m.M}`, `${C}${m.M}=${m.M}${m.B}`, `2${C}${m.M}=${m.A}${m.B}`];
-      if (matches(problem, claim, strs)) return { ok: true, proof };
-      return gives('median_hyp', strs[0], proof);
+    const ras = rightRefs(refRows);
+    if (!ras.length) return fail2('needRightRef', proof);
+    const strs = [];
+    for (const ra of ras) {
+      for (const r of refRows) {
+        const m = midOf(problem, r.claim);
+        if (!m) continue;
+        const C = ra.t.p[1];
+        if (!legPairs(problem, ra.t).some(([P, , Q]) => (P === m.A && Q === m.B) || (P === m.B && Q === m.A))) continue;
+        strs.push(`${C}${m.M}=${m.A}${m.M}`, `${C}${m.M}=${m.M}${m.B}`, `2${C}${m.M}=${m.A}${m.B}`);
+      }
     }
-    return fail2('needHypMid', proof);
+    if (!strs.length) return fail2('needHypMid', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('median_hyp', strs[0], proof);
   },
   tri_30(claim, refRows, problem) {
     const proof = `leg_30 ${refNames(refRows)}`.trim();
-    const ra = rightRef(refRows);
-    if (!ra) return fail2('needRightRef', proof);
-    for (const r of refRows) {
-      if (r === ra.r || r.claim.type !== 'eq') continue;
-      const v = eqVec(r.claim);
-      const keys = [...v.keys()].filter((k) => k !== '1');
-      if (keys.length !== 1 || !keys[0].startsWith('a:') || Math.abs((v.get('1') || 0) + 30 * v.get(keys[0])) > 1e-6) continue;
-      const t = atomsOf(r.claim).get(keys[0]);
-      for (const [P, C, Q] of legPairs(problem, ra.t)) {
-        for (const [A, B] of [[P, Q], [Q, P]]) {
-          if (termKey(t) !== angKey(C, A, B, problem.rays)) continue;
-          const strs = [`2${B}${C}=${A}${B}`];
-          if (matches(problem, claim, strs)) return { ok: true, proof };
-          return gives('tri_30', strs[0], proof);
+    const ras = rightRefs(refRows);
+    if (!ras.length) return fail2('needRightRef', proof);
+    const strs = [];
+    for (const ra of ras) {
+      for (const r of refRows) {
+        if (r === ra.r || r.claim.type !== 'eq') continue;
+        const v = eqVec(r.claim);
+        const keys = [...v.keys()].filter((k) => k !== '1');
+        if (keys.length !== 1 || !keys[0].startsWith('a:') || Math.abs((v.get('1') || 0) + 30 * v.get(keys[0])) > 1e-6) continue;
+        const t = atomsOf(r.claim).get(keys[0]);
+        for (const [P, C, Q] of legPairs(problem, ra.t)) {
+          for (const [A, B] of [[P, Q], [Q, P]]) if (termKey(t) === angKey(C, A, B, problem.rays)) strs.push(`2${B}${C}=${A}${B}`);
         }
       }
     }
-    return fail2('need30Ref', proof);
+    if (!strs.length) return fail2('need30Ref', proof);
+    if (matches(problem, claim, strs)) return { ok: true, proof };
+    return gives('tri_30', strs[0], proof);
   },
 
   // ---- L08 Pythagoras (right angle at C: CA² + CB² = AB²)
   pythagoras(claim, refRows, problem) {
     const proof = `pythagoras ${refNames(refRows)}`.trim();
-    const ra = rightRef(refRows);
-    if (!ra) return fail2('needRightRef', proof);
-    const strs = legPairs(problem, ra.t).map(([P, C, Q]) => `${C}${P}²+${C}${Q}²=${P}${Q}²`);
+    const ras = rightRefs(refRows);
+    if (!ras.length) return fail2('needRightRef', proof);
+    const strs = ras.flatMap((ra) => legPairs(problem, ra.t)).map(([P, C, Q]) => `${C}${P}²+${C}${Q}²=${P}${Q}²`);
     if (matches(problem, claim, strs)) return { ok: true, proof };
     return gives('pythagoras', strs[0], proof);
   },
@@ -1514,10 +1518,10 @@ const STAGE_CHECKS = {
 function trigDef(fn) {
   return (claim, refRows, problem) => {
     const proof = `${fn}_def ${refNames(refRows)}`.trim();
-    const ra = rightRef(refRows);
-    if (!ra) return fail2('needRightRef', proof);
+    const ras = rightRefs(refRows);
+    if (!ras.length) return fail2('needRightRef', proof);
     const strs = [];
-    for (const [P, C, Q] of legPairs(problem, ra.t)) {
+    for (const [P, C, Q] of ras.flatMap((ra) => legPairs(problem, ra.t))) {
       for (const [A, B] of [[P, Q], [Q, P]]) {
         // the angle at A: opposite leg CB, adjacent leg CA, hypotenuse AB
         const [opp, adj, hyp] = [`${C}${B}`, `${C}${A}`, `${A}${B}`];

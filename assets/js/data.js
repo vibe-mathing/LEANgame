@@ -3,6 +3,7 @@
 // Math inside strings is wrapped in $...$ so it renders left-to-right.
 
 import { PROBLEMS_L04_L11 } from './problems-l04-l11.js';
+import { PROBLEMS_L01_L03_MORE } from './problems-l01-l03-more.js';
 
 export const TRACKS = [
   { id: 'hs', status: 'open', name: { he: 'תיכון', en: 'High school' } },
@@ -455,6 +456,12 @@ export const PROBLEMS = {
   // stages 4–11 live in problems-l04-l11.js
   ...PROBLEMS_L04_L11,
 };
+
+// More problems for stages 1–3 (problems-l01-l03-more.js). Each has a fixed number of its own
+// (progress is saved per stage and number); the list is kept in number order.
+for (const [stage, list] of Object.entries(PROBLEMS_L01_L03_MORE)) {
+  PROBLEMS[stage] = [...(PROBLEMS[stage] || []), ...list].sort((a, b) => a.n - b.n);
+}
 
 export function stageById(id) { return STAGES.find((s) => s.id === id); }
 export function stageNumber(id) { return STAGES.findIndex((s) => s.id === id) + 1; }
