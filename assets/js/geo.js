@@ -1892,7 +1892,9 @@ export function leanTheorem(problem, results, upto) {
     ...renamed.map((s, i) => `(ray${i + 1} : ${s})`),
     ...problem.givensParsed.map((g, i) => `(g${i + 1} : ${leanClaim(g)})`),
   ];
-  const lines = [`theorem ${name} (${problem.pointNames.join(' ')} : Point)`];
+  // circle and tangent facts name the radius r (len O A = r, IsTangent P A O r): bind it
+  const radius = problem.config.some((c) => /\br\b/.test(c.lean || '')) ? ' (r : ℝ)' : '';
+  const lines = [`theorem ${name} (${problem.pointNames.join(' ')} : Point)${radius}`];
   hyps.forEach((h, i) => lines.push(`    ${h}${i === hyps.length - 1 ? ' :' : ''}`));
   if (!hyps.length) lines[0] += ' :';
   lines.push(`    ${leanClaim(problem.goalParsed)} := by`);

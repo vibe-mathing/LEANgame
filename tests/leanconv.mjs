@@ -3,14 +3,15 @@
 // 1. Every built-in problem → Lean → back to words and a drawing → the editor's reader and review:
 //    the same givens, goal and "from the diagram" facts, the same wording reasons, a clean review.
 // 2. Lean written by hand: Mathlib spellings, renamed points, ∧ and →, ∀, "חשבו", errors.
-// 3. --lean: every exported statement compiles in the Lean project (WSL, ~/LeanGame).
+// 3. --lean: every exported statement compiles in the Lean project (WSL, ~/LeanGame), and so does
+//    the statement the player's Lean panel shows (geo.js leanTheorem).
 
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { PROBLEMS } from '../assets/js/data.js';
-import { parseClaim, claimKey } from '../assets/js/geo.js';
+import { parseClaim, claimKey, prepareProblem, leanTheorem } from '../assets/js/geo.js';
 import { buildReview, reviewReport, buildProblem, claimContext, solveDrawing } from '../assets/js/qparse.js';
 import { problemToLean, leanToQuestion, readLean } from '../assets/js/leanconv.js';
 
@@ -32,6 +33,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // ---------------------------------------------------------------- 1. built-in problems, there and back
 
 const statements = [];
+const player = []; // geo.js leanTheorem: the player's Lean panel
 const withSides = [];
 let n = 0;
 for (const [stage, list] of Object.entries(PROBLEMS)) {
@@ -44,6 +46,7 @@ for (const [stage, list] of Object.entries(PROBLEMS)) {
     check(`${id}: export has no warnings`, !out.warnings.length, JSON.stringify(out.warnings));
     if (out.sides.length || out.triangles.length) withSides.push(`${id} (${[...out.triangles.map((T) => `△${T.join('')}`), ...out.sides.map((s) => `${s.a}${s.b}${s.same ? '|' : '/'}${s.p}${s.q}`)].join(' ')})`);
     statements.push({ id, name: out.name, lean: out.body });
+    player.push(`${leanTheorem(prepareProblem(JSON.parse(JSON.stringify(p0)), stage))}\n`);
     const q = leanToQuestion(out.lean);
     if (!q.ok) { check(`${id}: import`, false, JSON.stringify(q.errors)); continue; }
     check(`${id}: goal holds in the new drawing`, q.goalHolds !== false);
@@ -197,11 +200,12 @@ imported('side of a line', `theorem zig (A B C D E : Point) (h : Par A B C D) (s
 
 if (process.argv.includes('--lean')) {
   const body = statements.map((s) => s.lean).join('\n');
-  const file = `import LeanGame\n\nnamespace SchoolGeo.FromSite\n\n${body}\nend SchoolGeo.FromSite\n`;
+  const file = `import LeanGame\n\nnamespace SchoolGeo.FromSite\n\n${body}\nend SchoolGeo.FromSite\n\nnamespace SchoolGeo.Player\n\n${player.join('\n')}\nend SchoolGeo.Player\n`;
+  const total = statements.length + player.length;
   const path = join(tmpdir(), 'leanconv_all.lean');
   writeFileSync(path, file);
   const wsl = path.replace(/^([A-Za-z]):/, (m, d) => `/mnt/${d.toLowerCase()}`).replace(/\\/g, '/');
-  console.log(`compiling ${statements.length} statements: ${path}`);
+  console.log(`compiling ${statements.length} exported + ${player.length} player statements: ${path}`);
   let out = '';
   try {
     out = execFileSync('wsl.exe', ['-d', 'Ubuntu', '--', 'bash', '-lc', `cd ~/LeanGame && lake env lean '${wsl}' 2>&1`], { encoding: 'utf8', timeout: 900000, maxBuffer: 1 << 26 });
@@ -209,7 +213,7 @@ if (process.argv.includes('--lean')) {
   const errors = out.split('\n').filter((l) => /: error/.test(l));
   const sorries = out.split('\n').filter((l) => /declaration uses 'sorry'|declaration uses `sorry`/.test(l)).length;
   check('Lean: no errors', !errors.length, errors.slice(0, 10).join('\n    '));
-  check('Lean: every statement elaborated', sorries === statements.length, `${sorries} of ${statements.length}\n${out.slice(0, 2000)}`);
+  check('Lean: every statement elaborated', sorries === total, `${sorries} of ${total}\n${out.slice(0, 2000)}`);
 }
 
 console.log(`${passed} passed, ${failed} failed`);
