@@ -89,6 +89,15 @@ export const REASONS = {
   segment_add: R(null, 'basic', 0, 'seg_add', ['חיבור קטעים', 'חיבור קטעים', 'אם $B$ נמצאת על הקטע $AC$, אז $AB + BC = AC$.'], ['Segment addition', 'Segment addition', 'If $B$ lies on segment $AC$, then $AB + BC = AC$.'], true),
   angle_add: R(null, 'basic', 0, 'ang_add', ['חיבור זוויות', 'חיבור זוויות', 'אם הקרן $BD$ עוברת בתוך $∢ABC$, אז $∢ABD + ∢DBC = ∢ABC$.'], ['Angle addition', 'Angle addition', 'If ray $BD$ runs inside $∢ABC$, then $∢ABD + ∢DBC = ∢ABC$.'], true),
 
+  // constructions (auxiliary lines): added with the construction tool, not typed (constructions-ui.js)
+  cons_segment: R(null, 'construction', 0, 'draw', ['בנייה: קטע', 'בנייה: קטע בין שתי נקודות', 'מעבירים קטע בין שתי נקודות שבשרטוט.'], ['Construction: segment', 'Construction: segment', 'Draw the segment between two points of the diagram.'], true),
+  cons_extend: R(null, 'construction', 0, 'exists_extension', ['בנייה: המשכה', 'בנייה: המשכת קטע', 'מאריכים קטע אל מעבר לאחד מקצותיו, עד נקודה חדשה.'], ['Construction: extension', 'Construction: extend a segment', 'Extend a segment beyond one of its ends, to a new point.'], true),
+  cons_midpoint: R(null, 'construction', 0, 'exists_midpoint', ['בנייה: אמצע', 'בנייה: אמצע קטע', 'מסמנים את נקודת האמצע של קטע.'], ['Construction: midpoint', 'Construction: midpoint', 'Mark the midpoint of a segment.'], true),
+  cons_median: R(null, 'construction', 0, 'exists_midpoint', ['בנייה: תיכון', 'בנייה: תיכון', 'מעבירים מקודקוד קטע אל אמצע הצלע שמולו.'], ['Construction: median', 'Construction: median', 'Draw a segment from a vertex to the midpoint of the opposite side.'], true),
+  cons_perp: R(null, 'construction', 0, 'exists_foot', ['בנייה: אנך', 'בנייה: אנך מנקודה לישר', 'מורידים מנקודה אנך לישר, עד נקודת החיתוך (עקב האנך).'], ['Construction: perpendicular', 'Construction: perpendicular to a line', 'Drop a perpendicular from a point to a line, to its foot.'], true),
+  cons_parallel: R(null, 'construction', 0, 'exists_parallel', ['בנייה: מקביל', 'בנייה: ישר מקביל דרך נקודה', 'מעבירים דרך נקודה ישר המקביל לישר נתון.'], ['Construction: parallel', 'Construction: parallel through a point', 'Draw through a point the line parallel to a given line.'], true),
+  cons_bisector: R(null, 'construction', 0, 'exists_bisector_foot', ['בנייה: חוצה זווית', 'בנייה: חוצה זווית', 'מעבירים את חוצה הזווית עד הצלע שמולה.'], ['Construction: angle bisector', 'Construction: angle bisector', 'Draw the bisector of an angle, to the opposite side.'], true),
+
   // L01 angles
   adj_angles: R('L01', 'theorem', 0, 'adj_angles_sum', ['זוויות צמודות', 'סכום זוויות צמודות', 'סכום זוויות צמודות הוא $180°$.'], ['Adjacent angles', 'Adjacent angles', 'Adjacent angles sum to $180°$.'], true),
   straight_angle: R('L01', 'theorem', 0, 'straight_angle', ['זווית שטוחה', 'זווית שטוחה', 'זווית שהשוקיים שלה יוצרות ישר אחד היא בת $180°$.'], ['Straight angle', 'Straight angle', 'An angle whose arms form one straight line measures $180°$.'], true),
@@ -118,6 +127,7 @@ export const REASONS = {
   par_converse: R('L04', 'theorem', 1, 'alt_par', ['תנאי להקבלה', 'משפט הפוך לישרים מקבילים', 'אם זוויות מתחלפות או מתאימות שוות, או שסכום זוויות חד-צדדיות הוא $180°$, הישרים מקבילים.'], ['Test for parallels', 'Converse for parallel lines', 'If alternate or corresponding angles are equal, or co-interior angles sum to $180°$, the lines are parallel.'], true),
   tri_sum: R('L04', 'theorem', 0, 'tri_angle_sum', ['סכום זוויות במשולש', 'סכום הזוויות במשולש', 'סכום הזוויות במשולש הוא $180°$.'], ['Triangle angle sum', 'Triangle angle sum', 'The angles of a triangle sum to $180°$.'], true),
   ext_angle: R('L04', 'theorem', 0, 'ext_angle', ['זווית חיצונית', 'זווית חיצונית למשולש', 'זווית חיצונית למשולש שווה לסכום שתי הזוויות הפנימיות שאינן צמודות לה.'], ['Exterior angle', 'Exterior angle of a triangle', 'An exterior angle equals the sum of the two remote interior angles.'], true),
+  par_trans: R('L04', 'theorem', 2, 'par_trans', ['מקבילים לישר שלישי', 'שני ישרים המקבילים לישר שלישי', 'שני ישרים המקבילים לישר שלישי מקבילים זה לזה.'], ['Parallel to a third line', 'Two lines parallel to a third', 'Two lines parallel to a third line are parallel to each other.'], true),
 
   // L05 inequalities
   side_angle: R('L05', 'theorem', 1, 'side_angle_ineq', ['מול צלע גדולה', 'מול צלע גדולה זווית גדולה', 'מול הצלע הגדולה במשולש מונחת הזווית הגדולה.'], ['Larger side', 'Larger side, larger angle', 'The larger side of a triangle faces the larger angle.'], true),

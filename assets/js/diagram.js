@@ -23,7 +23,8 @@ function arcGeom(V, X, Y, r) {
 
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-export function renderDiagram(problem, { width = 420, height = 320, pad = 50, animate = true, label = '' } = {}) {
+// The drawing of a problem's diagram: the SVG's inner markup, and the screen position of every point.
+function draw(problem, { width = 420, height = 320, pad = 50 } = {}) {
   const names = Object.keys(problem.points);
   const xs = names.map((n) => problem.points[n][0]);
   const ys = names.map((n) => problem.points[n][1]);
@@ -108,9 +109,12 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     const r = c.r * s;
     return `<path class="dg-line dg-circle" pathLength="1" style="--i:${i}" d="M${pt([x + r, y])}A${f(r)} ${f(r)} 0 1 0 ${pt([x - r, y])}A${f(r)} ${f(r)} 0 1 0 ${pt([x + r, y])}"/>`;
   }).join('');
+  // segments added by construction rows (problem.consSegments) are dashed
+  const cons = new Set(problem.consSegments || []);
   const lines = circlePaths + (problem.segments || []).map((sg, i) => {
     const [a, b] = sg.split('');
-    return `<path class="dg-line" pathLength="1" style="--i:${i + circles.length}" d="M${pt(P[a])}L${pt(P[b])}"/>`;
+    // pathLength="1" drives the drawing animation; a dashed construction line needs real lengths
+    return `<path class="dg-line${cons.has(sg) ? ' dg-cons' : ''}"${cons.has(sg) ? '' : ' pathLength="1"'} style="--i:${i + circles.length}" d="M${pt(P[a])}L${pt(P[b])}"/>`;
   }).join('');
 
   const points = names.map((n, i) => `<circle class="dg-point" style="--i:${i}" cx="${f(P[n][0])}" cy="${f(P[n][1])}" r="3.4"/>`).join('');
@@ -127,15 +131,30 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     return `<text class="dg-label" style="--i:${i}" x="${f(P[n][0] + dx)}" y="${f(P[n][1] + dy)}">${n}</text>`;
   }).join('');
 
+  return {
+    P,
+    angleRadius,
+    html: `<g class="dg-hl"></g><g class="dg-marks">${marks}</g><g class="dg-lines">${lines}</g>
+    <g class="dg-points">${points}</g><g class="dg-labels">${labels}</g>`,
+  };
+}
+
+export function renderDiagram(problem, { width = 420, height = 320, pad = 50, animate = true, label = '' } = {}) {
   const wrap = document.createElement('div');
-  wrap.innerHTML = `<svg class="dg${animate ? ' anim' : ''}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">
-    <g class="dg-hl"></g><g class="dg-marks">${marks}</g><g class="dg-lines">${lines}</g>
-    <g class="dg-points">${points}</g><g class="dg-labels">${labels}</g></svg>`;
+  wrap.innerHTML = `<svg class="dg${animate ? ' anim' : ''}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}"></svg>`;
   const svg = wrap.firstElementChild;
-  const hl = svg.querySelector('.dg-hl');
+  let cur;
+  let sig;
+  const paint = (p) => {
+    cur = draw(p, { width, height, pad });
+    svg.innerHTML = cur.html;
+    sig = p.consSig || '';
+  };
+  paint(problem);
 
   function highlight(items) {
-    hl.innerHTML = (items || []).map((it) => {
+    const { P, angleRadius } = cur;
+    svg.querySelector('.dg-hl').innerHTML = (items || []).map((it) => {
       const tone = `tone-${it.tone || 'a'}`;
       if (it.kind === 'seg') return `<path class="hl-seg ${tone}" d="M${pt(P[it.p[0]])}L${pt(P[it.p[1]])}"/>`;
       if (it.kind === 'ang') {
@@ -149,7 +168,15 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     svg.classList.toggle('has-hl', !!(items && items.length));
   }
 
-  return { el: svg, highlight, clear: () => highlight([]) };
+  // Redraw when the proof's constructions changed (geo.js syncConstructions); no animation then.
+  function sync(p) {
+    if ((p.consSig || '') === sig) return false;
+    svg.classList.remove('anim');
+    paint(p);
+    return true;
+  }
+
+  return { el: svg, highlight, clear: () => highlight([]), sync };
 }
 
 // What a claim talks about, as highlight items: left side in one highlighter
@@ -160,6 +187,7 @@ export function claimToItems(claim) {
   if (claim.type === 'perp' || claim.type === 'par') return [{ kind: 'seg', p: claim.a, tone: 'a' }, { kind: 'seg', p: claim.b, tone: 'b' }];
   if (claim.type === 'sim') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];
   if (claim.type === 'quad') return [{ kind: 'tri', p: claim.P, tone: 'a' }];
+  if (claim.type === 'drawn') return [{ kind: 'seg', p: claim.a, tone: 'a' }];
   // Every segment and angle of each side (sides can be sums such as ∢AOC + ∢COB, and
   // terms can be products, ratios, squares or sin∢A).
   const items = [];

@@ -347,6 +347,7 @@ const quadKey = (kind, P) => QUADS[kind].sym.map((o) => o.map((i) => P[i]).join(
 export function claimKey(c) {
   if (!c) return '';
   if (c.type === 'perp' || c.type === 'par') return c.type + ':' + [c.la, c.lb].sort().join('|');
+  if (c.type === 'drawn') return 'drawn:' + [...c.a].sort().join('');
   if (c.type === 'quad') return `quad:${c.kind}:${quadKey(c.kind, c.P)}`;
   if (c.type === 'ineq') {
     // larger − smaller > 0, never rescaled: "2AB > 2CD" is not "AB > CD"
@@ -434,6 +435,7 @@ export function fmtClaim(c) {
   if (!c) return '';
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
   if (c.type === 'sim') return `△${c.P.join('')} ∼ △${c.Q.join('')}`;
+  if (c.type === 'drawn') return c.a.join('');
   if (c.type === 'perp') return `${c.a.join('')} ⊥ ${c.b.join('')}`;
   if (c.type === 'par') return `${c.a.join('')} ∥ ${c.b.join('')}`;
   if (c.type === 'quad') {
@@ -468,6 +470,7 @@ function leanSide(side) {
 export function leanClaim(c) {
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'sim') return `Sim ${c.P.join(' ')} ${c.Q.join(' ')}`;
+  if (c.type === 'drawn') return 'True';
   if (c.type === 'perp') return `Perp ${c.a.join(' ')} ${c.b.join(' ')}`;
   if (c.type === 'par') return `Par ${c.a.join(' ')} ${c.b.join(' ')}`;
   if (c.type === 'quad') return `${QUADS[c.kind].lean} ${c.P.join(' ')}`;
@@ -489,6 +492,9 @@ export function unlockedReasons(stageId) {
 
 export function prepareProblem(p, stageId) {
   if (p.prepared) return p;
+  // the diagram as the question gives it; construction rows add to it (withConstructions)
+  p.base = { points: p.points, segments: p.segments || [], config: p.config };
+  p.consSig = '';
   p.stage = stageId;
   p.pointNames = Object.keys(p.points);
   p.rays = computeRays(p.points);
@@ -1535,11 +1541,232 @@ function trigDef(fn) {
 
 Object.assign(CHECKS, STAGE_CHECKS);
 
-// Check every row. rows: [{ text, reason, refs: [rowNumbers] }].
-export function checkProof(problem, rows) {
+// Two lines parallel to a third line are parallel to each other.
+CHECKS.par_trans = (claim, refRows, problem) => {
+  const proof = `par_trans ${refNames(refRows)}`.trim();
+  if (claim.type !== 'par') return fail2('parConvNeedPar', proof);
+  const pars = refRows.filter((r) => r.claim.type === 'par').map((r) => [r.claim.la, r.claim.lb]);
+  if (pars.length !== 2) return fail2('needTwoPar', proof);
+  const common = pars[0].find((l) => pars[1].includes(l));
+  if (!common) return fail2('parTransNoCommon', proof);
+  const ends = [pars[0].find((l) => l !== common), pars[1].find((l) => l !== common)];
+  if (ends[0] && ends[1] && ends[0] !== ends[1] && [claim.la, claim.lb].sort().join() === ends.sort().join()) return { ok: true, proof };
+  return fail2('parTransWrong', proof);
+};
+
+// ---------- constructions (auxiliary lines) ----------
+// A construction row { cons: { kind, args, news }, reason: kind } adds points, dashed segments
+// and position facts to the diagram, and states the fact it gives, which later rows cite.
+// The browser places the new points from the coordinates; in Lean each construction is an
+// existence theorem (obtain ⟨M, hM⟩ := …). Arguments, by kind:
+//   cons_segment  [P, Q]     draw segment PQ
+//   cons_extend   [P, Q]     extend PQ beyond Q to X:            PQ + QX = PX
+//   cons_midpoint [P, Q]     mark the midpoint M of PQ:          PM = MQ
+//   cons_median   [A, P, Q]  draw from A to the midpoint M of PQ: PM = MQ
+//   cons_perp     [A, P, Q]  drop from A the perpendicular AH to line PQ: AH ⊥ PQ
+//   cons_parallel [A, P, Q]  draw through A the line XY parallel to PQ:  XY ∥ PQ
+//   cons_bisector [P, A, Q]  bisect ∢PAQ, meeting PQ at D:        ∢PAD = ∢DAQ
+
+export const CONS_KINDS = {
+  cons_segment: { args: 2, news: 0 },
+  cons_extend: { args: 2, news: 1 },
+  cons_midpoint: { args: 2, news: 1 },
+  cons_median: { args: 3, news: 1 },
+  cons_perp: { args: 3, news: 1 },
+  cons_parallel: { args: 3, news: 2 },
+  cons_bisector: { args: 3, news: 1 },
+};
+export const isConsReason = (rid) => !!CONS_KINDS[rid];
+
+const consBetween = (a, o, b) => ({
+  type: 'between', a, o, b, lean: `Sbtw ℝ ${a} ${o} ${b}`, cons: true,
+  text: { he: `$${o}$ נמצאת על $${a}${b}$`, en: `$${o}$ lies on $${a}${b}$` },
+});
+
+// What a construction adds to `view` ({ points, segments }): { points, segments, config,
+// claim (school notation, or null), drawn, lean }, or { error }.
+export function buildConstruction(view, cons) {
+  const err = (key, vars) => ({ error: { key, vars } });
+  const spec = cons && CONS_KINDS[cons.kind];
+  if (!spec) return err('consUseTool');
+  const args = cons.args || [];
+  const news = cons.news || [];
+  if (args.length !== spec.args || news.length !== spec.news || args.some((x) => !x)) return err('consNeedPoints');
+  const missing = args.find((x) => !view.points[x]);
+  if (missing) return err('unknownPoint', { p: `$${missing}$` });
+  if (new Set(args).size < args.length || new Set(news).size < news.length) return err('repeatPoint');
+  for (const x of news) {
+    if (!/^[A-Z]$/.test(x)) return err('consBadName');
+    if (view.points[x]) return err('consNameTaken', { p: `$${x}$` });
+  }
+  const P = (x) => view.points[x];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const len = (u) => Math.hypot(u[0], u[1]);
+  const flat = (a, v, b) => { const u = sub(P(b), P(a)); const w = sub(P(v), P(a)); return Math.abs(u[0] * w[1] - u[1] * w[0]) < 1e-6 * len(u) * Math.max(1, len(w)); };
+  const out = { points: {}, segments: [], config: [], claim: null, drawn: null, lean: '' };
+  const [a0, a1, a2] = args;
+  const lean = (thm) => `obtain ⟨${news.join(', ')}, h${news.join('')}⟩ := ${thm} ${args.join(' ')}`;
+  switch (cons.kind) {
+    case 'cons_segment': {
+      if ((view.segments || []).some((s) => s === a0 + a1 || s === a1 + a0)) return err('consAlready', { s: `$${a0}${a1}$` });
+      out.segments.push(a0 + a1);
+      out.drawn = [a0, a1];
+      out.lean = `-- the segment ${a0}${a1} is drawn`;
+      break;
+    }
+    case 'cons_extend': {
+      const [X] = news;
+      out.points[X] = lerp(P(a0), P(a1), 1.5);
+      out.segments.push(a1 + X);
+      out.config.push(consBetween(a0, a1, X));
+      out.claim = `${a0}${a1}+${a1}${X}=${a0}${X}`;
+      out.lean = lean('exists_extension');
+      break;
+    }
+    case 'cons_midpoint':
+    case 'cons_median': {
+      const [Q, R] = cons.kind === 'cons_median' ? [a1, a2] : [a0, a1];
+      if (cons.kind === 'cons_median' && flat(a1, a0, a2)) return err('consCollinear');
+      const [M] = news;
+      out.points[M] = lerp(P(Q), P(R), 0.5);
+      out.config.push(consBetween(Q, M, R));
+      if (cons.kind === 'cons_median') out.segments.push(a0 + M);
+      out.claim = `${Q}${M}=${M}${R}`;
+      out.lean = lean('exists_midpoint');
+      break;
+    }
+    case 'cons_perp': {
+      if (flat(a1, a0, a2)) return err('consOnLine', { p: `$${a0}$`, l: `$${a1}${a2}$` });
+      const [H] = news;
+      const u = sub(P(a2), P(a1));
+      const t = ((P(a0)[0] - P(a1)[0]) * u[0] + (P(a0)[1] - P(a1)[1]) * u[1]) / (u[0] * u[0] + u[1] * u[1]);
+      if (Math.abs(t) < 1e-9 || Math.abs(t - 1) < 1e-9) return err('consFootIsVertex', { p: `$${Math.abs(t) < 1e-9 ? a1 : a2}$` });
+      out.points[H] = lerp(P(a1), P(a2), t);
+      out.segments.push(a0 + H);
+      if (t > 0 && t < 1) out.config.push(consBetween(a1, H, a2));
+      else if (t > 1) { out.config.push(consBetween(a1, a2, H)); out.segments.push(a2 + H); }
+      else { out.config.push(consBetween(H, a1, a2)); out.segments.push(H + a1); }
+      out.claim = `${a0}${H}⊥${a1}${a2}`;
+      out.lean = lean('exists_foot');
+      break;
+    }
+    case 'cons_parallel': {
+      if (flat(a1, a0, a2)) return err('consOnLine', { p: `$${a0}$`, l: `$${a1}${a2}$` });
+      const [X, Y] = news;
+      const u = sub(P(a2), P(a1));
+      const k = 0.35;
+      out.points[X] = [P(a0)[0] - u[0] * k, P(a0)[1] - u[1] * k];
+      out.points[Y] = [P(a0)[0] + u[0] * k, P(a0)[1] + u[1] * k];
+      out.config.push(consBetween(X, a0, Y));
+      out.segments.push(X + Y);
+      out.claim = `${X}${Y}∥${a1}${a2}`;
+      out.lean = lean('exists_parallel');
+      break;
+    }
+    case 'cons_bisector': {
+      if (flat(a0, a1, a2)) return err('consCollinear');
+      const [D] = news;
+      const da = len(sub(P(a0), P(a1)));
+      const db = len(sub(P(a2), P(a1)));
+      out.points[D] = lerp(P(a0), P(a2), da / (da + db));
+      out.config.push(consBetween(a0, D, a2));
+      out.segments.push(a1 + D);
+      out.claim = `∢${a0}${a1}${D}=∢${D}${a1}${a2}`;
+      out.lean = lean('exists_bisector_foot');
+      break;
+    }
+    default: return err('consUseTool');
+  }
+  for (const [x, c] of Object.entries(out.points)) {
+    const same = Object.keys(view.points).find((q) => Math.hypot(view.points[q][0] - c[0], view.points[q][1] - c[1]) < 1e-6);
+    if (same) return err('consOnPoint', { p: `$${same}$`, x: `$${x}$` });
+  }
+  return out;
+}
+
+const consSig = (rows) => JSON.stringify(rows.map((r, i) => (r.cons ? [i, r.cons] : null)).filter(Boolean));
+const CONS_FIELDS = ['points', 'segments', 'config', 'pointNames', 'rays', 'givensParsed', 'goalParsed', 'goalKey', 'consSegments', 'consInfo', 'consBorn', 'consSig'];
+
+// The problem as the proof's construction rows extend it: new points, dashed segments
+// (consSegments), position facts, the givens and goal re-read with the new points (one angle may
+// gain names), and per construction row its result (consInfo, by row index) and where each new
+// point was born (consBorn). The problem itself is not changed.
+export function withConstructions(problem, rows) {
+  const sig = consSig(rows || []);
+  if (!problem.base || sig === (problem.consSig || '')) return problem;
+  const cache = problem.base.cache || (problem.base.cache = new Map());
+  if (cache.has(sig)) return cache.get(sig);
+  const b = problem.base;
+  const points = { ...b.points };
+  const segments = [...b.segments];
+  const config = [...b.config];
+  const consSegments = [];
+  const consInfo = new Map();
+  const consBorn = {};
+  rows.forEach((r, i) => {
+    if (!r.cons) return;
+    const out = buildConstruction({ points, segments }, r.cons);
+    consInfo.set(i, out);
+    if (out.error) return;
+    Object.assign(points, out.points);
+    segments.push(...out.segments);
+    consSegments.push(...out.segments);
+    config.push(...out.config);
+    for (const x of Object.keys(out.points)) consBorn[x] = i;
+  });
+  const d = Object.create(problem);
+  Object.assign(d, { points, segments, config, consSegments, consInfo, consBorn, consSig: sig, pointNames: Object.keys(points), rays: computeRays(points) });
+  d.givensParsed = problem.givens.map((g) => parseClaim(g.claim, d).claim);
+  const goal = parseClaim(problem.goal, d);
+  d.goalParsed = goal.claim;
+  d.goalKey = claimKey(goal.claim);
+  if (cache.size > 30) cache.delete(cache.keys().next().value);
+  cache.set(sig, d);
+  return d;
+}
+
+// Bring the page's problem object in line with its rows' constructions (the diagram, the claim
+// preview and the Lean request all read it). Returns true when something changed.
+export function syncConstructions(p, rows) {
+  const d = withConstructions(p, rows);
+  if (d === p) return false;
+  for (const k of CONS_FIELDS) p[k] = d[k];
+  return true;
+}
+
+// Every point a claim names.
+function claimPoints(c) {
+  const out = new Set();
+  const term = (t) => {
+    if (!t) return;
+    if (t.kind === 'seg' || t.kind === 'ang') t.p.forEach((x) => out.add(x));
+    else if (t.kind === 'trig') term(t.a);
+    else if (t.kind === 'mono') t.f.forEach((x) => term(x.t));
+  };
+  if (c.L) for (const { t } of [...c.L.terms, ...c.R.terms]) term(t);
+  for (const k of ['P', 'Q', 'a', 'b']) if (Array.isArray(c[k])) c[k].forEach((x) => out.add(x));
+  return [...out];
+}
+
+function consResult(problem, row, n) {
+  const info = row.cons ? problem.consInfo && problem.consInfo.get(n - 1) : { error: { key: 'consUseTool' } };
+  if (!info || info.error) {
+    const error = (info && info.error) || { key: 'consUseTool' };
+    return { n, parsed: { ok: false, error }, ok: false, msg: error, lean: null, goal: false, cons: true };
+  }
+  const claim = info.claim ? parseClaim(info.claim, problem).claim : { type: 'drawn', a: info.drawn };
+  return { n, parsed: { ok: true, claim }, ok: true, msg: null, lean: info.lean.replace(/⟩ :=/, `, s${n}⟩ :=`).replace(/, h\w+, s/, ', s'), goal: false, cons: true };
+}
+
+// Check every row. rows: [{ text, reason, refs: [rowNumbers] }]; a construction row also has
+// `cons` (see buildConstruction).
+export function checkProof(problem0, rows) {
+  const problem = withConstructions(problem0, rows);
   const results = [];
   rows.forEach((row, i) => {
     const n = i + 1;
+    if (row.cons || isConsReason(row.reason)) { results.push(consResult(problem, row, n)); return; }
     const parsed = parseClaim(row.text, problem);
     const res = { n, parsed, ok: false, msg: null, lean: null, goal: false };
     results.push(res);
@@ -1548,6 +1775,9 @@ export function checkProof(problem, rows) {
     const key = claimKey(claim);
     res.goal = key === problem.goalKey;
     const head = `have s${n} : ${leanClaim(claim)} :=`;
+    // a point a later construction row creates doesn't exist yet here
+    const late = claimPoints(claim).find((x) => problem.consBorn && problem.consBorn[x] >= i);
+    if (late) { res.msg = { key: 'notBuiltYet', vars: { p: `$${late}$`, n: problem.consBorn[late] + 1 } }; res.lean = `${head} sorry`; return; }
     const rid = row.reason;
     if (!rid) { res.msg = { key: 'noReason' }; res.lean = `${head} sorry`; return; }
     if (!problem.allowed.includes(rid)) { res.msg = { key: 'reasonNotAllowed' }; res.lean = `${head} sorry`; return; }

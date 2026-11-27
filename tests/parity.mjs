@@ -164,6 +164,22 @@ const CASES = [
     ];
   })(),
 
+  // constructions (auxiliary lines): rows with `cons`; the request carries the new points and their facts
+  ...(() => {
+    const Q = (st, n) => PROBLEMS[st].find((p) => p.n === n);
+    const C = (kind, args, news) => ({ text: '', reason: kind, refs: [], cons: { kind, args, news } });
+    return [
+      ['L02-8 construction: bisector', Q('L02', 8), [R('AB = AC', 'given'), C('cons_bisector', ['B', 'A', 'C'], ['D']), R('AD = AD', 'common_side'), R('ABD ≅ ACD', 'SAS', [1, 2, 3]), R('∢ABD = ∢ACD', 'cpct_angle', [4])]],
+      ['L02-9 construction: segment', Q('L02', 9), [R('AB = AD', 'given'), R('CB = CD', 'given'), C('cons_segment', ['A', 'C'], []), R('AC = AC', 'common_side'), R('ABC ≅ ADC', 'SSS', [1, 2, 4]), R('∢ABC = ∢ADC', 'cpct_angle', [5])]],
+      ['L04-8 construction: parallel', Q('L04', 8), [R('AB ∥ CD', 'given'), R('∢ABE = 44', 'given'), R('∢CDE = 30', 'given'), C('cons_parallel', ['E', 'A', 'B'], ['F', 'G']), R('FG ∥ CD', 'par_trans', [1, 4]),
+        R('∢ABE = ∢BEG', 'alt_angles', [4]), R('∢CDE = ∢DEG', 'alt_angles', [5]), R('∢BEG + ∢GED = ∢BED', 'angle_add'), R('∢BED = 74', 'algebra', [2, 3, 6, 7, 8])]],
+      ['L08-6 construction: perpendicular', Q('L08', 6), [R('AB = AC', 'given'), R('AB = 15', 'given'), R('BC = 18', 'given'), R('BD = 4', 'given'), C('cons_perp', ['A', 'B', 'C'], ['H']), R('BH = HC', 'iso_median', [1, 5]),
+        R('BH + HC = BC', 'segment_add'), R('BH = 9', 'algebra', [3, 6, 7]), R('BD + DH = BH', 'segment_add'), R('DH = 5', 'algebra', [4, 8, 9]), R('∢AHB = 90', 'perp_def', [5]),
+        R('AH² + BH² = AB²', 'pythagoras', [11]), R('AH = 12', 'algebra', [2, 8, 12]), R('AH² + DH² = AD²', 'pythagoras', [11]), R('AD = 13', 'algebra', [10, 13, 14])]],
+      ['construction: extension and midpoint', Q('L02', 8), [C('cons_extend', ['B', 'C'], ['E']), R('∢ACB + ∢ACE = 180', 'adj_angles'), C('cons_midpoint', ['B', 'C'], ['M']), R('BM + MC = BC', 'segment_add'), R('BM = MC', 'given')]],
+    ];
+  })(),
+
   // rows that must be rejected by both
   ['wrong rows', P1, [R('AB=AC', 'given'), R('∢BAD=∢CAD', 'given'), R('AD=AD', 'common_side'), R('ABD≅ADC', 'SAS', [1, 2, 3]),
     R('ABD≅ACD', 'SSS', [1, 2, 3]), R('ABD≅ACD', 'SSA', [1, 2, 3]), R('BD=CD', 'midpoint_def'), R('∢BAD=∢BAC', 'common_angle'), R('2∢BAD = ∢BAC', 'given')]],
@@ -171,6 +187,7 @@ const CASES = [
 
 let bad = 0;
 for (const [label, p, rows] of CASES) {
+  geo.syncConstructions(p, rows); // as the page does: the request carries the constructed points
   const local = geo.checkProof(p, rows);
   const t0 = Date.now();
   let res;

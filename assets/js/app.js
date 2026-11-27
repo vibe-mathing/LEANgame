@@ -2,7 +2,7 @@
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
 import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList } from './data.js';
-import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles } from './geo.js';
+import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions } from './geo.js';
 import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
@@ -11,6 +11,7 @@ import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congCo
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
+import { mountConstructions } from './constructions-ui.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -744,8 +745,11 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     hints: Math.min((saved && saved.hints) || 0, p.hints.length), // hints already waited for stay open
   };
 
+  syncConstructions(p, state.rows); // construction rows add points and lines (geo.js)
   const dg = renderDiagram(p, { animate: true, label: t('pp.diagramAria') });
   $('#diagram', root).append(dg.el);
+  // the construction tool (constructions-ui.js) adds its row at the end of the proof
+  mountConstructions({ root, p, dg, addRow: (row) => { state.rows.push(row); renderRows(); } });
 
   const rowsEl = $('#rows', root);
   const input = $('#claimInput', root);
@@ -807,6 +811,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   }
 
   function renderRows() {
+    syncConstructions(p, state.rows);
+    dg.sync(p);
     result = checkProof(p, state.rows);
     if (lean && lean.key === rowsKey()) applyLean(result, lean.res, state.rows);
     else scheduleLean();
