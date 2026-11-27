@@ -75,7 +75,7 @@ python -m http.server 5180
 4. **Project settings → General → Your apps:** מוסיפים אפליקציית Web, ומעתיקים את אובייקט ה-`firebaseConfig` אל `FIREBASE_CONFIG` ב-`assets/js/firebase-config.js`.
 5. בוחרים שם משתמש לבעל האתר. כותבים אותו ב-`OWNER_USERNAME` (אותו קובץ), וב-`ownerEmail()` ב-`firebase/firestore.rules`.
 6. **Firestore Database → Rules:** מדביקים את `firebase/firestore.rules` ולוחצים Publish.
-7. **Authentication → Settings → Authorized domains:** מוסיפים את `trigonomather-design.github.io`.
+7. **Authentication → Settings → Authorized domains:** מוסיפים את `vibe-mathing.github.io`.
 8. נכנסים ל-`#/join/staff` באתר ונרשמים עם שם המשתמש של בעל האתר.
 
 ## הוספת שאלה

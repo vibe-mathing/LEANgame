@@ -8,8 +8,8 @@
 import { getLang } from './i18n.js';
 
 // Keep in step with VERSION_CODE / VERSION_NAME in android-app/build.sh.
-export const APP_CODE = 1;
-export const APP_VERSION = '1.0';
+export const APP_CODE = 2;
+export const APP_VERSION = '1.1';
 const APP_FILE = 'downloads/LEANgame.apk';
 
 const ua = /\bLEANgameApp\/(\d+)/.exec(navigator.userAgent || '');
