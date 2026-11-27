@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LEANgame · משחק הוכחות</title>
+  <meta name="description" content="LEANgame: משחק הוכחות לתיכון. בונים הוכחה בטבלת טענה ונימוק, ו-Lean בודק כל שורה. A proof game where Lean checks every line.">
+  <meta name="theme-color" content="#F7F3EA" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141C1A" media="(prefers-color-scheme: dark)">
+  <meta name="lg-repo" content="https://github.com/trigonomather-design/LEANgame">
+  <meta property="og:title" content="LEANgame · משחק הוכחות">
+  <meta property="og:description" content="בונים הוכחה. Lean בודק כל שורה.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <script>
+    // Apply saved language and theme before first paint.
+    (function () {
+      var d = document.documentElement, l, th;
+      try { l = JSON.parse(localStorage.getItem('lg.lang')); th = JSON.parse(localStorage.getItem('lg.theme')); } catch (e) {}
+      l = l === 'en' ? 'en' : 'he';
+      d.lang = l; d.dir = l === 'he' ? 'rtl' : 'ltr';
+      d.dataset.theme = th || (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,500;1,500;1,600&family=Noto+Sans+Math&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playpen+Sans+Hebrew:wght@500;700&display=swap">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <script type="module" src="assets/js/app.js"></script>
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main id="app" tabindex="-1"></main>
+  <footer class="footer" id="footer"></footer>
+  <noscript><p style="padding:2rem;text-align:center">LEANgame צריך JavaScript. · LEANgame needs JavaScript.</p></noscript>
+</body>
+</html>

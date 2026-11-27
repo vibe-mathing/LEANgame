@@ -1,0 +1,47 @@
+# LEANgame — אתר
+
+משחק הוכחות לתיכון: בונים הוכחה בטבלת **טענה | נימוק**, ו-Lean בודק כל שורה.
+הנושא הראשון הוא גאומטריה. נושאים נוספים (טריגונומטריה, גאומטריה אנליטית, ובהמשך אוניברסיטה) יתווספו לאותו מבנה.
+
+> **אב-טיפוס.** באתר הזה הבדיקה מדומה בדפדפן (`assets/js/geo.js`) לפי אותם כללים של קטלוג הנימוקים. בגרסה המלאה כל שורה נשלחת לשירות בדיקה שמריץ את Lean ו-Mathlib.
+
+## מה יש באתר
+
+- **דף הבית:** הסבר על המשחק, הדגמה מונפשת של הוכחה, נושאים לפי מסלול (תיכון / אוניברסיטה), ומפת דרכים.
+- **גאומטריה:** מסע של 11 שלבים, התקדמות אישית (נשמרת בדפדפן), וארגז הכלים: קטלוג הנימוקים עם השמות ב-Lean.
+- **שאלות לשחק:** שלב 1 (זוויות קודקודיות) ושלב 2 (חפיפה: צ.ז.צ, צ.צ.צ, ז.צ.ז). שרטוט חי שמדגיש את מה שכותבים, משוב בעברית לכל שורה, רמזים, ותצוגת קוד Lean לכל שורה ולהוכחה המלאה.
+- עברית (ימין לשמאל) ואנגלית, ערכת "מחברת" בהירה וערכת "לוח" כהה.
+
+## מבנה
+
+```text
+index.html
+assets/
+  css/styles.css     עיצוב
+  js/app.js          ניתוב ותצוגות
+  js/data.js         נושאים, שלבים, קטלוג נימוקים, שאלות
+  js/geo.js          ניתוח טענות, נרמול, בדיקה ויצירת Lean
+  js/diagram.js      שרטוט SVG והדגשות
+  js/i18n.js         מחרוזות בעברית ובאנגלית
+  js/icons.js        אייקונים ולוגו
+```
+
+אין שלב בנייה: קבצים סטטיים בלבד, ומתאים ל-GitHub Pages.
+
+## הרצה מקומית
+
+```powershell
+python -m http.server 5180
+```
+
+ואז לפתוח את `http://localhost:5180`.
+
+## הוספת שאלה
+
+מוסיפים אובייקט ל-`PROBLEMS` ב-`assets/js/data.js`: נקודות עם קואורדינטות, קטעים, עובדות מהשרטוט, נתונים, מה צריך להוכיח, סימונים, הנימוקים המותרים ורמזים. הפורמט עוקב אחרי פורמט השאלות במדריך (`LEAN information/LEAN_GUIDE_he.md`, סעיף 8.4).
+
+---
+
+## English
+
+A proof game for high school: build a proof in a **claim | reason** table, and Lean checks every row. Geometry is the first topic. The site is static (no build step) and is served by GitHub Pages. In this prototype the checking runs in the browser using the same catalog rules; the full version will send each row to a Lean + Mathlib checking service. Hebrew is the primary language; English is a toggle.
