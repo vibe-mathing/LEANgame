@@ -139,6 +139,10 @@ const S = {
     'rv.intro': 'תיאור',
     'rv.introHint': 'מה שהתלמיד קורא מעל השרטוט. שמות נקודות בין סימני $, למשל $ABC$.',
     'rv.preview': 'כך זה ייראה:',
+    'pub.needSolve': 'כדי לפרסם לכולם, פתרו את השאלה קודם: לחצו "לנסות לפתור" והשלימו הוכחה שהבודק מקבל. טיוטה אפשר לשמור גם בלי לפתור.',
+    'pub.solved': 'פתרתם את השאלה, ואפשר לפרסם אותה.',
+    'pub.draft': 'טיוטה אפשר לשמור גם בלי לפתור. כדי לפרסם לכולם, פתרו אותה קודם.',
+    'be.unsolved': 'אי אפשר לפרסם שאלה שלא פתרתם. פתחו אותה בעורך, לחצו "לנסות לפתור" והשלימו הוכחה.',
     'rv.points': 'נקודות',
     'rv.pt.seg': 'על {s}',
     'rv.pt.x': 'חיתוך',
@@ -353,6 +357,10 @@ const S = {
     'rv.intro': 'Setup',
     'rv.introHint': 'What the student reads above the drawing. Put point names between $ signs, like $ABC$.',
     'rv.preview': 'It will look like this:',
+    'pub.needSolve': 'To publish for everyone, solve the question first: press "Try solving it" and finish a proof the checker accepts. You can save a draft without solving.',
+    'pub.solved': 'You solved the question, so it can be published.',
+    'pub.draft': 'A draft can be saved without solving. To publish for everyone, solve it first.',
+    'be.unsolved': 'You cannot publish a question you have not solved. Open it in the editor, press "Try solving it" and finish a proof.',
     'rv.points': 'Points',
     'rv.pt.seg': 'on {s}',
     'rv.pt.x': 'crossing',
@@ -707,7 +715,7 @@ async function pageEditor(host, parts, alive) {
       if (!bank.canEdit(q)) { host.innerHTML = `<div class="acct-card paper acct-narrow"><p class="au-msg">${esc(tt('acc.notYours'))}</p></div>`; ED = null; return; }
       let src = {};
       try { src = JSON.parse(q.source || '{}'); } catch { src = {}; }
-      Object.assign(ED, { baseUpdatedAt: q.updatedAt, text: src.text || '', drawing: src.drawing || emptyDrawing(), review: src.review || null, status: q.status });
+      Object.assign(ED, { baseUpdatedAt: q.updatedAt, text: src.text || '', drawing: src.drawing || emptyDrawing(), review: src.review || null, status: q.status, saved: { data: q.data, solution: q.solution } });
       if (src.review) ED.reviewFor = sig(ED.text, ED.drawing);
       if (draft && draft.baseUpdatedAt === q.updatedAt) Object.assign(ED, draft, { key, restored: true });
     } else if (draft && (draft.text || (draft.drawing && draft.drawing.pts.length))) {
@@ -1355,6 +1363,17 @@ function stepReview(body, alive, redraw) {
   const uncheck = (sec) => { ED.checked[sec] = false; };
 
   const isReady = () => !rep.errors.length && SECTIONS.every((s) => ED.checked[s]);
+  // Solved before published: the author's accepted proof for exactly this version of the problem (qbank.js).
+  const solution = () => {
+    if (rep.errors.length) return null;
+    try { return bank.solvedFor(Q.buildProblem(rv, ED.drawing), ED.saved); } catch { return null; }
+  };
+  const canSave = () => isReady() && !saving && (ED.status !== 'published' || !!solution());
+  const pubNoteHTML = () => {
+    const solved = !!solution();
+    const key = solved ? 'pub.solved' : ED.status === 'published' ? 'pub.needSolve' : 'pub.draft';
+    return `<p class="au-msg au-pubnote ${solved ? 'is-ok' : ED.status === 'published' ? 'is-err' : ''}">${esc(tt(key))}</p>`;
+  };
   const statusHTML = () => {
     const ctxRep = rep;
     const errs = ctxRep.errors.map((e) => `<li class="is-err">${icon('x')}<span>${errHTML(e)}</span>${e.key === 'unknown' ? ` <button type="button" class="linkish" data-dismiss="${esc(e.src)}">${esc(tt('rv.dismiss'))}</button>` : ''}${e.key === 'notWitness' ? ` <button type="button" class="tool-btn" data-act="straighten">${tic('wand')} ${esc(tt('rv.straighten'))}</button>` : ''}</li>`).join('');
@@ -1373,7 +1392,9 @@ function stepReview(body, alive, redraw) {
     const st = body.querySelector('.au-status');
     if (st) st.outerHTML = statusHTML();
     const save = body.querySelector('[data-act="save"]');
-    if (save) save.disabled = !isReady() || saving;
+    if (save) save.disabled = !canSave();
+    const note = body.querySelector('.au-pubnote');
+    if (note) note.outerHTML = pubNoteHTML();
   };
 
   const html = () => {
@@ -1495,8 +1516,9 @@ function stepReview(body, alive, redraw) {
               <select class="acct-input" id="rvStatus"><option value="published" ${ED.status === 'published' ? 'selected' : ''}>${esc(tt('rv.published'))}</option><option value="draft" ${ED.status === 'draft' ? 'selected' : ''}>${esc(tt('rv.draftS'))}</option></select></label>
             <span class="au-grow-1"></span>
             <button type="button" class="btn btn-ghost btn-small" data-act="try" ${ctxRep.errors.length ? 'disabled' : ''}>${icon('play')} ${esc(tt('rv.try'))}</button>
-            <button type="button" class="btn btn-primary" data-act="save" ${ready && !saving ? '' : 'disabled'}>${icon('check')} ${esc(saving ? tt('rv.saving') : ED.id ? tt('rv.update') : tt('rv.save'))}</button>
+            <button type="button" class="btn btn-primary" data-act="save" ${canSave() ? '' : 'disabled'}>${icon('check')} ${esc(saving ? tt('rv.saving') : ED.id ? tt('rv.update') : tt('rv.save'))}</button>
           </div>
+          ${pubNoteHTML()}
           ${saveErr ? `<p class="au-msg is-err">${esc(saveErr)}</p>` : ''}
         </div>
       </div>`;
@@ -1562,7 +1584,7 @@ function stepReview(body, alive, redraw) {
         commit('goal');
         break;
       }
-      case 'rvStatus': ED.status = el.value; persist(); break;
+      case 'rvStatus': ED.status = el.value; persist(); syncChecks(); break;
       default: break;
     }
   });
@@ -1638,7 +1660,7 @@ function stepReview(body, alive, redraw) {
         saving = true; saveErr = ''; render();
         try {
           const problem = Q.buildProblem(rv, ED.drawing);
-          const id = await bank.saveQuestion({ id: ED.id, title: rv.title, stage: rv.stage, status: ED.status, data: problem, source: { v: 1, text: ED.text, drawing: ED.drawing, review: rv } });
+          const id = await bank.saveQuestion({ id: ED.id, title: rv.title, stage: rv.stage, status: ED.status, data: problem, source: { v: 1, text: ED.text, drawing: ED.drawing, review: rv }, solution: bank.solvedFor(problem, ED.saved) });
           dropDraft(ED.key);
           ED.savedId = id;
           ED.step = 3;

@@ -734,7 +734,14 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   // teacher question bank: progress under "tq-<id>"; the editor's preview saves nothing
   const pk = bank ? `tq-${bank.id}` : pkey(stage, n);
   const solvedHere = () => !!progress()[pk]?.solved;
-  const save = (data) => { if (!(bank && bank.draft)) saveProgress(stage, n, data, pk); };
+  const save = (data) => {
+    // the editor's preview saves no progress, but a solved proof unlocks publishing (qbank.js)
+    if (bank && bank.draft) {
+      if (data.solved && data.rows) import('./qbank.js').then((m) => m.markDraftSolved(data.rows)).catch(() => {});
+      return;
+    }
+    saveProgress(stage, n, data, pk);
+  };
   const saved = bank && bank.draft ? null : progress()[pk];
   const state = {
     rows: (saved && saved.rows) || [],

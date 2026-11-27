@@ -25,6 +25,7 @@ rules_version = '2';
 //   usernames/{id}  { uid, username }
 //   logins/{key}    { uid, email }
 //   config/owner  { uid }   written once by the owner
+//   config/staffInvite { code }   the teacher invite code; admins only (a sign-up with it starts as teacher)
 //   config/site   { signupOpen: { '3': bool, …, staff: bool } }  a student track missing from the map is open;
 //                                                                 the staff link is closed unless set to true
 //   config/tools  { tracks: { default?, '3'?, … } }  proof-tool settings per track (tools.js)
@@ -68,6 +69,10 @@ service cloud.firestore {
     function uhash(u) { return hashing.sha256('leangame-username:' + u).toHexString().lower(); }
     function usernameDoc(u) { return /databases/$(database)/documents/usernames/$(uhash(u)); }
     function claimedByMe(u) { return exists(usernameDoc(u)) && get(usernameDoc(u)).data.uid == request.auth.uid; }
+    function inviteDoc() { return /databases/$(database)/documents/config/staffInvite; }
+    function validInvite(c) {
+      return c is string && c.size() >= 10 && exists(inviteDoc()) && get(inviteDoc()).data.code == c;
+    }
 
     match /users/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid) || isStaff();
@@ -76,7 +81,7 @@ service cloud.firestore {
       // The owner creates theirs as admin in the staff track; others join a track whose sign-up is open.
       // The owner's username is reserved for the owner.
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['login', 'username', 'name', 'track', 'role', 'blocked', 'progress', 'createdAt', 'lastSeen'])
+        && request.resource.data.keys().hasOnly(['login', 'username', 'name', 'track', 'role', 'blocked', 'progress', 'createdAt', 'lastSeen', 'invite'])
         && request.resource.data.login == request.auth.token.email
         && validUsername(request.resource.data.username)
         && claimedByMe(request.resource.data.username)
@@ -86,10 +91,15 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.lastSeen == request.time
         && ((isOwner() && request.resource.data.role == 'admin' && request.resource.data.track == 'staff')
-            || (!isOwner() && request.resource.data.role == 'student'
-                && request.resource.data.username != ownerUsername()
-                && (request.resource.data.track in tracks() || request.resource.data.track == 'staff')
-                && signupOpen(request.resource.data.track)));
+            || (!isOwner() && request.resource.data.username != ownerUsername()
+                && ((request.resource.data.role == 'student'
+                     && request.resource.data.track in tracks()
+                     && signupOpen(request.resource.data.track))
+                    // a teacher signs up through the admin's invite link: the code must match config/staffInvite
+                    || (request.resource.data.role == 'teacher'
+                        && request.resource.data.track == 'staff'
+                        && signupOpen('staff')
+                        && validInvite(request.resource.data.get('invite', ''))))));
 
       allow update: if
         // Admins change anything. Only the owner touches admins (including giving or removing the role).
@@ -153,6 +163,16 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid;
     }
 
+    // The teacher invite code (#/join/staff/<code>). Only admins read or change it; the users rule above
+    // compares a sign-up's code with it (rules can read it even though the person signing up cannot).
+    match /config/staffInvite {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['code'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 10 && request.resource.data.code.size() <= 64;
+    }
+
     match /config/site {
       allow read: if true;
       allow write: if isAdmin()
@@ -180,19 +200,22 @@ service cloud.firestore {
         && d.status in ['published', 'draft']
         && d.data is string && d.data.size() <= 100000
         && d.source is string && d.source.size() <= 100000
-        && d.authorName is string && d.authorName.size() <= 60;
+        && d.authorName is string && d.authorName.size() <= 60
+        // solved before published: a published question carries its author's accepted proof
+        && d.get('solution', '') is string && d.get('solution', '').size() <= 100000
+        && (d.status != 'published' || d.get('solution', '').size() > 2);
     }
     match /teacherQuestions/{id} {
       allow read: if resource.data.status == 'published' || isStaff();
       allow create: if isStaff()
-        && request.resource.data.keys().hasOnly(['authorUid', 'authorName', 'title', 'stage', 'status', 'data', 'source', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['authorUid', 'authorName', 'title', 'stage', 'status', 'data', 'source', 'solution', 'createdAt', 'updatedAt'])
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && validQuestion(request.resource.data);
       allow update: if isStaff()
         && (resource.data.authorUid == request.auth.uid || isAdmin())
-        && changed().hasOnly(['title', 'stage', 'status', 'data', 'source', 'updatedAt'])
+        && changed().hasOnly(['title', 'stage', 'status', 'data', 'source', 'solution', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
         && validQuestion(request.resource.data);
       allow delete: if isStaff() && (resource.data.authorUid == request.auth.uid || isAdmin());

@@ -5,7 +5,12 @@
 //   teacherQuestions/{id} { authorUid, authorName, title, stage, status: 'published' | 'draft',
 //                           data   (the problem as JSON, the format of PROBLEMS in data.js),
 //                           source (the words and the drawing as JSON, so the editor can reopen it),
+//                           solution (the author's accepted proof rows as JSON, '' if not solved yet),
 //                           createdAt, updatedAt }
+//
+// A question is published only after its author has solved it: the editor's "try it" player reports
+// a solved proof (markDraftSolved), the editor saves it with the question, and saveQuestion and
+// firestore.rules refuse status 'published' without a solution.
 //
 // Who may do what (firebase/firestore.rules enforces the same):
 //   everyone   reads published questions
@@ -56,8 +61,9 @@ const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : typeof ts === 'number' ?
 const fromDoc = (id, x) => ({
   id, authorUid: x.authorUid, authorName: x.authorName || '', title: x.title || '', stage: x.stage || 'L01',
   status: x.status === 'draft' ? 'draft' : 'published', data: x.data || '{}', source: x.source || '{}',
-  createdAt: ms(x.createdAt), updatedAt: ms(x.updatedAt),
+  solution: x.solution || '', createdAt: ms(x.createdAt), updatedAt: ms(x.updatedAt),
 });
+const parseRows = (s) => { try { const r = JSON.parse(s || 'null'); return Array.isArray(r) && r.length ? r : null; } catch { return null; } };
 
 const toCode = (e) => {
   if (e instanceof BankError) return e;
@@ -129,6 +135,37 @@ export function setTryDraft(stage, problem, back) {
   sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ stage, problem, back }));
 }
 
+// ---------------------------------------------------------------- solved before published
+// Solutions are kept per exact version of the problem (its JSON), so any change to the question
+// asks for a new solution.
+const SOLVED_KEY = 'lg.tqSolved';
+function problemSig(problem) {
+  const s = JSON.stringify(problem || null);
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return `${s.length}-${h.toString(36)}`;
+}
+const loadSolved = () => { try { return JSON.parse(localStorage.getItem(SOLVED_KEY)) || {}; } catch { return {}; } };
+
+// Called by the player when the author solves the "try it" draft.
+export function markDraftSolved(rows) {
+  let d = null;
+  try { d = JSON.parse(sessionStorage.getItem(DRAFT_KEY)); } catch { /* ignore */ }
+  if (!d || !d.problem || !Array.isArray(rows) || !rows.length) return;
+  const all = loadSolved();
+  all[problemSig(d.problem)] = { rows, at: Date.now() };
+  const keep = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 30);
+  try { localStorage.setItem(SOLVED_KEY, JSON.stringify(Object.fromEntries(keep))); } catch { /* ignore */ }
+}
+
+// The accepted proof rows for exactly this problem, or null. A saved question's own solution counts too.
+export function solvedFor(problem, saved) {
+  const hit = loadSolved()[problemSig(problem)];
+  if (hit) return hit.rows;
+  if (saved && saved.solution && saved.data === JSON.stringify(problem)) return parseRows(saved.solution);
+  return null;
+}
+
 // ---------------------------------------------------------------- writing
 
 const clean = (q) => ({
@@ -137,15 +174,18 @@ const clean = (q) => ({
   status: q.status === 'draft' ? 'draft' : 'published',
   data: JSON.stringify(q.data),
   source: JSON.stringify(q.source || {}),
+  solution: Array.isArray(q.solution) && q.solution.length ? JSON.stringify(q.solution) : '',
 });
 
 // Adds a question (no id) or updates one. Returns the id.
+// q.solution: the author's accepted proof rows for exactly q.data; required to publish.
 export async function saveQuestion(q) {
   await auth.authReady;
   const u = me();
   if (!u || !isStaff()) throw new BankError('denied');
   const fields = clean(q);
   if (!fields.title) throw new BankError('noTitle');
+  if (fields.status === 'published' && !fields.solution) throw new BankError('unsolved');
   if (fields.data.length > 100000 || fields.source.length > 100000) throw new BankError('tooBig');
   try {
     if (auth.mode === 'local') {
@@ -175,8 +215,9 @@ export async function saveQuestion(q) {
   } catch (e) { throw toCode(e); }
 }
 
+// From the bank page: publishing works only for a question saved with its solution.
 export async function setStatus(q, status) {
-  return saveQuestion({ ...q, status, data: JSON.parse(q.data), source: JSON.parse(q.source) });
+  return saveQuestion({ ...q, status, data: JSON.parse(q.data), source: JSON.parse(q.source), solution: parseRows(q.solution) });
 }
 
 export async function deleteQuestion(q) {

@@ -85,8 +85,9 @@ const S = {
     'join.chooseTitle': 'באיזה מסלול אתם לומדים?',
     'join.chooseLead': 'בדרך כלל המורה שולח קישור ישיר למסלול. אם לא קיבלתם קישור, בחרו כאן.',
     'join.unknown': 'הקישור לא מוכר. בחרו את המסלול שלכם:',
-    'join.staffTitle': 'הרשמת צוות',
-    'join.staffLead': 'למורים ולצוות האתר. אחרי ההרשמה המנהל מגדיר לכם תפקיד, ועד אז החשבון הוא חשבון תלמיד רגיל.',
+    'join.staffTitle': 'הרשמת מורים',
+    'join.staffLead': 'נרשמים כאן ומקבלים מיד חשבון מורה: רואים את התלמידים ואת ההתקדמות שלהם, ומוסיפים שאלות למאגר.',
+    'join.staffNoInvite': 'כדי להירשם כמורה צריך את קישור ההזמנה המלא מהמנהל. בדף הזה בלי קישור הזמנה רק בעל האתר יכול להירשם.',
     'join.staffClosed': 'הקישור הזה לבעל האתר ולצוות. הרשמת הצוות סגורה כרגע, ולכן רק בעל האתר, עם שם המשתמש שהאתר הגדיר לו, יכול להירשם כאן עכשיו.',
     'join.staffLocal': 'במצב הבדיקה המקומי שם המשתמש של המנהל הוא {u}.',
 
@@ -155,7 +156,10 @@ const S = {
     'adm.col.actions': 'פעולות',
     'adm.allRoles': 'כל התפקידים',
     'adm.roleOf': 'התפקיד של {name}',
-    'adm.staffNote': 'קישור הצוות סגור כברירת מחדל. פתחו אותו כשמזמינים מורה. מי שנרשם בו מקבל חשבון תלמיד, עד שתגדירו לו תפקיד בטבלה.',
+    'adm.staffNote': 'קישור הזמנה למורים: מי שנרשם בו מקבל מיד חשבון מורה. שלחו אותו רק למורים, ואל תפרסמו אותו בפומבי. "קוד חדש" מבטל את הקישור הקודם.',
+    'adm.staffNew': 'קוד חדש',
+    'adm.staffMake': 'יצירת קישור הזמנה',
+    'adm.staffNone': 'עוד אין קישור הזמנה.',
     'adm.teacherNote': 'כמורה, אתם רואים את כל התלמידים וההתקדמות שלהם, משנים מסלול וחוסמים. תפקידים, מחיקה והגדרות האתר בידי המנהל.',
     'adm.block': 'חסימה',
     'adm.unblock': 'ביטול חסימה',
@@ -182,7 +186,9 @@ const S = {
     'err.bad-email': 'כתבו כתובת אימייל תקינה.',
     'err.owner-email-later': 'בעל האתר נרשם בלי אימייל, ומוסיף אותו אחר כך בדף "החשבון שלי".',
     'err.email-taken': 'האימייל הזה כבר משמש חשבון אחר.',
-    'err.staff-closed': 'הקישור הזה לבעל האתר ולצוות, והרשמת הצוות סגורה כרגע. בעל האתר: בדקו ששם המשתמש הוא בדיוק השם שהאתר הגדיר.',
+    'err.staff-closed': 'הרשמת המורים סגורה כרגע. בקשו מהמנהל לפתוח אותה.',
+    'err.staff-need-invite': 'כדי להירשם כמורה צריך את קישור ההזמנה המלא מהמנהל.',
+    'err.bad-invite': 'קישור ההזמנה לא תקף (אולי המנהל יצר קוד חדש). בקשו מהמנהל את הקישור העדכני.',
     'err.rules-denied': 'השרת סירב לשמור את החשבון. כנראה כללי האבטחה ב-Firebase לא מעודכנים. פנו למנהל האתר.',
     'err.bad-name': 'כתבו שם, עד 60 תווים.',
     'err.weak-password': 'הסיסמה צריכה לפחות {n} תווים.',
@@ -276,8 +282,9 @@ const S = {
     'join.chooseTitle': 'Which track are you in?',
     'join.chooseLead': 'Usually your teacher sends a direct link to your track. If you did not get one, choose here.',
     'join.unknown': 'That link is not recognised. Choose your track:',
-    'join.staffTitle': 'Staff sign-up',
-    'join.staffLead': 'For teachers and site staff. After you sign up, the admin gives you a role; until then the account is a plain student account.',
+    'join.staffTitle': 'Teacher sign-up',
+    'join.staffLead': 'Sign up here and get a teacher account right away: you see the students and their progress, and you add questions to the bank.',
+    'join.staffNoInvite': 'To sign up as a teacher you need the full invite link from the admin. Without an invite link, only the site owner can sign up on this page.',
     'join.staffClosed': 'This link is for the site owner and staff. Staff sign-up is closed right now, so only the site owner, with the username the site set for them, can sign up here now.',
     'join.staffLocal': 'In local test mode the admin username is {u}.',
 
@@ -346,7 +353,10 @@ const S = {
     'adm.col.actions': 'Actions',
     'adm.allRoles': 'All roles',
     'adm.roleOf': 'Role of {name}',
-    'adm.staffNote': 'The staff link is closed by default. Open it when you invite a teacher. Whoever signs up through it gets a student account until you give them a role in the table.',
+    'adm.staffNote': 'Teacher invite link: whoever signs up through it gets a teacher account right away. Send it to teachers only and never post it publicly. "New code" cancels the previous link.',
+    'adm.staffNew': 'New code',
+    'adm.staffMake': 'Create an invite link',
+    'adm.staffNone': 'No invite link yet.',
     'adm.teacherNote': 'As a teacher you see all students and their progress, change tracks and block students. Roles, deleting accounts and site settings stay with the admin.',
     'adm.block': 'Block',
     'adm.unblock': 'Unblock',
@@ -373,7 +383,9 @@ const S = {
     'err.bad-email': 'Enter a valid e-mail address.',
     'err.owner-email-later': 'The site owner signs up without an e-mail and adds it later on the "My account" page.',
     'err.email-taken': 'That e-mail is already used by another account.',
-    'err.staff-closed': 'This link is for the site owner and staff, and staff sign-up is closed right now. Site owner: check that the username is exactly the one the site set.',
+    'err.staff-closed': 'Teacher sign-up is closed right now. Ask the admin to open it.',
+    'err.staff-need-invite': 'To sign up as a teacher you need the full invite link from the admin.',
+    'err.bad-invite': 'This invite link is not valid (the admin may have made a new code). Ask the admin for the current link.',
     'err.rules-denied': 'The server refused to save the account. The Firebase security rules are probably out of date. Tell the site admin.',
     'err.bad-name': 'Enter a name, up to 60 characters.',
     'err.weak-password': 'The password needs at least {n} characters.',
@@ -480,7 +492,7 @@ const PAGES = { login: pageLogin, join: pageJoin, me: pageMe, admin: pageAdmin }
 
 export function accountRoute(parts) {
   if (parts[0] === 'login') return { name: 'acct', page: 'login' };
-  if (parts[0] === 'join') return { name: 'acct', page: 'join', track: parts[1] ? parts[1].toLowerCase() : null };
+  if (parts[0] === 'join') return { name: 'acct', page: 'join', track: parts[1] ? parts[1].toLowerCase() : null, invite: parts[2] || null };
   if (parts[0] === 'account') return { name: 'acct', page: 'me' };
   if (parts[0] === 'admin') return { name: 'acct', page: 'admin' };
   return null;
@@ -734,12 +746,13 @@ async function pageJoin(host, route) {
       <p class="kicker">${tt('join.kicker')}</p>
       <h1 class="acct-h">${staff ? tt('join.staffTitle') : tt('join.title')}</h1>
       <p class="acct-lead">${staff ? tt('join.staffLead') : tt('join.lead')}</p>
-      ${staff && !open ? `<p class="acct-note">${ic('lock')}<span>${tt('join.staffClosed')}</span></p>` : ''}
+      ${staff && !route.invite ? `<p class="acct-note">${ic('lock')}<span>${tt('join.staffNoInvite')}</span></p>` : ''}
+      ${staff && route.invite && !open ? `<p class="acct-note">${ic('lock')}<span>${tt('err.staff-closed')}</span></p>` : ''}
       ${staff && auth.mode === 'local' ? `<p class="acct-hint">${esc(tt('join.staffLocal', { u: auth.ownerUsername() }))}</p>` : ''}
       <form class="acct-form" novalidate>
         ${field('name', tt('f.name'), { autocomplete: 'name', hint: tt('f.nameHint') })}
         ${field('username', tt('f.username'), { autocomplete: 'username', auto: true, hint: tt('f.usernameHint') })}
-        ${staff ? '' : field('email', tt('f.email'), { type: 'email', autocomplete: 'email', ltr: true, hint: tt('f.emailHint'), optional: true })}
+        ${staff && !route.invite ? '' : field('email', tt('f.email'), { type: 'email', autocomplete: 'email', ltr: true, hint: tt('f.emailHint'), optional: true })}
         ${field('password', tt('f.password'), { type: 'password', autocomplete: 'new-password', ltr: true, reveal: true, hint: tt('f.passwordHint', { n: auth.MIN_PASSWORD }) })}
         ${field('password2', tt('f.password2'), { type: 'password', autocomplete: 'new-password', ltr: true })}
         <p class="acct-note">${ic('info')}<span>${tt('join.keep')}</span></p>
@@ -756,7 +769,7 @@ async function pageJoin(host, route) {
     run(form, async () => {
       if (form.password.value !== form.password2.value) throw new auth.AuthError('mismatch');
       const user = await quietly(() => auth.signUp({
-        name: form.name.value, username: form.username.value, email: form.email ? form.email.value : '', password: form.password.value, track,
+        name: form.name.value, username: form.username.value, email: form.email ? form.email.value : '', password: form.password.value, track, invite: route.invite,
       }));
       sessionStorage.removeItem('lg.returnTo');
       location.hash = user.isStaff ? '#/admin' : '#/hs/geometry';
@@ -908,8 +921,10 @@ async function pageAdmin(host, route, alive) {
   }
   const isAdm = me.isAdmin;
 
-  const st = { users: null, open: null, q: '', track: 'all', role: 'all', expanded: null, armed: null, error: null };
+  const st = { users: null, open: null, invite: null, q: '', track: 'all', role: 'all', expanded: null, armed: null, error: null };
   let armTimer = null;
+  // The staff card's link carries the teacher invite code: #/join/staff/<code>.
+  const linkFor = (t) => (t === auth.STAFF ? `${joinUrl(t)}/${st.invite}` : joinUrl(t));
 
   host.innerHTML = `${banner()}
     <div class="acct-head">
@@ -966,11 +981,14 @@ async function pageAdmin(host, route, alive) {
       return `
       <div class="adm-link paper${t === auth.STAFF ? ' adm-link-staff' : ''}">
         <div class="adm-link-top">${trackPill(t)}<span class="muted">${st.users ? esc(tt('adm.nStudents', { n: c[t] || 0 })) : ''}</span></div>
-        <div class="adm-link-row">
-          <input class="acct-input adm-url" readonly dir="ltr" value="${esc(joinUrl(t))}" aria-label="${esc(tt('trackLong.' + t))}">
+        ${t !== auth.STAFF || st.invite ? `<div class="adm-link-row">
+          <input class="acct-input adm-url" readonly dir="ltr" value="${esc(linkFor(t))}" aria-label="${esc(tt('trackLong.' + t))}">
           <button type="button" class="tool-btn" data-copy="${t}">${ic('copy')} <span>${tt('adm.copy')}</span></button>
+        </div>` : `<p class="acct-hint">${tt('adm.staffNone')}</p>`}
+        <div class="adm-link-row">
+          <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${on ? 'checked' : ''} ${st.open && isAdm ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
+          ${t === auth.STAFF ? `<button type="button" class="tool-btn" data-newinvite="1">${ic('reset')} <span>${st.invite ? tt('adm.staffNew') : tt('adm.staffMake')}</span></button>` : ''}
         </div>
-        <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${on ? 'checked' : ''} ${st.open && isAdm ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
         ${t === auth.STAFF ? `<p class="acct-hint">${tt('adm.staffNote')}</p>` : ''}
       </div>`;
     }).join('');
@@ -1050,8 +1068,11 @@ async function pageAdmin(host, route, alive) {
   async function load() {
     st.error = null;
     drawTable();
-    const [users, open] = await Promise.allSettled([auth.admin.listUsers(), auth.getSignupOpen()]);
+    const [users, open, invite] = await Promise.allSettled([
+      auth.admin.listUsers(), auth.getSignupOpen(), isAdm ? auth.admin.getStaffInvite() : Promise.resolve(null),
+    ]);
     if (!alive()) return;
+    st.invite = invite.status === 'fulfilled' ? invite.value : null;
     if (users.status === 'fulfilled') st.users = users.value;
     else { st.users = null; st.error = tt('adm.loadFail') + ' ' + errText(users.reason); }
     st.open = open.status === 'fulfilled' ? open.value : null;
@@ -1068,7 +1089,7 @@ async function pageAdmin(host, route, alive) {
     const b = e.target.closest('button');
     if (!b || !host.contains(b)) return;
     if (b.dataset.copy) {
-      const url = joinUrl(b.dataset.copy);
+      const url = linkFor(b.dataset.copy);
       try { await navigator.clipboard.writeText(url); } catch {
         const inp = b.parentElement.querySelector('input'); inp.select(); document.execCommand('copy');
       }
@@ -1076,6 +1097,10 @@ async function pageAdmin(host, route, alive) {
       span.textContent = tt('adm.copied');
       b.classList.add('is-done');
       setTimeout(() => { span.textContent = tt('adm.copy'); b.classList.remove('is-done'); }, 1600);
+    } else if (b.dataset.newinvite) {
+      b.disabled = true;
+      await act(async () => { st.invite = await auth.admin.newStaffInvite(); });
+      drawLinks();
     } else if (b.dataset.expand) {
       st.expanded = st.expanded === b.dataset.expand ? null : b.dataset.expand;
       drawTable();

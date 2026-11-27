@@ -348,6 +348,11 @@ async function firebaseBackend() {
         return await load(c.user);
       } finally { busy = false; }
     },
+    async getStaffInvite() {
+      const s = await F.getDoc(F.doc(db, 'config', 'staffInvite'));
+      return s.exists() ? s.data().code || null : null;
+    },
+    setStaffInvite: (code) => F.setDoc(F.doc(db, 'config', 'staffInvite'), { code }),
     async signUp(email, username, pw, profile) {
       busy = true;
       try {
@@ -472,9 +477,11 @@ function localBackend() {
       if (Object.values(d.users).some((u) => u.login === email)) throw new AuthError('email-taken');
       const id = await usernameId(username);
       if (d.usernames[id]) throw new AuthError('username-taken');
-      const own = profile.role === 'admin';
       const t = profile.track;
-      if (t === STAFF ? !own && d.config.signupOpen?.staff !== true : d.config.signupOpen?.[t] === false) throw new AuthError('rules-denied');
+      const allowed = profile.role === 'admin' ? t === STAFF
+        : profile.role === 'teacher' ? t === STAFF && d.config.signupOpen?.staff === true && !!profile.invite && profile.invite === d.config.staffInvite?.code
+        : profile.role === 'student' && TRACKS.includes(t) && d.config.signupOpen?.[t] !== false;
+      if (!allowed) throw new AuthError('denied');
       const uid = 'local-' + Math.random().toString(36).slice(2, 10);
       d.usernames[id] = { uid, username };
       d.users[uid] = { ...profile, progress: {}, login: email, username, pw: await hash(pw), createdAt: Date.now(), lastSeen: Date.now() };
@@ -516,7 +523,9 @@ function localBackend() {
     async saveProgress(uid, all) { patchUser(uid, { progress: all, lastSeen: Date.now() }); },
     async touch(uid) { patchUser(uid, { lastSeen: Date.now() }); },
     async setName(uid, name) { patchUser(uid, { name }); },
-    async getConfig() { return load().config; },
+    async getConfig() { const { staffInvite, ...rest } = load().config; return rest; },
+    async getStaffInvite() { guard(); return load().config.staffInvite?.code || null; },
+    async setStaffInvite(code) { guard(); const d = load(); d.config.staffInvite = { code }; save(d); },
     async setSignupOpen(track, open) { guard(); const d = load(); d.config.signupOpen = { ...(d.config.signupOpen || {}), [track]: open }; save(d); },
     async getToolConfig() { return load().config.tools || {}; },
     async setToolConfig(data) { guard(); const d = load(); d.config.tools = data; save(d); },
@@ -584,7 +593,9 @@ export async function getToolConfig() {
 }
 
 // email is optional. When given, the account logs in with it too and "forgot password" works for it.
-export async function signUp({ username, email, password, name, track }) {
+// invite: the code from the admin's teacher invite link (#/join/staff/<code>). With a valid code the account
+// starts as a teacher; firestore.rules check the code against config/staffInvite, which only admins can read.
+export async function signUp({ username, email, password, name, track, invite }) {
   const uname = normUsername(username);
   name = String(name || '').trim().replace(/\s+/g, ' ');
   email = normEmail(email);
@@ -599,16 +610,22 @@ export async function signUp({ username, email, password, name, track }) {
   if (asOwner && b.ownerClaimed()) throw new AuthError('username-taken');
   if (asOwner && track !== STAFF) throw new AuthError('owner-staff');
   if (asOwner && email) throw new AuthError('owner-email-later');
+  invite = String(invite || '').trim();
+  const asTeacher = track === STAFF && !asOwner;
+  if (asTeacher && !invite) throw new AuthError('staff-need-invite');
   if (!asOwner && !(await getSignupOpen())[track]) throw new AuthError(track === STAFF ? 'staff-closed' : 'signup-closed');
   try { if (await b.usernameTaken(uname)) throw new AuthError('username-taken'); } catch (e) { if (e instanceof AuthError) throw e; }
   const addr = email || await loginEmail(uname);
-  const profile = { name, track, role: asOwner ? 'admin' : 'student', blocked: false, progress: '{}' };
+  const profile = { name, track, role: asOwner ? 'admin' : asTeacher ? 'teacher' : 'student', blocked: false, progress: '{}' };
+  if (asTeacher) profile.invite = invite;
   let p;
   try { p = await b.signUp(addr, uname, password, profile); } catch (e) {
     const err = toAuthError(e);
     if (err.code === 'email-taken' && !email) throw new AuthError('username-taken');
-    // A Firestore refusal here means the page and firestore.rules disagree: say so instead of hiding it.
-    throw err.code === 'denied' ? new AuthError('rules-denied') : err;
+    // A Firestore refusal: for a teacher invite, the code is wrong or was replaced; otherwise the page and
+    // firestore.rules disagree, so say so instead of hiding it.
+    if (err.code === 'denied') throw new AuthError(asTeacher ? 'bad-invite' : 'rules-denied');
+    throw err;
   }
   await handleProfile(p);
   if (!user) throw new AuthError(takeNotice() || 'unknown');
@@ -732,4 +749,13 @@ export const admin = {
   remove: async (uid) => { const b = await needAdmin(); return call(() => b.deleteUser(uid)); },
   setSignupOpen: async (track, open) => { const b = await needAdmin(); return call(() => b.setSignupOpen(track, open)); },
   setToolConfig: async (data) => { const b = await needAdmin(); return call(() => b.setToolConfig(data)); },
+  // The teacher invite code (admin only). newStaffInvite() replaces it, so older invite links stop working.
+  getStaffInvite: async () => { const b = await needAdmin(); return call(() => b.getStaffInvite()); },
+  newStaffInvite: async () => {
+    const b = await needAdmin();
+    const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    const code = [...crypto.getRandomValues(new Uint8Array(14))].map((x) => abc[x % abc.length]).join('');
+    await call(() => b.setStaffInvite(code));
+    return code;
+  },
 };
