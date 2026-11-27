@@ -106,6 +106,8 @@ function missingText(m) {
 function message(e, row, r) {
   switch (e.key) {
     case 'missing': {
+      // Lean may report nothing it can name (open points left out): the reason doesn't lead to the claim.
+      if (!e.missing || !e.missing.length) return { key: 'reasonNoFit', vars: { rid: row.reason } };
       const m = e.missing.map(missingText).join(', ');
       return { key: e.missing.length === 1 ? 'critMissing1' : 'critMissingN', vars: { rid: row.reason, m } };
     }
