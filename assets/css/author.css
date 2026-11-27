@@ -1,0 +1,217 @@
+/* Teacher question editor (#/author) and the teacher question bank (#/bank). Loaded by author.js.
+   Uses the site's tokens (styles.css) and logical properties, so RTL and LTR both work. */
+
+.au { padding-block: clamp(28px, 5vw, 56px) 72px; }
+.au-wrap { display: grid; gap: 22px; }
+.au-head { display: grid; gap: 6px; justify-items: start; }
+.au-head .acct-h { margin-bottom: 4px; }
+.au-head .kicker a { color: inherit; text-decoration: none; }
+.au-head .kicker a:hover { text-decoration: underline; }
+.au-head-actions { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+.au-msg { padding: 10px 14px; border-radius: 12px; background: var(--paper-2); color: var(--ink-2); font-size: .94rem; }
+.au-msg.is-err { background: var(--err-soft); color: var(--err); }
+.au-msg.is-ok { background: var(--ok-soft); color: var(--ok); }
+.linkish { background: none; border: 0; padding: 0; color: var(--pen); text-decoration: underline; text-underline-offset: .18em; cursor: pointer; font: inherit; font-size: .9rem; }
+.linkish:hover { color: var(--pen-2); }
+.au .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.au .ic { display: inline-flex; width: 1.05em; height: 1.05em; flex: none; }
+.au .ic svg { width: 100%; height: 100%; }
+
+/* ---------------------------------------------------------------- steps */
+
+.au-steps { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: .9rem; font-weight: 600; color: var(--muted); }
+.au-steps li { display: inline-flex; align-items: center; gap: 8px; }
+.au-stepn { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-2); font-size: .82rem; background: var(--card); }
+.au-steps li.is-on { color: var(--ink); }
+.au-steps li.is-on .au-stepn { background: var(--pen); border-color: var(--pen); color: var(--pen-ink); }
+.au-steps li.is-done .au-stepn { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.au-steps li:not(:last-child)::after { content: ''; width: 26px; height: 1.5px; background: var(--line-2); margin-inline-start: 10px; }
+.au-restored { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 14px; border-radius: 12px; font-size: .9rem;
+  background: color-mix(in srgb, var(--hl) 20%, var(--card)); border: 1px solid color-mix(in srgb, var(--hl) 55%, transparent); }
+
+/* ---------------------------------------------------------------- step 1: words and drawing */
+
+.au-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; }
+.au-text, .au-draw { padding: clamp(16px, 2.4vw, 24px); display: grid; gap: 12px; }
+.au-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.au-sec-h .acct-h2 { margin: 0; }
+.au-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.au-chips-l { font-size: .74rem; font-weight: 700; color: var(--muted); letter-spacing: .04em; min-width: 52px; }
+.au-chips .qchip { height: 30px; padding: 0 10px; font-size: .84rem; }
+.au-chips .symkey { width: 34px; height: 34px; }
+.au-textarea {
+  width: 100%; min-height: 168px; resize: vertical; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line-2);
+  background: var(--paper); color: var(--ink); font: inherit; font-size: 1.02rem; line-height: 1.75;
+  background-image: linear-gradient(transparent calc(1.75em - 1px), var(--grid-card) 1px); background-size: 100% 1.75em; background-attachment: local;
+}
+.au-textarea:focus, .au .acct-input:focus { outline: none; border-color: var(--pen); box-shadow: 0 0 0 4px var(--pen-soft); }
+.au-live { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+.au-pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 999px; font-size: .84rem; font-weight: 600;
+  background: var(--paper-2); color: var(--ink-2); }
+.au-pill.is-ok { background: var(--ok-soft); color: var(--ok); }
+.au-pill.is-warn { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+.au-pill.is-soft { background: var(--pen-soft); color: var(--pen); }
+
+.au-dtools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.au-tool { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--line-2);
+  background: var(--card); color: var(--ink-2); cursor: pointer; font-size: .84rem; font-weight: 600; transition: background-color .15s, color .15s, border-color .15s; }
+.au-tool:hover { border-color: var(--pen); color: var(--pen); }
+.au-tool[aria-pressed="true"] { background: var(--pen); border-color: var(--pen); color: var(--pen-ink); }
+.au-tool.armed { background: var(--err-soft); border-color: var(--err); color: var(--err); }
+.au-tsep { width: 1px; height: 24px; background: var(--line-2); margin-inline: 4px; }
+.au-canvas { position: relative; }
+.au-svg { width: 100%; height: auto; display: block; border-radius: 14px; border: 1px solid var(--line-2); background: var(--paper); touch-action: none; user-select: none; -webkit-user-select: none; }
+.au-svg[data-tool="point"], .au-svg[data-tool="seg"], .au-svg[data-tool="circ"] { cursor: crosshair; }
+.au-svg[data-tool="del"] { cursor: not-allowed; }
+.au-gridline { fill: none; stroke: var(--grid-card); stroke-width: 1; }
+.au-svg.show-grid .au-gridline { stroke: color-mix(in srgb, var(--pen) 22%, transparent); }
+.au-s { stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; }
+.au-s.is-sel { stroke: var(--pen); stroke-width: 4.5; }
+.au-c { fill: none; stroke: var(--ink); stroke-width: 2; }
+.au-c.is-sel { stroke: var(--pen); stroke-width: 4; }
+.au-p circle { fill: var(--card); stroke: var(--ink); stroke-width: 2.2; }
+.au-p.is-on circle { fill: var(--pen); stroke: var(--pen); }
+.au-p.is-fixed circle { fill: var(--goal); stroke: var(--goal); }
+.au-p.is-sel circle { stroke: var(--pen); stroke-width: 4; fill: var(--hl); }
+.au-p text { font-family: var(--font-math); font-style: italic; font-weight: 600; font-size: 19px; fill: var(--ink); text-anchor: middle; dominant-baseline: central;
+  paint-order: stroke; stroke: var(--paper); stroke-width: 5px; stroke-linejoin: round; pointer-events: none; }
+.au-p text.au-selno { font-family: var(--font-ui); font-style: normal; font-size: 11px; fill: var(--pen); }
+.au-ghostline { fill: none; stroke: var(--pen); stroke-width: 2; stroke-dasharray: 6 5; }
+.au-snap { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.au-snap.on-pt { stroke: var(--pen); stroke-width: 2.5; }
+.au-snap.on-obj { stroke: var(--ok); stroke-width: 2.5; }
+.au-snaplabel { font-size: 12px; font-weight: 600; fill: var(--ok); paint-order: stroke; stroke: var(--paper); stroke-width: 4px; }
+.au-hover { stroke: var(--pen); stroke-width: 7; stroke-opacity: .18; stroke-linecap: round; }
+.au-rename { position: absolute; z-index: 5; width: 170px; padding: 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line-2); box-shadow: var(--shadow-lg); font-size: .82rem; }
+.au-rename label { display: grid; gap: 6px; }
+.au-rename input { height: 36px; width: 100%; padding: 0 10px; border-radius: 8px; border: 1.5px solid var(--pen); background: var(--paper); color: var(--ink); font: inherit; font-size: 1.1rem; text-transform: uppercase; }
+.au-rename-err { color: var(--err); display: block; margin-top: 4px; }
+.au-dhint { margin: 0; }
+.au-selbar { display: grid; gap: 10px; padding: 12px; border-radius: 14px; background: var(--pen-soft); border: 1px solid color-mix(in srgb, var(--pen) 30%, transparent); }
+.au-selbar[hidden] { display: none; }
+.au-selhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.au-selwhat { font-family: var(--font-math); font-style: italic; font-weight: 600; font-size: 1.05rem; }
+.au-seg2 { display: inline-flex; gap: 4px; }
+.au-seg2 .qchip { height: 28px; padding: 0 10px; font-size: .8rem; }
+.au-selhead .linkish { margin-inline-start: auto; }
+.au-rels { display: flex; flex-wrap: wrap; gap: 8px; }
+.au-rel { height: 38px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--pen); background: var(--card); color: var(--pen); cursor: pointer;
+  font-family: var(--font-math); font-size: 1.02rem; font-weight: 600; }
+.au-rel:hover { background: var(--pen); color: var(--pen-ink); }
+
+.au-foot { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
+.au-foot .au-msg { margin-inline-end: auto; }
+
+/* ---------------------------------------------------------------- step 2: review */
+
+.au-rvlead { max-width: 75ch; }
+.au-rv { display: grid; grid-template-columns: minmax(260px, 4fr) minmax(0, 8fr); gap: 20px; align-items: start; }
+.au-rvfig { position: sticky; top: 84px; }
+.au-figcard { padding: 14px; display: grid; gap: 10px; justify-items: stretch; }
+.au-figcard .diagram-card { border-radius: 12px; overflow: hidden; background: var(--card); }
+.au-figcard .diagram-card svg { width: 100%; height: auto; }
+.au-wide { justify-content: center; }
+.au-rvmain { display: grid; gap: 16px; min-width: 0; }
+.au-status { padding: 14px 18px; display: grid; gap: 8px; border-inline-start: 5px solid var(--line-2); }
+.au-status.is-err { border-inline-start-color: var(--err); }
+.au-status.is-ok { border-inline-start-color: var(--ok); }
+.au-status.is-pending { border-inline-start-color: var(--pen); }
+.au-status-h { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; font-family: var(--font-ui); }
+.au-status.is-err .au-status-h { color: var(--err); }
+.au-status.is-ok .au-status-h { color: var(--ok); }
+.au-status-h2 { font-size: .86rem; color: var(--amber); font-family: var(--font-ui); margin-top: 4px; }
+.au-issues { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: .93rem; }
+.au-issues li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.au-issues li > .ic { transform: translateY(2px); }
+.au-issues li > span { flex: 1 1 260px; }
+.au-issues li.is-err > .ic { color: var(--err); }
+.au-issues li.is-warn > .ic { color: var(--amber); }
+.au-sec { padding: clamp(16px, 2.2vw, 22px); display: grid; gap: 12px; border-inline-start: 5px solid transparent; transition: border-color .2s; }
+.au-sec.is-checked { border-inline-start-color: var(--ok); }
+.au-check { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line-2); cursor: pointer; font-size: .86rem; font-weight: 700; color: var(--ink-2); background: var(--card); }
+.au-check input { width: 18px; height: 18px; accent-color: var(--ok); margin: 0; }
+.au-sec.is-checked .au-check { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.au-field { display: grid; gap: 6px; font-size: .9rem; font-weight: 600; color: var(--ink-2); }
+.au-field .acct-input { font-weight: 400; color: var(--ink); }
+.au-inline { grid-auto-flow: column; align-items: center; gap: 10px; }
+.au-inline .acct-input { height: 40px; width: auto; }
+.au .au-ta { height: auto; min-height: 64px; padding: 10px 14px; resize: vertical; line-height: 1.6; }
+.au-preview { padding: 10px 14px; border-radius: 12px; background: var(--paper-2); font-size: .98rem; }
+.au-h3 { font-size: .88rem; font-weight: 700; color: var(--ink-2); font-family: var(--font-ui); margin-top: 4px; }
+.au-h3 small { font-weight: 500; }
+.au-ptchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.au-ptchip { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--paper-2); font-size: 1rem; }
+.au-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.au-facts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.au-facts li.is-err { color: var(--err); }
+.au-facts li.is-ok > .ic { color: var(--ok); }
+.au code, .au-facts code { font-family: var(--font-mono); font-size: .78rem; padding: 2px 7px; border-radius: 6px; background: var(--paper-2); color: var(--ink-2); }
+
+.au-givens { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.au-given { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+.au-given.is-bad { border-color: var(--err); background: var(--err-soft); }
+.au-gn { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--paper-2); font-weight: 700; font-size: .86rem; color: var(--ink-2); margin-top: 6px; }
+.au-gmain { display: grid; gap: 6px; min-width: 0; }
+.au-grow { display: flex; align-items: center; gap: 8px; }
+.au-claim { font-family: var(--font-math); font-size: 1.08rem; height: 42px; }
+.au-grow .au-claim { flex: 1 1 auto; min-width: 0; }
+.au-hold { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: .8rem; font-weight: 700; padding: 0 9px; height: 28px; border-radius: 999px; }
+.au-hold.is-ok { color: var(--ok); background: var(--ok-soft); }
+.au-hold.is-err { color: var(--err); background: var(--err-soft); }
+.au-hold.is-soft { color: var(--muted); background: var(--paper-2); }
+.au-x { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--muted); cursor: pointer; flex: none; }
+.au-x:hover { color: var(--err); border-color: var(--err); background: var(--err-soft); }
+.au-gerr { color: var(--err); font-size: .88rem; }
+.au-gerr[hidden] { display: none; }
+.au-gmeta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .84rem; color: var(--ink-2); }
+.au-addrow { display: flex; gap: 8px; align-items: center; }
+.au-addrow .au-claim { flex: 1 1 auto; }
+.au-asklhs { font-size: 1.15rem; white-space: nowrap; }
+.au-value { max-width: 180px; }
+.au-marks { display: flex; flex-wrap: wrap; gap: 8px; }
+.au-mark { height: auto; min-height: 36px; }
+.au-hints { margin: 0; padding-inline-start: 22px; display: grid; gap: 8px; }
+.au-hints li { display: flex; gap: 8px; align-items: start; }
+.au-hints .au-ta { flex: 1 1 auto; }
+.au-savebar { padding: 14px 18px; position: sticky; bottom: 12px; z-index: 4; box-shadow: var(--shadow-lg); }
+.au-grow-1 { flex: 1 1 auto; }
+.au .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ---------------------------------------------------------------- step 3 */
+
+.au-done { display: grid; justify-items: center; text-align: center; gap: 10px; width: min(680px, 100%); margin-inline: auto; }
+.au-done-stamp { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-size: 1.8rem; border: 2px solid var(--ok); transform: rotate(-8deg); }
+.au-done-actions { justify-content: center; }
+
+/* ---------------------------------------------------------------- the bank */
+
+.au-bank-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.au-bank-bar .adm-search { flex: 1 1 260px; }
+.au-count { margin-inline-start: auto; font-size: .9rem; }
+.au-bank { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+.au-empty { padding: 28px; display: grid; justify-items: center; gap: 14px; text-align: center; grid-column: 1 / -1; }
+.au-card { display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+.au-card-fig { border-bottom: 1px solid var(--line); background: var(--card); min-height: 120px; }
+.au-card-fig svg { width: 100%; height: auto; }
+.au-card-body { padding: 14px 16px 16px; display: grid; gap: 6px; align-content: start; }
+.au-card-stage { font-size: .78rem; font-weight: 700; color: var(--pen); letter-spacing: .03em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.au-draft { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
+.au-card-title { font-family: var(--font-display); font-weight: 900; font-size: 1.2rem; line-height: 1.25; }
+.au-card-by { font-size: .84rem; }
+.au-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.au-card-actions .tool-btn { height: 40px; }
+
+/* ---------------------------------------------------------------- narrow screens */
+
+@media (max-width: 980px) {
+  .au-grid, .au-rv { grid-template-columns: minmax(0, 1fr); }
+  .au-rvfig { position: static; }
+  .au-figcard { max-width: 520px; }
+}
+@media (max-width: 560px) {
+  .au-tool span { display: none; }
+  .au-tool { padding: 0 9px; }
+  .au-grow { flex-wrap: wrap; }
+  .au-savebar { position: static; }
+  .au-inline { grid-auto-flow: row; }
+}

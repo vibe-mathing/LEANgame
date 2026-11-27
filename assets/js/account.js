@@ -131,6 +131,10 @@ const S = {
     'adm.denied': 'הדף הזה למנהלים בלבד.',
     'adm.links': 'קישורי הרשמה',
     'adm.linksLead': 'שלחו לכל קבוצה את הקישור של המסלול שלה. מי שנרשם בקישור משויך למסלול שלו.',
+    'adm.qbank': 'מאגר שאלות מורים',
+    'adm.qbankLead': 'מוסיפים שאלה במילים ובשרטוט, והתוכנה ממלאת את כל הנתונים לבדיקה לפני השמירה.',
+    'adm.qbankOpen': 'למאגר',
+    'adm.qbankNew': 'שאלה חדשה',
     'adm.copy': 'העתקה',
     'adm.copied': 'הועתק',
     'adm.open': 'פתוחה',
@@ -318,6 +322,10 @@ const S = {
     'adm.denied': 'This page is for admins only.',
     'adm.links': 'Sign-up links',
     'adm.linksLead': 'Send each group the link for its track. Whoever signs up through a link joins that track.',
+    'adm.qbank': 'Teacher question bank',
+    'adm.qbankLead': 'Add a question in words and a drawing; the editor fills in all the data for you to check before saving.',
+    'adm.qbankOpen': 'Open the bank',
+    'adm.qbankNew': 'New question',
     'adm.copy': 'Copy',
     'adm.copied': 'Copied',
     'adm.open': 'Open',
@@ -913,6 +921,11 @@ async function pageAdmin(host, route, alive) {
       <h2 class="acct-h2">${tt('adm.links')}</h2>
       <p class="acct-hint">${tt('adm.linksLead')}</p>
       <div class="adm-links" id="admLinks"><div class="acct-wait"></div></div>
+    </section>
+    <section class="adm-sec" id="admQbank">
+      <h2 class="acct-h2">${tt('adm.qbank')}</h2>
+      <p class="acct-hint">${tt('adm.qbankLead')}</p>
+      <div class="acct-actions"><a class="btn btn-primary btn-small" href="#/author">${tt('adm.qbankNew')}</a><a class="btn btn-ghost btn-small" href="#/bank">${tt('adm.qbankOpen')} ${ic('arrow', 'dir')}</a></div>
     </section>
     ${isAdm ? '<section class="adm-sec" id="admTools"></section>' : ''}
     <section class="adm-sec">

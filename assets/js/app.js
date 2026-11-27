@@ -28,9 +28,10 @@ for (const s of STAGES) for (const p of PROBLEMS[s.id] || []) prepareProblem(p, 
 const progress = () => store.get('progress', {});
 const pkey = (stage, n) => `${stage}-${n}`;
 const isSolved = (stage, n) => !!progress()[pkey(stage, n)]?.solved;
-function saveProgress(stage, n, data) {
+// `key`: a teacher bank question keeps its progress under "tq-<id>", apart from the stages.
+function saveProgress(stage, n, data, key = pkey(stage, n)) {
   const all = progress();
-  all[pkey(stage, n)] = { ...(all[pkey(stage, n)] || {}), ...data };
+  all[key] = { ...(all[key] || {}), ...data };
   store.set('progress', all);
   syncProgress(all);
 }
@@ -112,6 +113,9 @@ function currentRoute() {
     }
     return { name: 'topic' };
   }
+  // teacher question bank: #/bank, #/author[/<id>] (author.js) and #/tq/<id> to solve one (qbank.js)
+  if (parts[0] === 'tq' && parts[1]) return { name: 'tq', id: decodeURIComponent(parts[1]) };
+  if (parts[0] === 'bank' || parts[0] === 'author') return { name: 'author', parts };
   const acct = accountRoute(parts);
   if (acct) return acct;
   return { name: 'home' };
@@ -125,6 +129,8 @@ function render() {
   if (route.name === 'home') { app.innerHTML = viewHome(); after = bindHome; document.title = 'LEANgame · ' + t('brand.tag'); }
   else if (route.name === 'topic') { app.innerHTML = viewTopic(); after = bindTopic; document.title = `${t('nav.geometry')} · LEANgame`; }
   else if (route.name === 'acct') { app.innerHTML = viewAccount(route); after = (root) => bindAccount(root, route); document.title = accountTitle(route); }
+  else if (route.name === 'author') { app.innerHTML = ''; after = (root) => mountAuthor(root, route); } // teacher question bank
+  else if (route.name === 'tq') { app.innerHTML = '<div class="wrap" style="padding-block:48px"><div class="acct-wait" aria-busy="true"></div></div>'; after = (root) => mountBankProblem(root, route); }
   else { app.innerHTML = viewProblem(route); after = (root) => bindProblem(root, route); document.title = `${L(route.problem.title)} · LEANgame`; }
   cleanup = after ? after(app) || null : null;
   if (pendingScroll) {
@@ -138,6 +144,48 @@ function render() {
 }
 
 window.addEventListener('hashchange', render);
+
+// ---------------------------------------------------------------- teacher question bank
+// The editor and the bank page live in author.js; a bank question plays in the normal problem
+// view, in "bank mode": no pager, breadcrumbs back to the bank, progress under "tq-<id>".
+
+function mountAuthor(root, route) {
+  let alive = true;
+  let off = null;
+  import('./author.js')
+    .then((m) => { if (alive) off = m.bindAuthor(root, route.parts); })
+    .catch((e) => console.error('[bank] editor not loaded', e));
+  return () => { alive = false; if (off) off(); };
+}
+
+function mountBankProblem(root, route) {
+  let alive = true;
+  let off = null;
+  import('./qbank.js').then(async (m) => {
+    const r = await m.loadPlayable(route.id);
+    if (!alive) return;
+    if (!r) {
+      root.innerHTML = `<div class="wrap" style="padding-block:48px"><p>${esc(m.bankWord('notFound'))}</p><p style="margin-top:16px"><a class="btn btn-ghost" href="#/bank">${esc(m.bankWord('toBank'))}</a></p></div>`;
+      return;
+    }
+    prepareProblem(r.problem, r.stage);
+    const draft = !!r.meta.draft;
+    const bank = {
+      id: r.meta.id, draft,
+      backHref: draft ? r.meta.back : '#/bank',
+      backLabel: draft ? m.bankWord('back') : m.bankWord('crumb'),
+      badge: draft ? m.bankWord('preview') : m.bankWord('badge'),
+    };
+    const pr = { name: 'problem', stage: r.stage, n: r.problem.n, problem: r.problem, bank };
+    root.innerHTML = viewProblem(pr);
+    document.title = `${r.problem.titleRaw || ''} · LEANgame`;
+    off = bindProblem(root, pr) || null;
+  }).catch((e) => {
+    console.error('[bank]', e);
+    if (alive) root.innerHTML = `<div class="wrap" style="padding-block:48px"><p>${esc(String(e && e.code ? e.code : e))}</p></div>`;
+  });
+  return () => { alive = false; if (off) off(); };
+}
 
 // The level map shows which tools each stage opens; redraw it when that changes
 // (tool settings arriving, logging in, an admin viewing as a student).
@@ -232,6 +280,7 @@ function viewHome() {
       </div>
     </div>
   </section>
+
   ${appStrip()}
 
   <section class="section" id="how">
@@ -526,8 +575,8 @@ function bindTopic(root) {
 
 // ---------------------------------------------------------------- problem
 
-function viewProblem({ stage, n, problem: p }) {
-  const list = PROBLEMS[stage];
+function viewProblem({ stage, n, problem: p, bank }) {
+  const list = bank ? [p] : PROBLEMS[stage]; // a teacher bank question stands alone
   const sNum = stageNumber(stage);
   const st = STAGES.find((s) => s.id === stage);
   const prev = list.find((x) => x.n === n - 1);
@@ -538,8 +587,9 @@ function viewProblem({ stage, n, problem: p }) {
   <div class="pp">
     <div class="wrap">
       <div class="pp-bar">
-        <nav class="crumbs" aria-label="breadcrumbs"><a href="#/">${t('nav.home')}</a><span>/</span><a href="#/hs/geometry">${t('nav.geometry')}</a><span>/</span><span>${t('tp.stage', { n: sNum })} · ${L(st.name)}</span></nav>
-        <div class="pager">
+        <nav class="crumbs" aria-label="breadcrumbs"><a href="#/">${t('nav.home')}</a><span>/</span>${bank ? `<a href="${esc(bank.backHref)}">${esc(bank.backLabel)}</a>` : `<a href="#/hs/geometry">${t('nav.geometry')}</a>`}<span>/</span><span>${t('tp.stage', { n: sNum })} · ${L(st.name)}</span></nav>
+        ${bank ? `<span class="badge">${esc(bank.badge)}</span>` : ''}
+        <div class="pager"${bank ? ' hidden' : ''}>
           ${prev ? `<a class="pager-btn" href="#/hs/geometry/${stage}/${prev.n}" aria-label="${t('pp.prev')}">${icon('chevron', 'dir back')}</a>` : '<span class="pager-btn" aria-hidden="true"></span>'}
           <span>${t('pp.problemOf', { n, m: list.length })}</span>
           ${next ? `<a class="pager-btn" href="#/hs/geometry/${stage}/${next.n}" aria-label="${t('pp.next')}">${icon('chevron', 'dir')}</a>` : '<span class="pager-btn" aria-hidden="true"></span>'}
@@ -675,12 +725,16 @@ function exactReason(query, allowed) {
     && [REASONS[id].short.he, REASONS[id].short.en, REASONS[id].name.he, REASONS[id].name.en].some((nm) => squash(nm) === q));
 }
 
-function bindProblem(root, { stage, n, problem: p }) {
+function bindProblem(root, { stage, n, problem: p, bank }) {
   // A theorem the student proves in its own problem stays out of their toolbox until then (tools.js).
   p.allowedAll = p.allowedAll || p.allowed;
   const earnReasons = () => { p.allowed = p.allowedAll.filter((id) => reasonEarned(id, isSolved)); };
   earnReasons();
-  const saved = progress()[pkey(stage, n)];
+  // teacher question bank: progress under "tq-<id>"; the editor's preview saves nothing
+  const pk = bank ? `tq-${bank.id}` : pkey(stage, n);
+  const solvedHere = () => !!progress()[pk]?.solved;
+  const save = (data) => { if (!(bank && bank.draft)) saveProgress(stage, n, data, pk); };
+  const saved = bank && bank.draft ? null : progress()[pk];
   const state = {
     rows: (saved && saved.rows) || [],
     reason: null,
@@ -749,7 +803,7 @@ function bindProblem(root, { stage, n, problem: p }) {
   }
 
   function persist() {
-    saveProgress(stage, n, { rows: state.rows, solved: result.solvedAt >= 0 || isSolved(stage, n) });
+    save({ rows: state.rows, solved: result.solvedAt >= 0 || solvedHere() });
   }
 
   function renderRows() {
@@ -788,21 +842,21 @@ function bindProblem(root, { stage, n, problem: p }) {
     box.hidden = !solved;
     $('#composer', root).classList.toggle('is-dim', solved);
     if (!solved) { box.innerHTML = ''; wasSolved = false; return; }
-    if (!wasSolved) { toolNews = toolsOpenedNow(); theoremNews = !!p.proves && !isSolved(stage, n) && !isAdmin(); syncTools(); }
+    if (!wasSolved) { toolNews = toolsOpenedNow(); theoremNews = !!p.proves && !solvedHere() && !isAdmin(); syncTools(); }
     const all = problemList();
     const idx = all.findIndex((x) => x.stage === stage && x.n === n);
-    const nxt = all[idx + 1];
+    const nxt = bank ? null : all[idx + 1];
     box.innerHTML = `
       <div class="stamp${wasSolved ? ' on still' : ''}"><span>${t('pp.solved.stamp')}</span></div>
       <div class="solved-copy">
         <h3>${t('pp.solved.t')}</h3>
         <p>${t('pp.solved.p')}</p>
-        ${nxt ? '' : `<p class="muted">${t('pp.solved.last')}</p>`}
+        ${nxt || bank ? '' : `<p class="muted">${t('pp.solved.last')}</p>`}
         ${theoremNews ? `<p class="tool-news">${icon('spark')}<span><b>${t('tool.theoremNew', { name: reasonShort(p.proves) })}</b> ${t('tool.theoremNewP')}</span></p>` : ''}
         ${toolNews.map((id) => `<p class="tool-news">${icon(TOOLS[id].icon)}<span><b>${t('tool.new', { name: t('tool.' + id) })}</b> ${t('tool.' + id + '.new')}</span></p>`).join('')}
         <div class="cta-row">
           ${nxt ? `<a class="btn btn-primary" href="#/hs/geometry/${nxt.stage}/${nxt.n}">${t('pp.solved.next')} ${icon('arrow', 'dir')}</a>` : ''}
-          <a class="btn btn-ghost" href="#/hs/geometry">${icon('map')} ${t('pp.solved.map')}</a>
+          ${bank ? `<a class="btn btn-ghost" href="${esc(bank.backHref)}">${icon('map')} ${esc(bank.backLabel)}</a>` : `<a class="btn btn-ghost" href="#/hs/geometry">${icon('map')} ${t('pp.solved.map')}</a>`}
         </div>
         <details class="lean-peek">
           <summary>${icon('code')} ${t('pp.solved.code')}</summary>
@@ -1139,7 +1193,7 @@ function bindProblem(root, { stage, n, problem: p }) {
   // Seconds until the hint opens: first the student tries, then each hint costs a longer wait.
   const hintLeft = () => hintTryLeft({
     ownRows: state.rows.filter((r) => !r.filled).length,
-    earned: state.hints > 0 || isSolved(stage, n),
+    earned: state.hints > 0 || solvedHere(),
     since: openedAt,
   });
 
@@ -1175,7 +1229,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     hintWaiting = false;
     if (!ok) return;
     state.hints = Math.min(state.hints + 1, p.hints.length);
-    saveProgress(stage, n, { hints: state.hints });
+    save({ hints: state.hints });
     renderHints();
     syncHint();
   });

@@ -82,6 +82,16 @@ python -m http.server 5180
 
 מוסיפים אובייקט ל-`PROBLEMS` ב-`assets/js/data.js`: נקודות עם קואורדינטות, קטעים, עובדות מהשרטוט, נתונים, מה צריך להוכיח, סימונים, הנימוקים המותרים ורמזים. הפורמט עוקב אחרי פורמט השאלות במדריך (`LEAN information/LEAN_GUIDE_he.md`, סעיף 8.4).
 
+### מאגר שאלות מורים
+
+מורים ומנהלים מוסיפים שאלות בלי לכתוב קוד, ב-`#/author` (קישור גם מדף הניהול):
+
+1. **כתיבה ושרטוט.** כותבים את השאלה במילים, כמו בדף עבודה ("נתון: ... הוכיחו: ..."), עם כפתורים לסימנים ולמושגים (מקביל, אמצע, חוצה זווית, משיק ועוד). משרטטים נקודות, קטעים ומעגל. נקודה שמונחת ליד קטע, בחיתוך של שני קטעים או ליד מעגל נצמדת אליו, והנקודות מקבלות את השמות שבנוסח. בוחרים קטעים או נקודות בשרטוט ומוסיפים טענה בלחיצה ("AB ∥ CD", "∢AOC = 40°").
+2. **בדיקת הנתונים.** התוכנה ממלאת לבד את כל מה שהמשחק צריך: תיאור, נתונים (עם הנוסח לתלמיד ועם "הגדרת אמצע" או "הגדרת חוצה זווית" כשצריך), צ"ל, עובדות מהשרטוט, שלב מוצע, סימונים ושרטוט. ליד כל נתון מופיע אם הוא מתקיים בשרטוט. "יישור השרטוט" מזיז את הנקודות החופשיות עד שכל הנתונים מתקיימים בדיוק, ואז נבדק שגם הצ"ל מתקיים (או שהתשובה לשאלת חישוב נכונה). מסמנים "בדקתי" בכל חלק, ואפשר "לנסות לפתור" לפני השמירה.
+3. **שמירה.** השאלה נכנסת למאגר `#/bank`, ונפתרת בקישור `#/tq/<id>` באותו מסך של שאלות המשחק. ההתקדמות נשמרת תחת `tq-<id>`, בנפרד מהשלבים.
+
+הקבצים: `assets/js/qparse.js` (קריאת הנוסח והשרטוט, בדיקות, יישור; בלי DOM), `assets/js/author.js` (המסכים), `assets/js/qbank.js` (שמירה ב-Firestore, אוסף `teacherQuestions`, או בדפדפן במצב מקומי), `assets/css/author.css`. בדיקות: `node tests/qparse.mjs`. מי שאינו צוות רואה רק שאלות מפורסמות; הכותב או מנהל עורכים ומוחקים. כל טקסט של מורה עובר escape לפני שהוא מוצג.
+
 ---
 
 ## English
@@ -89,3 +99,5 @@ python -m http.server 5180
 A proof game for high school: build a proof in a **claim | reason** table, and Lean checks every row. Geometry is the first topic. The site is static (no build step) and is served by GitHub Pages. In this prototype the checking runs in the browser using the same catalog rules; the full version will send each row to a Lean + Mathlib checking service. Hebrew is the primary language; English is a toggle.
 
 **Student accounts.** Students sign up with a username and password through a link per track (`#/join/3`, `#/join/4`, `#/join/5`, `#/join/uni`), and their progress syncs to Firebase (Auth + Firestore). Roles: student, student+, student premium (tiers set by the admin), teacher (sees and manages students), admin (everything; the owner `admin` appoints admins). Admins and teachers manage sign-up links, students and progress at `#/admin`. The Firebase project is `leangame-3ee1b`. Access is enforced by `firebase/firestore.rules`. Setup steps are in the Hebrew section "חיבור Firebase" above. Until `FIREBASE_CONFIG` is set, accounts work only on localhost, stored in the browser.
+
+**Teacher question bank.** Teachers and admins add questions at `#/author` without code: they write the question in words (Hebrew, worksheet style) and draw it (points, segments, a circle, with snapping onto segments, crossings and circles). The review screen is filled in automatically: setup, givens, goal, diagram facts, suggested stage and marks, each given checked against the drawing. "Straighten the drawing" moves the free points until every given holds exactly, and then the goal must hold too. Saved questions are listed at `#/bank` and played at `#/tq/<id>`, with progress under `tq-<id>`. Code: `qparse.js` (reading and checks, no DOM; tests in `tests/qparse.mjs`), `author.js`, `qbank.js` (Firestore collection `teacherQuestions`), `author.css`.
