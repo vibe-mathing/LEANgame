@@ -756,6 +756,7 @@ export function wrapMath(s) {
 
 const LEN_TOL = 0.02; // relative
 const ANG_TOL = 1; // degrees
+const NONPAR_MIN = 5; // degrees between lines that must not be parallel (a trapezoid's legs)
 
 function termVal(t, pos) {
   if (t.kind === 'seg') return { v: dist(pos[t.p[0]], pos[t.p[1]]), dim: 1 };
@@ -797,6 +798,9 @@ export function claimErrors(c, pos, scale) {
     const par = (a, b) => ({ v: lineAngle(pos, a, b), tol: ANG_TOL });
     const perp = (a, b) => ({ v: 90 - lineAngle(pos, a, b), tol: ANG_TOL });
     const eq = (a, b) => ({ v: rel(dist(pos[a[0]], pos[a[1]]), dist(pos[b[0]], pos[b[1]])), tol: LEN_TOL });
+    // legs that are not parallel: zero once they meet at NONPAR_MIN° or more, so a trapezoid is
+    // never a parallelogram (Lean's IsTrapezoid says ¬ AD ∥ BC)
+    const notPar = (a, b) => ({ v: Math.max(0, NONPAR_MIN - lineAngle(pos, a, b)), tol: ANG_TOL });
     const pg = [par([A, B], [D, C]), par([A, D], [B, C])];
     switch (kind) {
       case 'parallelogram': return pg;
@@ -804,8 +808,8 @@ export function claimErrors(c, pos, scale) {
       case 'rhombus': return [...pg, eq([A, B], [B, C])];
       case 'square': return [...pg, perp([A, B], [B, C]), eq([A, B], [B, C])];
       case 'kite': return [eq([A, B], [A, D]), eq([C, B], [C, D])];
-      case 'trapezoid': return [par([A, B], [D, C])];
-      case 'isoTrapezoid': return [par([A, B], [D, C]), eq([A, D], [B, C])];
+      case 'trapezoid': return [par([A, B], [D, C]), notPar([A, D], [B, C])];
+      case 'isoTrapezoid': return [par([A, B], [D, C]), notPar([A, D], [B, C]), eq([A, D], [B, C])];
       default: return [];
     }
   };
