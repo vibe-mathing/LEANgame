@@ -70,6 +70,13 @@
 .acct-msg.err { background: var(--err-soft); color: var(--err); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); }
 .acct-msg.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); }
 .acct-submit { justify-self: start; min-width: 160px; }
+.acct-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.acct-link { border: 0; background: none; padding: 4px 0; font: inherit; font-size: .92rem; font-weight: 600; color: var(--pen); cursor: pointer; text-decoration: underline; text-underline-offset: .2em; }
+.acct-link:hover { color: var(--pen-2); }
+.acct-reset { margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--line-2); }
+.mono.small { font-size: .78rem; }
+.adm-stools:empty { display: none; }
+.adm-stools { margin-top: 12px; }
 .acct-form .btn-small.acct-submit { min-width: 0; }
 .acct-submit:disabled { opacity: .6; cursor: progress; transform: none; }
 .acct-submit.is-busy::after { content: ''; width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: acct-spin .7s linear infinite; }
@@ -200,6 +207,20 @@
 .adm-table td.num b { font-family: var(--font-display); font-size: 1.1rem; }
 .adm-table .badge { margin-inline-start: 6px; height: 20px; font-size: .7rem; }
 .b-blocked { background: var(--err-soft); color: var(--err); }
+
+/* roles */
+.role-pill {
+  --rc: var(--muted);
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; white-space: nowrap;
+  font-size: .8rem; font-weight: 700; color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent);
+}
+.role-student { --rc: var(--muted); }
+.role-student_plus { --rc: var(--ok); }
+.role-student_premium { --rc: var(--amber); }
+.role-teacher { --rc: var(--pen); }
+.role-admin { --rc: var(--goal); }
+.adm-select[class*="role-"] { color: var(--rc); border-color: color-mix(in srgb, var(--rc) 40%, transparent); }
+.adm-link-staff { border-style: dashed; }
 .adm-name { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; text-align: start; text-decoration: underline dotted var(--line-2); text-underline-offset: .25em; }
 .adm-name:hover { color: var(--pen); }
 .adm-actions { display: flex; gap: 6px; flex-wrap: wrap; }

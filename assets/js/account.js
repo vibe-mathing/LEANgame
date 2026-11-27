@@ -2,9 +2,9 @@
 //   #/login            log in
 //   #/join             choose a track
 //   #/join/<track>     sign up to a track: 3, 4, 5 or uni (the links the teacher hands out)
-//   #/join/staff       the owner's admin account
+//   #/join/staff       staff sign-up (closed unless the admin opens it); the owner always signs up here
 //   #/account          my account: progress, name, password, log out
-//   #/admin            admin: sign-up links (open/close), students, progress, block/delete, admins
+//   #/admin            admin and teachers: sign-up links, students, progress, roles, block/delete
 // Strings live here, not in i18n.js, so this module stays self-contained.
 
 import { getLang, esc, L } from './i18n.js';
@@ -35,11 +35,18 @@ const S = {
     'trackSub.5': 'מתמטיקה בתיכון',
     'trackSub.uni': 'קורסים לתואר',
 
-    'f.username': 'שם משתמש',
+    'role.student': 'תלמיד',
+    'role.student_plus': 'תלמיד+',
+    'role.student_premium': 'תלמיד פרימיום',
+    'role.teacher': 'מורה',
+    'role.admin': 'מנהל',
+
+    'f.username': 'שם משתמש או אימייל',
+    'f.login': 'שם משתמש או אימייל',
     'f.password': 'סיסמה',
     'f.password2': 'סיסמה שוב',
     'f.name': 'שם מלא',
-    'f.usernameHint': 'באנגלית: אותיות, ספרות, נקודה, קו תחתון או מקף. 3 עד 20 תווים.',
+    'f.usernameHint': 'כל שם שתרצו, בכל שפה. נרשמים עם אימייל? אז אפשר יהיה לשחזר דרכו את הסיסמה.',
     'f.passwordHint': 'לפחות {n} תווים.',
     'f.nameHint': 'כך המורה יזהה אתכם.',
     'f.show': 'הצגת הסיסמה',
@@ -50,8 +57,17 @@ const S = {
 
     'login.kicker': 'כניסה',
     'login.title': 'ברוכים השבים',
-    'login.lead': 'נכנסים עם שם המשתמש והסיסמה. ההתקדמות נשמרת בחשבון, ומחכה לכם בכל מחשב.',
+    'login.lead': 'נכנסים עם שם המשתמש (או האימייל) והסיסמה. ההתקדמות נשמרת בחשבון, ומחכה לכם בכל מחשב.',
     'login.submit': 'כניסה',
+    'login.forgot': 'שכחתי סיסמה',
+    'reset.title': 'איפוס סיסמה',
+    'reset.lead': 'כתבו את האימייל של החשבון, ונשלח אליו קישור לבחירת סיסמה חדשה.',
+    'reset.email': 'אימייל',
+    'reset.submit': 'שליחת קישור',
+    'reset.sent': 'אם יש חשבון עם האימייל הזה, שלחנו אליו קישור. בדקו גם בספאם.',
+    'reset.sentLocal': 'במצב בדיקה מקומי לא נשלח מייל.',
+    'reset.noEmail': 'נרשמתם עם שם משתמש בלי אימייל? אי אפשר לשחזר את הסיסמה במייל. פנו למורה.',
+    'reset.back': 'חזרה לכניסה',
     'login.noAccount': 'אין לכם חשבון? נרשמים בקישור שקיבלתם מהמורה, או',
     'login.choose': 'בוחרים מסלול כאן',
 
@@ -67,8 +83,9 @@ const S = {
     'join.chooseTitle': 'באיזה מסלול אתם לומדים?',
     'join.chooseLead': 'בדרך כלל המורה שולח קישור ישיר למסלול. אם לא קיבלתם קישור, בחרו כאן.',
     'join.unknown': 'הקישור לא מוכר. בחרו את המסלול שלכם:',
-    'join.staffTitle': 'חשבון מנהל',
-    'join.staffLead': 'רק בעל האתר פותח את החשבון הזה, עם שם המשתמש שמוגדר כמנהל.',
+    'join.staffTitle': 'הרשמת צוות',
+    'join.staffLead': 'למורים ולצוות האתר. אחרי ההרשמה המנהל מגדיר לכם תפקיד, ועד אז החשבון הוא חשבון תלמיד רגיל.',
+    'join.staffClosed': 'הקישור הזה לבעל האתר ולצוות. הרשמת הצוות סגורה כרגע, ולכן רק בעל האתר, עם שם המשתמש שהאתר הגדיר לו, יכול להירשם כאן עכשיו.',
     'join.staffLocal': 'במצב הבדיקה המקומי שם המשתמש של המנהל הוא {u}.',
 
     'hello': 'שלום, {name}',
@@ -90,6 +107,15 @@ const S = {
     'me.pwNew': 'סיסמה חדשה',
     'me.pwSubmit': 'החלפת סיסמה',
     'me.pwDone': 'הסיסמה הוחלפה.',
+    'me.recTitle': 'מייל לשחזור סיסמה',
+    'me.recLead': 'אימייל נפרד למנהל. אחרי שתאשרו אותו בקישור שיישלח אליו, תיכנסו איתו (במקום שם המשתמש), וקישורי איפוס סיסמה יישלחו אליו.',
+    'me.recEmail': 'אימייל לשחזור',
+    'me.recPw': 'הסיסמה הנוכחית',
+    'me.recSubmit': 'שליחת אישור',
+    'me.recSent': 'שלחנו קישור אישור אל {email}. אחרי שתאשרו, היכנסו עם האימייל הזה.',
+    'me.recLocal': 'במצב בדיקה מקומי האימייל נשמר מיד. מעכשיו נכנסים איתו.',
+    'me.recNow': 'האימייל של החשבון: {email}. נכנסים איתו, וקישורי איפוס סיסמה נשלחים אליו.',
+    'me.emailNote': 'אם תשכחו את הסיסמה, אפשר לשחזר אותה דרך {email}.',
     'me.adminTitle': 'ניהול האתר',
     'me.adminText': 'קישורי הרשמה, רשימת התלמידים וההתקדמות שלהם.',
     'me.toAdmin': 'למסך הניהול',
@@ -119,7 +145,12 @@ const S = {
     'adm.col.joined': 'נרשם',
     'adm.col.seen': 'פעילות אחרונה',
     'adm.col.solved': 'נפתרו',
+    'adm.col.role': 'תפקיד',
     'adm.col.actions': 'פעולות',
+    'adm.allRoles': 'כל התפקידים',
+    'adm.roleOf': 'התפקיד של {name}',
+    'adm.staffNote': 'קישור הצוות סגור כברירת מחדל. פתחו אותו כשמזמינים מורה. מי שנרשם בו מקבל חשבון תלמיד, עד שתגדירו לו תפקיד בטבלה.',
+    'adm.teacherNote': 'כמורה, אתם רואים את כל התלמידים וההתקדמות שלהם, משנים מסלול וחוסמים. תפקידים, מחיקה והגדרות האתר בידי המנהל.',
     'adm.block': 'חסימה',
     'adm.unblock': 'ביטול חסימה',
     'adm.delete': 'מחיקה',
@@ -141,7 +172,11 @@ const S = {
 
     'err.username-taken': 'שם המשתמש הזה כבר תפוס. נסו שם אחר.',
     'err.wrong-login': 'שם המשתמש או הסיסמה לא נכונים.',
-    'err.bad-username': 'שם משתמש: 3 עד 20 תווים באנגלית: אותיות, ספרות, נקודה, קו תחתון או מקף.',
+    'err.bad-username': 'כתבו שם משתמש, עד 64 תווים.',
+    'err.bad-email': 'כתבו כתובת אימייל תקינה.',
+    'err.email-taken': 'האימייל הזה כבר משמש חשבון אחר.',
+    'err.staff-closed': 'הקישור הזה לבעל האתר ולצוות, והרשמת הצוות סגורה כרגע. בעל האתר: בדקו ששם המשתמש הוא בדיוק השם שהאתר הגדיר.',
+    'err.rules-denied': 'השרת סירב לשמור את החשבון. כנראה כללי האבטחה ב-Firebase לא מעודכנים. פנו למנהל האתר.',
     'err.bad-name': 'כתבו שם, עד 60 תווים.',
     'err.weak-password': 'הסיסמה צריכה לפחות {n} תווים.',
     'err.mismatch': 'שתי הסיסמאות לא זהות.',
@@ -159,6 +194,8 @@ const S = {
     'err.old-password': 'הסיסמה הנוכחית לא נכונה.',
     'err.signed-out': 'החיבור נותק. היכנסו מחדש.',
     'err.bad-track': 'אין מסלול כזה.',
+    'err.bad-role': 'אין תפקיד כזה.',
+    'err.owner-staff': 'שם המשתמש הזה שמור לבעל האתר. בעל האתר נרשם בקישור הצוות.',
     'err.unknown': 'משהו השתבש. נסו שוב.',
   },
   en: {
@@ -182,11 +219,18 @@ const S = {
     'trackSub.5': 'High school math',
     'trackSub.uni': 'Degree courses',
 
-    'f.username': 'Username',
+    'role.student': 'Student',
+    'role.student_plus': 'Student+',
+    'role.student_premium': 'Student Premium',
+    'role.teacher': 'Teacher',
+    'role.admin': 'Admin',
+
+    'f.username': 'Username or e-mail',
+    'f.login': 'Username or e-mail',
     'f.password': 'Password',
     'f.password2': 'Password again',
     'f.name': 'Full name',
-    'f.usernameHint': 'English letters, digits, dot, underscore or hyphen. 3 to 20 characters.',
+    'f.usernameHint': 'Any name you like, in any language. Sign up with an e-mail and you can recover your password through it.',
     'f.passwordHint': 'At least {n} characters.',
     'f.nameHint': 'So your teacher knows who you are.',
     'f.show': 'Show password',
@@ -197,8 +241,17 @@ const S = {
 
     'login.kicker': 'Log in',
     'login.title': 'Welcome back',
-    'login.lead': 'Log in with your username and password. Your progress is saved to your account and waits for you on any computer.',
+    'login.lead': 'Log in with your username (or e-mail) and password. Your progress is saved to your account and waits for you on any computer.',
     'login.submit': 'Log in',
+    'login.forgot': 'Forgot password',
+    'reset.title': 'Reset password',
+    'reset.lead': "Enter the account's e-mail and we'll send it a link to choose a new password.",
+    'reset.email': 'E-mail',
+    'reset.submit': 'Send link',
+    'reset.sent': 'If an account uses this e-mail, we sent it a link. Check your spam folder too.',
+    'reset.sentLocal': 'In local test mode no e-mail is sent.',
+    'reset.noEmail': 'Signed up with a username and no e-mail? The password cannot be recovered by e-mail. Ask your teacher.',
+    'reset.back': 'Back to log in',
     'login.noAccount': 'No account yet? Sign up with the link your teacher gave you, or',
     'login.choose': 'choose a track here',
 
@@ -214,8 +267,9 @@ const S = {
     'join.chooseTitle': 'Which track are you in?',
     'join.chooseLead': 'Usually your teacher sends a direct link to your track. If you did not get one, choose here.',
     'join.unknown': 'That link is not recognised. Choose your track:',
-    'join.staffTitle': 'Admin account',
-    'join.staffLead': 'Only the site owner opens this account, using the username set as admin.',
+    'join.staffTitle': 'Staff sign-up',
+    'join.staffLead': 'For teachers and site staff. After you sign up, the admin gives you a role; until then the account is a plain student account.',
+    'join.staffClosed': 'This link is for the site owner and staff. Staff sign-up is closed right now, so only the site owner, with the username the site set for them, can sign up here now.',
     'join.staffLocal': 'In local test mode the admin username is {u}.',
 
     'hello': 'Hello, {name}',
@@ -237,6 +291,15 @@ const S = {
     'me.pwNew': 'New password',
     'me.pwSubmit': 'Change password',
     'me.pwDone': 'Password changed.',
+    'me.recTitle': 'Password recovery e-mail',
+    'me.recLead': 'A separate e-mail for the admin. Once you confirm it through the link sent to it, you log in with it (instead of the username), and password reset links go to it.',
+    'me.recEmail': 'Recovery e-mail',
+    'me.recPw': 'Current password',
+    'me.recSubmit': 'Send confirmation',
+    'me.recSent': 'We sent a confirmation link to {email}. Once you confirm, log in with that e-mail.',
+    'me.recLocal': 'In local test mode the e-mail is saved at once. From now on you log in with it.',
+    'me.recNow': "The account's e-mail: {email}. You log in with it, and password reset links go to it.",
+    'me.emailNote': 'If you forget your password, you can recover it through {email}.',
     'me.adminTitle': 'Site admin',
     'me.adminText': 'Sign-up links, the student list and their progress.',
     'me.toAdmin': 'Open admin',
@@ -266,7 +329,12 @@ const S = {
     'adm.col.joined': 'Joined',
     'adm.col.seen': 'Last active',
     'adm.col.solved': 'Solved',
+    'adm.col.role': 'Role',
     'adm.col.actions': 'Actions',
+    'adm.allRoles': 'All roles',
+    'adm.roleOf': 'Role of {name}',
+    'adm.staffNote': 'The staff link is closed by default. Open it when you invite a teacher. Whoever signs up through it gets a student account until you give them a role in the table.',
+    'adm.teacherNote': 'As a teacher you see all students and their progress, change tracks and block students. Roles, deleting accounts and site settings stay with the admin.',
     'adm.block': 'Block',
     'adm.unblock': 'Unblock',
     'adm.delete': 'Delete',
@@ -288,7 +356,11 @@ const S = {
 
     'err.username-taken': 'That username is taken. Try another one.',
     'err.wrong-login': 'Wrong username or password.',
-    'err.bad-username': 'Username: 3 to 20 characters in English: letters, digits, dot, underscore or hyphen.',
+    'err.bad-username': 'Enter a username, up to 64 characters.',
+    'err.bad-email': 'Enter a valid e-mail address.',
+    'err.email-taken': 'That e-mail is already used by another account.',
+    'err.staff-closed': 'This link is for the site owner and staff, and staff sign-up is closed right now. Site owner: check that the username is exactly the one the site set.',
+    'err.rules-denied': 'The server refused to save the account. The Firebase security rules are probably out of date. Tell the site admin.',
     'err.bad-name': 'Enter a name, up to 60 characters.',
     'err.weak-password': 'The password needs at least {n} characters.',
     'err.mismatch': 'The two passwords do not match.',
@@ -306,6 +378,8 @@ const S = {
     'err.old-password': 'The current password is wrong.',
     'err.signed-out': 'You were logged out. Log in again.',
     'err.bad-track': 'There is no such track.',
+    'err.bad-role': 'There is no such role.',
+    'err.owner-staff': 'That username is reserved for the site owner, who signs up through the staff link.',
     'err.unknown': 'Something went wrong. Try again.',
   },
 };
@@ -347,7 +421,7 @@ function slotInner() {
   const u = auth.currentUser();
   if (!u) return `<a class="tool acct-login" href="#/login" data-remember>${ic('user')}<span>${tt('slot.login')}</span></a>`;
   const first = String(u.name || u.username).trim().split(/\s+/)[0];
-  return `${u.isAdmin ? `<a class="tool" href="#/admin" title="${tt('slot.admin')}" aria-label="${tt('slot.admin')}">${ic('shield')}</a>` : ''}
+  return `${u.isStaff ? `<a class="tool" href="#/admin" title="${tt('slot.admin')}" aria-label="${tt('slot.admin')}">${ic('shield')}</a>` : ''}
     <a class="tool acct-me" href="#/account" title="${tt('slot.me')}" aria-label="${tt('slot.me')}"><span class="acct-avatar" aria-hidden="true">${esc(first.charAt(0).toUpperCase())}</span><span class="acct-me-name">${esc(first)}</span></a>`;
 }
 
@@ -370,7 +444,7 @@ function afterLogin(u) {
   const back = sessionStorage.getItem('lg.returnTo');
   sessionStorage.removeItem('lg.returnTo');
   if (back) return back;
-  return u.isAdmin ? '#/admin' : '#/hs/geometry';
+  return u.isStaff ? '#/admin' : '#/hs/geometry';
 }
 
 // Called once by app.js. Re-renders home/topic when logging in or out changed the saved progress.
@@ -423,13 +497,15 @@ export function bindAccount(root, route) {
 const banner = () => (auth.mode === 'local' ? `<p class="acct-banner">${ic('info')}<span>${tt('local.banner')}</span></p>` : '');
 
 function field(name, label, opts = {}) {
-  const { type = 'text', hint = '', autocomplete = 'off', ltr = false, value = '', reveal = false } = opts;
+  const { type = 'text', hint = '', autocomplete = 'off', value = '', reveal = false } = opts;
+  // 'ltr' for passwords and e-mails; 'auto' for usernames, which may be Hebrew or an e-mail.
+  const ltr = opts.ltr ? 'ltr' : opts.auto ? 'auto' : '';
   const id = 'f-' + name;
   return `<div class="acct-field">
     <label for="${id}">${label}</label>
     <div class="acct-input-wrap">
       <input class="acct-input" id="${id}" name="${name}" type="${type}" autocomplete="${autocomplete}" value="${esc(value)}"
-        ${ltr ? 'dir="ltr" autocapitalize="none" spellcheck="false"' : ''} ${hint ? `aria-describedby="${id}-hint"` : ''} required>
+        ${ltr ? `dir="${ltr}" autocapitalize="none" spellcheck="false"` : ''} ${hint ? `aria-describedby="${id}-hint"` : ''} required>
       ${reveal ? `<button type="button" class="acct-reveal" data-reveal="${id}" aria-label="${tt('f.show')}" title="${tt('f.show')}" aria-pressed="false">${ic('eye')}</button>` : ''}
     </div>
     ${hint ? `<p class="acct-hint" id="${id}-hint">${hint}</p>` : ''}
@@ -538,22 +614,55 @@ async function pageLogin(host) {
       <p class="kicker">${tt('login.kicker')}</p>
       <h1 class="acct-h">${tt('login.title')}</h1>
       <p class="acct-lead">${tt('login.lead')}</p>
-      <form class="acct-form" novalidate>
-        ${field('username', tt('f.username'), { autocomplete: 'username', ltr: true })}
+      <form class="acct-form" id="loginForm" novalidate>
+        ${field('username', tt('f.login'), { autocomplete: 'username', auto: true })}
         ${field('password', tt('f.password'), { type: 'password', autocomplete: 'current-password', ltr: true, reveal: true })}
         ${msgBox(notice ? tt('err.' + notice) : '')}
-        <button class="btn btn-primary acct-submit" type="submit">${tt('login.submit')}</button>
+        <div class="acct-row">
+          <button class="btn btn-primary acct-submit" type="submit">${tt('login.submit')}</button>
+          <button type="button" class="acct-link" id="forgotBtn">${tt('login.forgot')}</button>
+        </div>
+      </form>
+      <form class="acct-form acct-reset" id="resetForm" novalidate hidden>
+        <h2 class="acct-h2">${tt('reset.title')}</h2>
+        <p class="acct-hint">${tt('reset.lead')}</p>
+        ${field('email', tt('reset.email'), { type: 'email', autocomplete: 'email', ltr: true })}
+        <p class="acct-note">${ic('info')}<span>${tt('reset.noEmail')}</span></p>
+        ${msgBox()}
+        <div class="acct-row">
+          <button class="btn btn-primary btn-small acct-submit" type="submit">${tt('reset.submit')}</button>
+          <button type="button" class="acct-link" id="resetBack">${tt('reset.back')}</button>
+        </div>
       </form>
       <p class="acct-foot">${tt('login.noAccount')} <a href="#/join">${tt('login.choose')}</a>.</p>
     </div>`;
   bindReveal(host);
-  const form = host.querySelector('form');
+  const form = host.querySelector('#loginForm');
+  const reset = host.querySelector('#resetForm');
   form.username.focus();
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     run(form, async () => {
       const user = await quietly(() => auth.signIn(form.username.value, form.password.value));
       location.hash = afterLogin(user);
+    });
+  });
+  host.querySelector('#forgotBtn').addEventListener('click', () => {
+    form.hidden = true;
+    reset.hidden = false;
+    if (auth.isEmail(form.username.value)) reset.email.value = form.username.value.trim();
+    reset.email.focus();
+  });
+  host.querySelector('#resetBack').addEventListener('click', () => {
+    reset.hidden = true;
+    form.hidden = false;
+    form.username.focus();
+  });
+  reset.addEventListener('submit', (e) => {
+    e.preventDefault();
+    run(reset, async () => {
+      await auth.sendPasswordReset(reset.email.value);
+      showMsg(reset, auth.mode === 'local' ? tt('reset.sentLocal') : tt('reset.sent'), 'ok');
     });
   });
 }
@@ -587,9 +696,10 @@ async function pageJoin(host, route) {
   const u = auth.currentUser();
   if (u) { host.innerHTML = alreadyCard(u); bindLogout(host); return; }
 
+  let open = !staff;
+  try { open = (await auth.getSignupOpen())[track]; } catch (e) { console.warn(e); }
+  // The staff form stays visible when closed, because the owner signs up there.
   if (!staff) {
-    let open = true;
-    try { open = (await auth.getSignupOpen())[track]; } catch (e) { console.warn(e); }
     if (!open) {
       host.innerHTML = `<div class="acct-card paper acct-narrow">
         <div class="join-track">${trackPill(track, true)}</div>
@@ -610,10 +720,11 @@ async function pageJoin(host, route) {
       <p class="kicker">${tt('join.kicker')}</p>
       <h1 class="acct-h">${staff ? tt('join.staffTitle') : tt('join.title')}</h1>
       <p class="acct-lead">${staff ? tt('join.staffLead') : tt('join.lead')}</p>
+      ${staff && !open ? `<p class="acct-note">${ic('lock')}<span>${tt('join.staffClosed')}</span></p>` : ''}
       ${staff && auth.mode === 'local' ? `<p class="acct-hint">${esc(tt('join.staffLocal', { u: auth.ownerUsername() }))}</p>` : ''}
       <form class="acct-form" novalidate>
         ${field('name', tt('f.name'), { autocomplete: 'name', hint: tt('f.nameHint') })}
-        ${field('username', tt('f.username'), { autocomplete: 'username', ltr: true, hint: tt('f.usernameHint') })}
+        ${field('username', tt('f.username'), { autocomplete: 'username', auto: true, hint: tt('f.usernameHint') })}
         ${field('password', tt('f.password'), { type: 'password', autocomplete: 'new-password', ltr: true, reveal: true, hint: tt('f.passwordHint', { n: auth.MIN_PASSWORD }) })}
         ${field('password2', tt('f.password2'), { type: 'password', autocomplete: 'new-password', ltr: true })}
         <p class="acct-note">${ic('info')}<span>${tt('join.keep')}</span></p>
@@ -625,12 +736,6 @@ async function pageJoin(host, route) {
   bindReveal(host);
   const form = host.querySelector('form');
   form.name.focus();
-  // Usernames are lower case; show that while typing.
-  form.username.addEventListener('input', () => {
-    const v = form.username.value;
-    const low = v.toLowerCase().replace(/\s/g, '');
-    if (low !== v) { const p = form.username.selectionStart; form.username.value = low; form.username.setSelectionRange(p, p); }
-  });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     run(form, async () => {
@@ -639,7 +744,7 @@ async function pageJoin(host, route) {
         name: form.name.value, username: form.username.value, password: form.password.value, track,
       }));
       sessionStorage.removeItem('lg.returnTo');
-      location.hash = user.isAdmin ? '#/admin' : '#/hs/geometry';
+      location.hash = user.isStaff ? '#/admin' : '#/hs/geometry';
     });
   });
 }
@@ -680,7 +785,7 @@ async function pageMe(host) {
       <div>
         <p class="kicker">${tt('me.kicker')}</p>
         <h1 class="acct-h">${esc(u.name)}</h1>
-        <p class="me-meta"><span dir="ltr" class="mono">@${esc(u.username)}</span>${trackPill(u.track)}${u.isOwner ? `<span class="badge b-open">${tt('badge.owner')}</span>` : u.isAdmin ? `<span class="badge b-open">${tt('badge.admin')}</span>` : ''}</p>
+        <p class="me-meta"><span dir="auto" class="mono">${esc(u.username)}</span>${trackPill(u.track)}<span class="role-pill role-${u.role}">${esc(tt('role.' + u.role))}</span>${u.isOwner ? `<span class="badge b-open">${tt('badge.owner')}</span>` : ''}</p>
       </div>
       <button type="button" class="btn btn-ghost btn-small me-logout" data-logout>${ic('logout')} ${tt('logout')}</button>
     </div>
@@ -695,7 +800,7 @@ async function pageMe(host) {
       </section>
 
       <div class="me-side">
-        ${u.isAdmin ? `<section class="acct-card paper me-admin">
+        ${u.isStaff ? `<section class="acct-card paper me-admin">
           <h2 class="acct-h2">${ic('shield')} ${tt('me.adminTitle')}</h2>
           <p class="acct-hint">${tt('me.adminText')}</p>
           <div class="acct-actions"><a class="btn btn-primary btn-small" href="#/admin">${tt('me.toAdmin')} ${ic('arrow', 'dir')}</a></div>
@@ -719,7 +824,19 @@ async function pageMe(host) {
             ${msgBox()}
             <button class="btn btn-ghost btn-small acct-submit" type="submit">${tt('me.pwSubmit')}</button>
           </form>
+          ${u.email && !u.isAdmin ? `<p class="acct-hint">${esc(tt('me.emailNote', { email: u.email }))}</p>` : ''}
         </section>
+
+        ${u.isAdmin ? `<section class="acct-card paper">
+          <h2 class="acct-h2">${tt('me.recTitle')}</h2>
+          ${u.email ? `<p class="acct-hint" id="recNow">${esc(tt('me.recNow', { email: u.email }))}</p>` : `<p class="acct-hint">${tt('me.recLead')}</p>`}
+          <form class="acct-form" id="recForm" novalidate>
+            ${field('recemail', tt('me.recEmail'), { type: 'email', autocomplete: 'email', ltr: true, value: u.email || '' })}
+            ${field('recpw', tt('me.recPw'), { type: 'password', autocomplete: 'current-password', ltr: true })}
+            ${msgBox()}
+            <button class="btn btn-ghost btn-small acct-submit" type="submit">${tt('me.recSubmit')}</button>
+          </form>
+        </section>` : ''}
       </div>
     </div>`;
 
@@ -745,6 +862,18 @@ async function pageMe(host) {
       showMsg(pwForm, tt('me.pwDone'), 'ok');
     });
   });
+  const recForm = host.querySelector('#recForm');
+  if (recForm) {
+    recForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      run(recForm, async () => {
+        const email = recForm.recemail.value.trim().toLowerCase();
+        await quietly(() => auth.setRecoveryEmail(email, recForm.recpw.value));
+        recForm.recpw.value = '';
+        showMsg(recForm, auth.mode === 'local' ? tt('me.recLocal') : tt('me.recSent', { email }), 'ok');
+      });
+    });
+  }
 }
 
 // ---------------------------------------------------------------- #/admin
@@ -759,25 +888,27 @@ async function pageAdmin(host, route, alive) {
   if (!(await guardAvailable(host))) return;
   const me = auth.currentUser();
   if (!me) { host.innerHTML = needLoginCard(); return; }
-  if (!me.isAdmin) {
+  if (!me.isStaff) {
     host.innerHTML = `<div class="acct-card paper acct-narrow"><p class="kicker">${tt('adm.kicker')}</p><h1 class="acct-h">${ic('lock')} ${tt('title.admin')}</h1><p class="acct-lead">${tt('adm.denied')}</p></div>`;
     return;
   }
+  const isAdm = me.isAdmin;
 
-  const st = { users: null, open: null, q: '', track: 'all', expanded: null, armed: null, error: null };
+  const st = { users: null, open: null, q: '', track: 'all', role: 'all', expanded: null, armed: null, error: null };
   let armTimer = null;
 
   host.innerHTML = `${banner()}
     <div class="acct-head">
-      <p class="kicker">${tt('adm.kicker')}</p>
+      <p class="kicker">${tt('adm.kicker')} · ${esc(tt('role.' + me.role))}</p>
       <h1 class="acct-h">${tt('adm.title')}</h1>
+      ${isAdm ? '' : `<p class="acct-note">${ic('info')}<span>${tt('adm.teacherNote')}</span></p>`}
     </div>
     <section class="adm-sec">
       <h2 class="acct-h2">${tt('adm.links')}</h2>
       <p class="acct-hint">${tt('adm.linksLead')}</p>
       <div class="adm-links" id="admLinks"><div class="acct-wait"></div></div>
     </section>
-    <section class="adm-sec" id="admTools"></section>
+    ${isAdm ? '<section class="adm-sec" id="admTools"></section>' : ''}
     <section class="adm-sec">
       <div class="adm-sec-head">
         <h2 class="acct-h2">${tt('adm.students')}</h2>
@@ -786,6 +917,10 @@ async function pageAdmin(host, route, alive) {
           <select id="admTrack" class="adm-select" aria-label="${tt('adm.col.track')}">
             <option value="all">${tt('adm.all')}</option>
             ${[...auth.TRACKS, auth.STAFF].map((t) => `<option value="${t}">${esc(trackName(t))}</option>`).join('')}
+          </select>
+          <select id="admRole" class="adm-select" aria-label="${tt('adm.col.role')}">
+            <option value="all">${tt('adm.allRoles')}</option>
+            ${auth.ROLES.map((r) => `<option value="${r}">${esc(tt('role.' + r))}</option>`).join('')}
           </select>
           <button type="button" class="tool-btn" id="admRefresh">${ic('reset')} ${tt('adm.refresh')}</button>
           <button type="button" class="tool-btn" id="admExport">${ic('download')} ${tt('adm.export')}</button>
@@ -806,22 +941,28 @@ async function pageAdmin(host, route, alive) {
 
   function drawLinks() {
     const c = counts();
-    $('#admLinks').innerHTML = auth.TRACKS.map((t) => `
-      <div class="adm-link paper">
+    const links = isAdm ? [...auth.TRACKS, auth.STAFF] : auth.TRACKS;
+    $('#admLinks').innerHTML = links.map((t) => {
+      const on = st.open ? !!st.open[t] : t !== auth.STAFF;
+      return `
+      <div class="adm-link paper${t === auth.STAFF ? ' adm-link-staff' : ''}">
         <div class="adm-link-top">${trackPill(t)}<span class="muted">${st.users ? esc(tt('adm.nStudents', { n: c[t] || 0 })) : ''}</span></div>
         <div class="adm-link-row">
           <input class="acct-input adm-url" readonly dir="ltr" value="${esc(joinUrl(t))}" aria-label="${esc(tt('trackLong.' + t))}">
           <button type="button" class="tool-btn" data-copy="${t}">${ic('copy')} <span>${tt('adm.copy')}</span></button>
         </div>
-        <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${!st.open || st.open[t] ? 'checked' : ''} ${st.open ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
-      </div>`).join('');
+        <label class="switch adm-open"><input type="checkbox" data-open="${t}" ${on ? 'checked' : ''} ${st.open && isAdm ? '' : 'disabled'} aria-label="${esc(tt('adm.openLabel', { track: tt('trackLong.' + t) }))}"><span class="switch-ui" aria-hidden="true"></span><span>${tt('adm.open')}</span></label>
+        ${t === auth.STAFF ? `<p class="acct-hint">${tt('adm.staffNote')}</p>` : ''}
+      </div>`;
+    }).join('');
   }
 
   function visibleUsers() {
     const q = st.q.trim().toLowerCase();
     return (st.users || [])
       .filter((u) => st.track === 'all' || u.track === st.track)
-      .filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.login).includes(q))
+      .filter((u) => st.role === 'all' || u.role === st.role)
+      .filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.username).includes(q) || String(u.login).includes(q))
       .sort((a, b) => String(a.name).localeCompare(String(b.name), getLang()));
   }
 
@@ -829,27 +970,36 @@ async function pageAdmin(host, route, alive) {
     const solved = solvedCount(u.progress || {});
     const self = u.uid === me.uid;
     const armed = st.armed === u.uid;
-    const trackCell = u.track === auth.STAFF
-      ? trackPill(u.track)
-      : `<select class="adm-select small" data-track="${u.uid}" aria-label="${esc(tt('adm.trackOf', { name: u.name }))}">${auth.TRACKS.map((t) => `<option value="${t}" ${u.track === t ? 'selected' : ''}>${esc(trackName(t))}</option>`).join('')}</select>`;
-    const actions = self ? `<span class="badge">${tt('badge.you')}</span>` : `
+    const isTier = auth.TIERS.includes(u.role);
+    // Same limits as firestore.rules: teachers edit students only; only the owner touches admins.
+    const canEdit = !self && !u.isOwner && (me.isOwner || (isAdm && u.role !== 'admin') || (me.isTeacher && isTier));
+    const trackOpts = isAdm ? [...auth.TRACKS, auth.STAFF] : auth.TRACKS;
+    const trackCell = canEdit && trackOpts.includes(u.track)
+      ? `<select class="adm-select small" data-track="${u.uid}" aria-label="${esc(tt('adm.trackOf', { name: u.name }))}">${trackOpts.map((t) => `<option value="${t}" ${u.track === t ? 'selected' : ''}>${esc(trackName(t))}</option>`).join('')}</select>`
+      : trackPill(u.track);
+    const roleOpts = me.isOwner ? auth.ROLES : auth.ROLES.filter((r) => r !== 'admin');
+    const roleCell = isAdm && canEdit
+      ? `<select class="adm-select small role-${u.role}" data-role="${u.uid}" aria-label="${esc(tt('adm.roleOf', { name: u.name }))}">${roleOpts.map((r) => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${esc(tt('role.' + r))}</option>`).join('')}</select>`
+      : `<span class="role-pill role-${u.role}">${esc(tt('role.' + u.role))}</span>`;
+    const actions = self ? `<span class="badge">${tt('badge.you')}</span>` : !canEdit ? '' : `
       <button type="button" class="tool-btn" data-block="${u.uid}">${u.blocked ? tt('adm.unblock') : tt('adm.block')}</button>
-      ${me.isOwner ? `<button type="button" class="tool-btn" data-admin="${u.uid}">${u.isAdmin ? tt('adm.unmakeAdmin') : tt('adm.makeAdmin')}</button>` : ''}
-      <button type="button" class="tool-btn${armed ? ' armed' : ''}" data-del="${u.uid}">${armed ? tt('adm.deleteSure') : tt('adm.delete')}</button>`;
+      ${isAdm ? `<button type="button" class="tool-btn${armed ? ' armed' : ''}" data-del="${u.uid}">${armed ? tt('adm.deleteSure') : tt('adm.delete')}</button>` : ''}`;
     return `<tr class="${u.blocked ? 'is-blocked' : ''}${st.expanded === u.uid ? ' is-open' : ''}">
         <td><button type="button" class="adm-name" data-expand="${u.uid}" aria-expanded="${st.expanded === u.uid}">${esc(u.name)}</button>
-          ${u.isOwner ? `<span class="badge b-open">${tt('badge.owner')}</span>` : u.isAdmin ? `<span class="badge b-open">${tt('badge.admin')}</span>` : ''}
+          ${u.isOwner ? `<span class="badge b-open">${tt('badge.owner')}</span>` : ''}
           ${u.blocked ? `<span class="badge b-blocked">${tt('badge.blocked')}</span>` : ''}</td>
-        <td><span dir="ltr" class="mono">${esc(u.login)}</span></td>
+        <td><span dir="auto" class="mono">${esc(u.username)}</span>${u.login && !u.login.endsWith('@' + auth.LOGIN_DOMAIN) && u.login !== u.username ? `<br><span dir="ltr" class="mono muted small">${esc(u.login)}</span>` : ''}</td>
+        <td>${roleCell}</td>
         <td>${trackCell}</td>
         <td class="nowrap"><span dir="ltr">${fmtDate(u.createdAt)}</span></td>
         <td class="nowrap"><span dir="ltr">${fmtDate(u.lastSeen)}</span></td>
         <td class="num"><span dir="ltr"><b>${solved}</b><span class="muted">/${total}</span></span></td>
         <td><div class="adm-actions">${actions}</div></td>
       </tr>
-      ${st.expanded === u.uid ? `<tr class="adm-detail"><td colspan="7">
+      ${st.expanded === u.uid ? `<tr class="adm-detail"><td colspan="8">
         <p class="adm-detail-title">${esc(tt('adm.solvedList', { name: u.name }))}</p>
         <div class="prog-list">${progressBlocks(u.progress || {})}</div>
+        ${isAdm ? `<div class="adm-stools" data-stools="${u.uid}"></div>` : ''}
       </td></tr>` : ''}`;
   }
 
@@ -863,11 +1013,19 @@ async function pageAdmin(host, route, alive) {
     if (!list.length) { box.innerHTML = `<p class="adm-empty">${tt('adm.noMatch')}</p>`; return; }
     box.innerHTML = `<table class="adm-table">
       <thead><tr>
-        <th>${tt('adm.col.name')}</th><th>${tt('adm.col.user')}</th><th>${tt('adm.col.track')}</th>
+        <th>${tt('adm.col.name')}</th><th>${tt('adm.col.user')}</th><th>${tt('adm.col.role')}</th><th>${tt('adm.col.track')}</th>
         <th>${tt('adm.col.joined')}</th><th>${tt('adm.col.seen')}</th><th>${tt('adm.col.solved')}</th><th>${tt('adm.col.actions')}</th>
       </tr></thead>
       <tbody>${list.map(rowHTML).join('')}</tbody>
     </table>`;
+    // Per-student tool settings (admin only), rendered by tools.js inside the expanded row.
+    const slot = isAdm && st.expanded ? box.querySelector(`[data-stools="${st.expanded}"]`) : null;
+    const target = slot && findUser(st.expanded);
+    if (target) {
+      import('./tools.js')
+        .then((m) => { if (alive() && slot.isConnected && typeof m.mountStudentTools === 'function') m.mountStudentTools(slot, target); })
+        .catch((e) => console.warn('[accounts] student tools not loaded', e));
+    }
   }
 
   async function load() {
@@ -907,11 +1065,6 @@ async function pageAdmin(host, route, alive) {
       b.disabled = true;
       await act(async () => { await auth.admin.setBlocked(u.uid, !u.blocked); u.blocked = !u.blocked; });
       drawTable();
-    } else if (b.dataset.admin) {
-      const u = findUser(b.dataset.admin);
-      b.disabled = true;
-      await act(async () => { await auth.admin.setAdmin(u.uid, !u.isAdmin); u.isAdmin = !u.isAdmin; });
-      drawTable();
     } else if (b.dataset.del) {
       const uid = b.dataset.del;
       if (st.armed !== uid) {
@@ -945,6 +1098,19 @@ async function pageAdmin(host, route, alive) {
       if (u.track === prev) el.value = prev;
       drawLinks();
       drawTable();
+    } else if (el.dataset.role) {
+      const u = findUser(el.dataset.role);
+      el.disabled = true;
+      await act(async () => {
+        await auth.admin.setRole(u.uid, el.value);
+        u.role = el.value;
+        u.isAdmin = el.value === 'admin';
+        u.isTeacher = el.value === 'teacher';
+      });
+      drawTable();
+    } else if (el.id === 'admRole') {
+      st.role = el.value;
+      drawTable();
     } else if (el.dataset.open) {
       const t = el.dataset.open;
       el.disabled = true;
@@ -957,10 +1123,12 @@ async function pageAdmin(host, route, alive) {
   });
   $('#admQ').addEventListener('input', (e) => { st.q = e.target.value; drawTable(); });
 
-  // Proof-tool settings per track: rendered by tools.js (the proof-tools module owns that section).
-  import('./tools.js')
-    .then((m) => { if (alive() && typeof m.mountToolSettings === 'function') m.mountToolSettings($('#admTools')); })
-    .catch((e) => console.warn('[accounts] tool settings not loaded', e));
+  // Proof-tool settings per track (admin only): rendered by tools.js, which owns that section.
+  if (isAdm) {
+    import('./tools.js')
+      .then((m) => { if (alive() && typeof m.mountToolSettings === 'function') m.mountToolSettings($('#admTools')); })
+      .catch((e) => console.warn('[accounts] tool settings not loaded', e));
+  }
 
   drawLinks();
   await load();
@@ -969,8 +1137,8 @@ async function pageAdmin(host, route, alive) {
 function exportCSV(users) {
   const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const iso = (ms) => (ms ? new Date(ms).toISOString().replace('T', ' ').slice(0, 16) : '');
-  const head = [tt('adm.col.name'), tt('adm.col.user'), tt('adm.col.track'), tt('adm.col.joined'), tt('adm.col.seen'), tt('adm.col.solved'), tt('badge.blocked')];
-  const rows = users.map((u) => [u.name, u.login, trackName(u.track), iso(u.createdAt), iso(u.lastSeen), solvedCount(u.progress || {}), u.blocked ? '1' : '']);
+  const head = [tt('adm.col.name'), tt('adm.col.user'), tt('adm.col.role'), tt('adm.col.track'), tt('adm.col.joined'), tt('adm.col.seen'), tt('adm.col.solved'), tt('badge.blocked')];
+  const rows = users.map((u) => [u.name, u.username, tt('role.' + u.role), trackName(u.track), iso(u.createdAt), iso(u.lastSeen), solvedCount(u.progress || {}), u.blocked ? '1' : '']);
   const csv = '﻿' + [head, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));

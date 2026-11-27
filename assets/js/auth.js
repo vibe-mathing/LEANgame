@@ -1,14 +1,27 @@
-// LEANgame accounts: username + password, one study track per student, and admin tools.
+// LEANgame accounts: username + password, one study track per student, roles, and admin tools.
 //
 // Backend: Firebase Auth + Firestore (settings in firebase-config.js, rules in firebase/firestore.rules).
-// A username is stored in Firebase Auth as "<username>@leangame.example". That address never gets mail,
-// so there is no password recovery by e-mail.
+//
+// Usernames are free text (any language, spaces allowed, up to 64 characters), or an e-mail address.
+// Firebase Auth knows every account by an e-mail address (see loginEmail()):
+//   - an e-mail username is used as is, so "forgot password" sends the reset link there;
+//   - a plain username becomes "<name>@leangame.example" (or "u-<hash>@leangame.example" for names that are
+//     not plain ASCII). Those addresses never get mail, so such accounts have no password recovery.
+// The admin may add a separate recovery e-mail (setRecoveryEmail). Once confirmed, it becomes the address the
+// admin logs in with, and reset links go there.
+// The owner is the account that signed up as OWNER_USERNAME first; its uid is pinned in config/owner.
+//
 // Without a Firebase config the public site simply has no accounts. On localhost a local test backend
 // (accounts kept in this browser's localStorage) stands in, so the pages can be tried before Firebase is set up.
 //
 // Public API (other modules may rely on it):
-//   currentUser() → null | { uid, username, name, track, blocked, isAdmin, isOwner }
-//   isAdmin()     → boolean (false until the auth state is known)
+//   currentUser() → null | { uid, username, email, name, track, role, tier, features, blocked,
+//                            isAdmin, isOwner, isTeacher, isStaff }
+//                   role: 'student' | 'student_plus' | 'student_premium' | 'teacher' | 'admin'
+//                   tier: the role when it is a student tier, else null
+//                   email: the real e-mail the account logs in with, or null
+//                   features: string[] of per-user feature flags (only an admin sets them)
+//   isAdmin(), isTeacher(), isStaff() (admin or teacher) → boolean (false until the auth state is known)
 //   onAuthChange(cb) → cb(user|null) on every change, and right away once the state is known; returns unsubscribe
 //   authReady     → Promise, resolves once the first auth state is known
 //   syncProgress(all) → called by app.js after it saves lg.progress
@@ -19,17 +32,47 @@ const SDK = 'https://www.gstatic.com/firebasejs/12.19.0/';
 export const LOGIN_DOMAIN = 'leangame.example';
 export const TRACKS = ['3', '4', '5', 'uni'];
 export const STAFF = 'staff';
-export const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,19}$/;
+// Roles. Every new account is 'student'; the admin changes roles on the admin page.
+// student / student_plus / student_premium are tiers (labels other features may read);
+// a teacher sees and manages students; an admin can do everything. The owner is always admin.
+export const TIERS = ['student', 'student_plus', 'student_premium'];
+export const ROLES = [...TIERS, 'teacher', 'admin'];
+export const MAX_USERNAME = 64;
 export const MIN_PASSWORD = 6;
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
-export const mode = FIREBASE_CONFIG ? 'firebase' : LOCAL_HOSTS.includes(location.hostname) ? 'local' : 'off';
+const onLocalhost = LOCAL_HOSTS.includes(location.hostname);
+// On localhost, "?localaccounts" in the address uses the local test backend even when Firebase is configured.
+const forceLocal = onLocalhost && new URLSearchParams(location.search).has('localaccounts');
+export const mode = FIREBASE_CONFIG && !forceLocal ? 'firebase' : onLocalhost ? 'local' : 'off';
 
 export class AuthError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
 
-export const normUsername = (u) => String(u || '').trim().toLowerCase();
+// ---------------------------------------------------------------- usernames and login addresses
+
+export const normUsername = (u) => String(u || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const isEmail = (s) => EMAIL_RE.test(String(s || '').trim());
+const SAFE_LOCAL = /^[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+const OWNER = normUsername(OWNER_USERNAME) || (mode === 'local' ? 'admin' : '');
+export const ownerUsername = () => OWNER;
+
+async function sha256hex(s) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+// The address Firebase Auth knows an account by.
+export async function loginEmail(username) {
+  const u = normUsername(username);
+  if (isEmail(u)) return u;
+  if (SAFE_LOCAL.test(u) && u.length <= 64 && !u.startsWith('u-')) return `${u}@${LOGIN_DOMAIN}`;
+  return `u-${(await sha256hex('leangame-username:' + u)).slice(0, 40)}@${LOGIN_DOMAIN}`;
+}
+const realEmail = (login) => (login && !String(login).endsWith('@' + LOGIN_DOMAIN) ? login : null);
+const ownerEmail = () => (OWNER ? `${OWNER}@${LOGIN_DOMAIN}` : '');
 
 // ---------------------------------------------------------------- state
 
@@ -42,6 +85,8 @@ export const authReady = new Promise((r) => { resolveReady = r; });
 
 export const currentUser = () => user;
 export const isAdmin = () => !!(user && user.isAdmin);
+export const isTeacher = () => !!(user && user.isTeacher);
+export const isStaff = () => !!(user && user.isStaff); // admin or teacher
 export const takeNotice = () => { const n = notice; notice = null; return n; };
 
 export function onAuthChange(cb) {
@@ -57,9 +102,19 @@ function emit(u) {
   for (const cb of [...listeners]) { try { cb(u); } catch (e) { console.error(e); } }
 }
 
+// Fills role and the derived flags on a raw profile ({ uid, login, username, role, … }).
+function withRole(p, isOwner) {
+  const role = isOwner ? 'admin' : ROLES.includes(p.role) ? p.role : 'student';
+  const username = p.username || String(p.login || '').split('@')[0];
+  return { ...p, username, role, isOwner: !!isOwner, isAdmin: role === 'admin', isTeacher: role === 'teacher' };
+}
+
 const publicUser = (p) => ({
-  uid: p.uid, username: p.login, name: p.name, track: p.track,
+  uid: p.uid, username: p.username, email: realEmail(p.login), name: p.name, track: p.track, role: p.role,
+  tier: TIERS.includes(p.role) ? p.role : null,
+  features: Array.isArray(p.features) ? p.features.filter((f) => typeof f === 'string') : [],
   blocked: !!p.blocked, isAdmin: !!p.isAdmin, isOwner: !!p.isOwner,
+  isTeacher: !!p.isTeacher, isStaff: !!p.isAdmin || !!p.isTeacher,
 });
 
 // ---------------------------------------------------------------- progress (lg.progress stays the store app.js reads)
@@ -145,12 +200,15 @@ const FIREBASE_ERRORS = {
   'auth/wrong-password': 'wrong-login',
   'auth/user-not-found': 'wrong-login',
   'auth/invalid-email': 'bad-username',
+  'auth/invalid-new-email': 'bad-email',
+  'auth/missing-email': 'bad-email',
   'auth/weak-password': 'weak-password',
   'auth/password-does-not-meet-requirements': 'weak-password',
   'auth/too-many-requests': 'too-many',
   'auth/network-request-failed': 'network',
   'auth/operation-not-allowed': 'not-enabled',
   'auth/requires-recent-login': 'reauth',
+  'auth/unauthorized-continue-uri': 'unknown',
   'permission-denied': 'denied',
   unavailable: 'network',
 };
@@ -163,7 +221,7 @@ function toAuthError(e) {
 // ---------------------------------------------------------------- backends
 
 let backend = null;
-let bootError = null;
+const backHome = () => ({ url: `${location.origin}${location.pathname}#/login`, handleCodeInApp: false });
 
 async function firebaseBackend() {
   const [{ initializeApp }, A, F] = await Promise.all([
@@ -173,37 +231,48 @@ async function firebaseBackend() {
   ]);
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = A.getAuth(app);
+  auth.languageCode = 'he';
   const db = F.getFirestore(app);
-  const owner = normUsername(OWNER_USERNAME);
   const uref = (uid) => F.doc(db, 'users', uid);
-  const email = (login) => `${login}@${LOGIN_DOMAIN}`;
-  const loginOf = (em) => String(em || '').split('@')[0];
+  const ownerRef = F.doc(db, 'config', 'owner');
   const ms = (ts) => (ts && ts.toMillis ? ts.toMillis() : null);
   const parse = (s) => { try { return JSON.parse(s || '{}') || {}; } catch { return {}; } };
-  const isOwnerLogin = (login) => !!owner && login === owner;
 
-  const fromSnap = (snap, admins) => {
+  // The owner's uid, once the owner has signed up (config/owner). Until then the owner is whoever holds ownerEmail().
+  let ownerUid = null;
+  try { const s = await F.getDoc(ownerRef); ownerUid = s.exists() ? s.data().uid : null; } catch (e) { console.warn('[accounts]', e); }
+  const isOwner = (uid, login) => (ownerUid ? uid === ownerUid : !!ownerEmail() && login === ownerEmail());
+  const fullLogin = (login) => (String(login || '').includes('@') ? login : `${login}@${LOGIN_DOMAIN}`);
+
+  const fromSnap = (snap) => {
     const x = snap.data();
-    return {
-      uid: snap.id, login: x.login, name: x.name, track: x.track, blocked: !!x.blocked,
-      createdAt: ms(x.createdAt), lastSeen: ms(x.lastSeen), progress: parse(x.progress),
-      isOwner: isOwnerLogin(x.login), isAdmin: isOwnerLogin(x.login) || admins.has(snap.id),
-    };
+    const login = fullLogin(x.login);
+    return withRole({
+      uid: snap.id, login, username: x.username, name: x.name, track: x.track, role: x.role, features: x.features,
+      blocked: !!x.blocked, createdAt: ms(x.createdAt), lastSeen: ms(x.lastSeen), progress: parse(x.progress),
+    }, isOwner(snap.id, login));
   };
 
   async function load(fu) {
     if (!fu) return null;
     const snap = await F.getDoc(uref(fu.uid));
-    if (!snap.exists()) return { uid: fu.uid, login: loginOf(fu.email), missing: true };
-    let admin = isOwnerLogin(loginOf(fu.email));
-    if (!admin) { try { admin = (await F.getDoc(F.doc(db, 'admins', fu.uid))).exists(); } catch { admin = false; } }
-    return fromSnap(snap, new Set(admin ? [fu.uid] : []));
+    if (!snap.exists()) return { uid: fu.uid, login: fu.email, missing: true };
+    // The owner pins their uid the first time they are seen.
+    if (!ownerUid && ownerEmail() && fu.email === ownerEmail()) {
+      try { await F.setDoc(ownerRef, { uid: fu.uid }); ownerUid = fu.uid; } catch (e) { console.warn('[accounts] could not pin owner', e); }
+    }
+    // After a confirmed e-mail change, keep the profile's login address in step.
+    if (fu.email && snap.data().login !== fu.email) {
+      F.updateDoc(uref(fu.uid), { login: fu.email }).catch((e) => console.warn('[accounts]', e));
+    }
+    const p = fromSnap(snap);
+    return { ...p, login: fu.email || p.login };
   }
 
   let busy = false;
   let handled;
   return {
-    owner,
+    ownerClaimed: () => !!ownerUid,
     start(cb) {
       A.onAuthStateChanged(auth, async (fu) => {
         if (busy) return;
@@ -213,21 +282,21 @@ async function firebaseBackend() {
         try { await cb(await load(fu)); } catch (e) { console.warn('[accounts]', e); await cb(null); }
       });
     },
-    async signIn(login, pw) {
+    async signIn(email, pw) {
       busy = true;
       try {
-        const c = await A.signInWithEmailAndPassword(auth, email(login), pw);
+        const c = await A.signInWithEmailAndPassword(auth, email, pw);
         handled = c.user.uid;
         return await load(c.user);
       } finally { busy = false; }
     },
-    async signUp(login, pw, name, track) {
+    async signUp(email, username, pw, name, track, role) {
       busy = true;
       try {
-        const c = await A.createUserWithEmailAndPassword(auth, email(login), pw);
+        const c = await A.createUserWithEmailAndPassword(auth, email, pw);
         try {
           await F.setDoc(uref(c.user.uid), {
-            login, name, track, blocked: false, progress: '{}',
+            login: email, username, name, track, role, blocked: false, progress: '{}',
             createdAt: F.serverTimestamp(), lastSeen: F.serverTimestamp(),
           });
         } catch (e) {
@@ -248,6 +317,20 @@ async function firebaseBackend() {
       await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, oldPw));
       await A.updatePassword(u, newPw);
     },
+    sendReset: (email) => A.sendPasswordResetEmail(auth, email, backHome()),
+    async setRecoveryEmail(email, pw) {
+      const u = auth.currentUser;
+      if (!u) throw new AuthError('signed-out');
+      try {
+        await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, pw));
+      } catch (e) {
+        throw String(e && e.code).startsWith('auth/') && !['auth/network-request-failed', 'auth/too-many-requests'].includes(e.code)
+          ? new AuthError('old-password') : e;
+      }
+      try { await A.verifyBeforeUpdateEmail(u, email, backHome()); } catch (e) {
+        throw e && e.code === 'auth/email-already-in-use' ? new AuthError('email-taken') : e;
+      }
+    },
     saveProgress: (uid, all) => F.updateDoc(uref(uid), { progress: JSON.stringify(all), lastSeen: F.serverTimestamp() }),
     touch: (uid) => F.updateDoc(uref(uid), { lastSeen: F.serverTimestamp() }),
     setName: (uid, name) => F.updateDoc(uref(uid), { name }),
@@ -262,18 +345,11 @@ async function firebaseBackend() {
     },
     setToolConfig: (data) => F.setDoc(F.doc(db, 'config', 'tools'), data),
     async listUsers() {
-      const [us, ad] = await Promise.all([F.getDocs(F.collection(db, 'users')), F.getDocs(F.collection(db, 'admins'))]);
-      const admins = new Set(ad.docs.map((d) => d.id));
-      return us.docs.map((d) => fromSnap(d, admins));
+      const us = await F.getDocs(F.collection(db, 'users'));
+      return us.docs.map(fromSnap);
     },
     updateUser: (uid, patch) => F.updateDoc(uref(uid), patch),
-    async deleteUser(uid) {
-      await F.deleteDoc(uref(uid));
-      await F.deleteDoc(F.doc(db, 'admins', uid)).catch(() => {});
-    },
-    setAdmin: (uid, on) => (on
-      ? F.setDoc(F.doc(db, 'admins', uid), { since: F.serverTimestamp() })
-      : F.deleteDoc(F.doc(db, 'admins', uid))),
+    deleteUser: (uid) => F.deleteDoc(uref(uid)),
   };
 }
 
@@ -281,49 +357,52 @@ async function firebaseBackend() {
 function localBackend() {
   const DB = 'lg.localAccounts';
   const SESSION = 'lg.localSession';
-  const owner = normUsername(OWNER_USERNAME) || 'admin';
-  const empty = () => ({ users: {}, admins: {}, config: {} });
+  const empty = () => ({ users: {}, config: {} });
   const load = () => { try { return JSON.parse(localStorage.getItem(DB)) || empty(); } catch { return empty(); } };
   const save = (d) => localStorage.setItem(DB, JSON.stringify(d));
   const wait = () => new Promise((r) => setTimeout(r, 200));
-  const hash = async (s) => {
-    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lg:' + s));
-    return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
-  };
+  const hash = (s) => sha256hex('lg:' + s);
+  const ownerUid = (d) => d.config.owner?.uid || null;
   const prof = (d, uid) => {
     const u = d.users[uid];
     if (!u) return null;
-    const own = u.login === owner;
-    return { uid, login: u.login, name: u.name, track: u.track, blocked: !!u.blocked, createdAt: u.createdAt, lastSeen: u.lastSeen, progress: u.progress || {}, isOwner: own, isAdmin: own || !!d.admins[uid] };
+    const own = ownerUid(d) ? uid === ownerUid(d) : u.login === ownerEmail();
+    return withRole({ uid, login: u.login, username: u.username, name: u.name, track: u.track, role: u.role, features: u.features, blocked: !!u.blocked, createdAt: u.createdAt, lastSeen: u.lastSeen, progress: u.progress || {} }, own);
   };
   const patchUser = (uid, patch) => { const d = load(); if (d.users[uid]) Object.assign(d.users[uid], patch); save(d); };
-  const isAdminNow = () => { const uid = localStorage.getItem(SESSION); const p = uid && prof(load(), uid); return !!(p && p.isAdmin); };
-  const guard = () => { if (!isAdminNow()) throw new AuthError('denied'); };
+  const me = () => { const uid = localStorage.getItem(SESSION); return (uid && prof(load(), uid)) || null; };
+  // Same limits as firestore.rules.
+  const guard = () => { const p = me(); if (!p || !p.isAdmin) throw new AuthError('denied'); return p; };
+  const guardStaff = () => { const p = me(); if (!p || !(p.isAdmin || (p.isTeacher && !p.blocked))) throw new AuthError('denied'); return p; };
+  const enter = (d, uid) => {
+    if (!ownerUid(d) && d.users[uid].login === ownerEmail()) { d.config.owner = { uid }; save(d); }
+    localStorage.setItem(SESSION, uid);
+    return prof(load(), uid);
+  };
 
   return {
-    owner,
+    ownerClaimed: () => !!ownerUid(load()),
     async start(cb) {
       const uid = localStorage.getItem(SESSION);
       await cb(uid ? prof(load(), uid) || { uid, missing: true } : null);
     },
-    async signIn(login, pw) {
+    async signIn(email, pw) {
       await wait();
       const d = load();
-      const hit = Object.entries(d.users).find(([, u]) => u.login === login);
+      const hit = Object.entries(d.users).find(([, u]) => u.login === email);
       if (!hit || hit[1].pw !== await hash(pw)) throw new AuthError('wrong-login');
-      localStorage.setItem(SESSION, hit[0]);
-      return prof(d, hit[0]);
+      return enter(d, hit[0]);
     },
-    async signUp(login, pw, name, track) {
+    async signUp(email, username, pw, name, track, role) {
       await wait();
       const d = load();
-      if (Object.values(d.users).some((u) => u.login === login)) throw new AuthError('username-taken');
-      if (track === STAFF ? login !== owner : d.config.signupOpen?.[track] === false) throw new AuthError('signup-closed');
+      if (Object.values(d.users).some((u) => u.login === email)) throw new AuthError('username-taken');
+      const own = role === 'admin';
+      if (track === STAFF ? !own && d.config.signupOpen?.staff !== true : d.config.signupOpen?.[track] === false) throw new AuthError('signup-closed');
       const uid = 'local-' + Math.random().toString(36).slice(2, 10);
-      d.users[uid] = { login, name, track, pw: await hash(pw), blocked: false, createdAt: Date.now(), lastSeen: Date.now(), progress: {} };
+      d.users[uid] = { login: email, username, name, track, role, pw: await hash(pw), blocked: false, createdAt: Date.now(), lastSeen: Date.now(), progress: {} };
       save(d);
-      localStorage.setItem(SESSION, uid);
-      return prof(d, uid);
+      return enter(d, uid);
     },
     async signOut() { localStorage.removeItem(SESSION); },
     async changePassword(oldPw, newPw) {
@@ -334,6 +413,16 @@ function localBackend() {
       d.users[uid].pw = await hash(newPw);
       save(d);
     },
+    async sendReset() { await wait(); /* no mail in local test mode */ },
+    async setRecoveryEmail(email, pw) {
+      await wait();
+      const uid = localStorage.getItem(SESSION);
+      const d = load();
+      if (!d.users[uid] || d.users[uid].pw !== await hash(pw)) throw new AuthError('old-password');
+      if (Object.values(d.users).some((u) => u.login === email)) throw new AuthError('email-taken');
+      d.users[uid].login = email; // local mode: confirmed at once
+      save(d);
+    },
     async saveProgress(uid, all) { patchUser(uid, { progress: all, lastSeen: Date.now() }); },
     async touch(uid) { patchUser(uid, { lastSeen: Date.now() }); },
     async setName(uid, name) { patchUser(uid, { name }); },
@@ -341,15 +430,23 @@ function localBackend() {
     async setSignupOpen(track, open) { guard(); const d = load(); d.config.signupOpen = { ...(d.config.signupOpen || {}), [track]: open }; save(d); },
     async getToolConfig() { return load().config.tools || {}; },
     async setToolConfig(data) { guard(); const d = load(); d.config.tools = data; save(d); },
-    async listUsers() { guard(); await wait(); const d = load(); return Object.keys(d.users).map((uid) => prof(d, uid)); },
-    async updateUser(uid, patch) { guard(); patchUser(uid, patch); },
-    async deleteUser(uid) { guard(); const d = load(); delete d.users[uid]; delete d.admins[uid]; save(d); },
-    async setAdmin(uid, on) {
-      const me = prof(load(), localStorage.getItem(SESSION));
-      if (!me || !me.isOwner) throw new AuthError('denied');
-      const d = load();
-      if (on) d.admins[uid] = { since: Date.now() }; else delete d.admins[uid];
-      save(d);
+    async listUsers() { guardStaff(); await wait(); const d = load(); return Object.keys(d.users).map((uid) => prof(d, uid)); },
+    async updateUser(uid, patch) {
+      const p = guardStaff();
+      const target = prof(load(), uid);
+      if (!p.isAdmin) {
+        const ok = target && TIERS.includes(target.role)
+          && Object.keys(patch).every((k) => k === 'track' || k === 'blocked')
+          && (patch.track === undefined || TRACKS.includes(patch.track));
+        if (!ok) throw new AuthError('denied');
+      }
+      if (!p.isOwner && (target?.role === 'admin' || patch.role === 'admin')) throw new AuthError('denied');
+      patchUser(uid, patch);
+    },
+    async deleteUser(uid) {
+      const p = guard();
+      if (!p.isOwner && prof(load(), uid)?.role === 'admin') throw new AuthError('denied');
+      const d = load(); delete d.users[uid]; save(d);
     },
   };
 }
@@ -361,7 +458,6 @@ const booted = (async () => {
     await backend.start(handleProfile);
   } catch (e) {
     console.warn('[accounts] unavailable', e);
-    bootError = e;
     backend = null;
     if (!known) emit(null);
   }
@@ -374,7 +470,6 @@ async function need() {
 }
 
 export const accountsAvailable = async () => { await booted; return !!backend; };
-export const ownerUsername = () => (backend ? backend.owner : normUsername(OWNER_USERNAME));
 
 // ---------------------------------------------------------------- student actions
 
@@ -383,7 +478,8 @@ export async function getSignupOpen() {
   let cfg = {};
   try { cfg = (await b.getConfig()) || {}; } catch (e) { console.warn('[accounts]', e); }
   const open = cfg.signupOpen || {};
-  return Object.fromEntries(TRACKS.map((t) => [t, open[t] !== false]));
+  // Student tracks are open unless closed; the staff link is closed unless the admin opens it.
+  return { ...Object.fromEntries(TRACKS.map((t) => [t, open[t] !== false])), [STAFF]: open[STAFF] === true };
 }
 
 // Proof-tool settings per track, set on the admin page (config/tools). Anyone may read them.
@@ -398,34 +494,36 @@ export async function getToolConfig() {
 }
 
 export async function signUp({ username, password, name, track }) {
-  const login = normUsername(username);
+  const uname = normUsername(username);
   name = String(name || '').trim().replace(/\s+/g, ' ');
   if (!name || name.length > 60) throw new AuthError('bad-name');
-  if (!USERNAME_RE.test(login)) throw new AuthError('bad-username');
+  if (!uname || uname.length > MAX_USERNAME) throw new AuthError('bad-username');
   if (String(password || '').length < MIN_PASSWORD) throw new AuthError('weak-password');
   if (track !== STAFF && !TRACKS.includes(track)) throw new AuthError('bad-track');
   const b = await need();
-  if (track === STAFF) {
-    if (!b.owner || login !== b.owner) throw new AuthError('not-owner');
-  } else if (!(await getSignupOpen())[track]) {
-    throw new AuthError('signup-closed');
-  }
+  const asOwner = !!OWNER && uname === OWNER;
+  if (asOwner && b.ownerClaimed()) throw new AuthError('username-taken');
+  if (asOwner && track !== STAFF) throw new AuthError('owner-staff');
+  if (!asOwner && !(await getSignupOpen())[track]) throw new AuthError(track === STAFF ? 'staff-closed' : 'signup-closed');
+  const email = await loginEmail(uname);
   let p;
-  try { p = await b.signUp(login, password, name, track); } catch (e) {
+  try { p = await b.signUp(email, uname, password, name, track, asOwner ? 'admin' : 'student'); } catch (e) {
     const err = toAuthError(e);
-    throw err.code === 'denied' ? new AuthError('signup-closed') : err;
+    // A Firestore refusal here means the page and firestore.rules disagree: say so instead of hiding it.
+    throw err.code === 'denied' ? new AuthError('rules-denied') : err;
   }
   await handleProfile(p);
   if (!user) throw new AuthError(takeNotice() || 'unknown');
   return user;
 }
 
+// Log in with a username or with the e-mail address the account uses.
 export async function signIn(username, password) {
-  const login = normUsername(username);
-  if (!login || !password) throw new AuthError('wrong-login');
+  const uname = normUsername(username);
+  if (!uname || !password) throw new AuthError('wrong-login');
   const b = await need();
   let p;
-  try { p = await b.signIn(login, password); } catch (e) { throw toAuthError(e); }
+  try { p = await b.signIn(await loginEmail(uname), password); } catch (e) { throw toAuthError(e); }
   await handleProfile(p);
   if (!user) throw new AuthError(takeNotice() || 'wrong-login');
   return user;
@@ -445,6 +543,29 @@ export async function changePassword(oldPw, newPw) {
   try { await b.changePassword(oldPw, newPw); } catch (e) { throw toAuthError(e); }
 }
 
+// "Forgot password": Firebase mails a reset link if an account uses this address.
+// It does not say whether one does, so the page always shows the same message.
+export async function sendPasswordReset(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (!isEmail(email) || email.endsWith('@' + LOGIN_DOMAIN)) throw new AuthError('bad-email');
+  const b = await need();
+  try { await b.sendReset(email); } catch (e) {
+    const err = toAuthError(e);
+    if (err.code !== 'wrong-login') throw err;
+  }
+}
+
+// Admins only: a separate recovery e-mail. Firebase mails a confirmation link; once confirmed,
+// the admin logs in with that address and reset links go there.
+export async function setRecoveryEmail(email, currentPassword) {
+  email = String(email || '').trim().toLowerCase();
+  if (!isEmail(email) || email.endsWith('@' + LOGIN_DOMAIN)) throw new AuthError('bad-email');
+  const b = await need();
+  if (!isAdmin()) throw new AuthError('denied');
+  try { await b.setRecoveryEmail(email, currentPassword); } catch (e) { throw toAuthError(e); }
+  if (mode === 'local') emit({ ...user, email });
+}
+
 export async function setMyName(name) {
   name = String(name || '').trim().replace(/\s+/g, ' ');
   if (!name || name.length > 60) throw new AuthError('bad-name');
@@ -461,18 +582,31 @@ async function needAdmin() {
   if (!isAdmin()) throw new AuthError('denied');
   return b;
 }
+async function needStaff() {
+  const b = await need();
+  if (!isStaff()) throw new AuthError('denied');
+  return b;
+}
 const call = async (fn) => { try { return await fn(); } catch (e) { throw toAuthError(e); } };
 
+// Admin: everything. Teacher: list students, change a student's track, block or unblock a student.
+// Only the owner touches other admins (including giving or taking away the admin role).
 export const admin = {
-  listUsers: async () => { const b = await needAdmin(); return call(() => b.listUsers()); },
-  setTrack: async (uid, track) => { const b = await needAdmin(); return call(() => b.updateUser(uid, { track })); },
-  setBlocked: async (uid, blocked) => { const b = await needAdmin(); return call(() => b.updateUser(uid, { blocked })); },
+  listUsers: async () => { const b = await needStaff(); return call(() => b.listUsers()); },
+  setTrack: async (uid, track) => { const b = await needStaff(); return call(() => b.updateUser(uid, { track })); },
+  setBlocked: async (uid, blocked) => { const b = await needStaff(); return call(() => b.updateUser(uid, { blocked })); },
+  setRole: async (uid, role) => {
+    const b = await needAdmin();
+    if (!ROLES.includes(role)) throw new AuthError('bad-role');
+    return call(() => b.updateUser(uid, { role }));
+  },
+  // Per-user feature flags, e.g. ['clickFacts'] (read by tools.js from currentUser().features).
+  setFeatures: async (uid, features) => {
+    const b = await needAdmin();
+    const list = [...new Set((features || []).filter((f) => typeof f === 'string' && f))];
+    return call(() => b.updateUser(uid, { features: list }));
+  },
   remove: async (uid) => { const b = await needAdmin(); return call(() => b.deleteUser(uid)); },
   setSignupOpen: async (track, open) => { const b = await needAdmin(); return call(() => b.setSignupOpen(track, open)); },
   setToolConfig: async (data) => { const b = await needAdmin(); return call(() => b.setToolConfig(data)); },
-  setAdmin: async (uid, on) => {
-    const b = await needAdmin();
-    if (!user.isOwner) throw new AuthError('denied');
-    return call(() => b.setAdmin(uid, on));
-  },
 };
