@@ -82,6 +82,7 @@ function termStr(a, atom) {
 
 function leanAtom(t) {
   if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
+  if (t.kind === 'area') return `area ${t.p.join(' ')}`;
   if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
   if (t.kind === 'trig') return `${t.fn}D (${leanAtom(t.a)})`;
   const pw = (x) => leanAtom(x.t) + (Math.abs(x.e) === 1 ? '' : ` ^ ${Math.abs(x.e)}`);
@@ -119,6 +120,7 @@ export function leanOfClaim(c, warn) {
 
 function schoolAtom(t) {
   if (t.kind === 'seg') return t.p.join('');
+  if (t.kind === 'area') return 'S△' + t.p.join('');
   if (t.kind === 'ang') return '∢' + t.p.join('');
   if (t.kind === 'trig') return t.fn + schoolAtom(t.a);
   const pw = (x) => schoolAtom(x.t) + (Math.abs(x.e) === 1 ? '' : Math.abs(x.e) === 2 ? '²' : `^${Math.abs(x.e)}`);
@@ -618,7 +620,7 @@ const LEAN_QUAD = Object.fromEntries(Object.entries(QUADS).map(([k, q]) => [q.le
 const REL = new Set(['=', '<', '>', '≤', '≥', '≠']);
 
 // polynomials over segments, angles, sin/cos/tan of angles and real variables
-const atomKey = (t) => (t.kind === 'seg' ? 's:' + [...t.p].sort().join('') : t.kind === 'ang' ? `a:${t.p[1]}:${[t.p[0], t.p[2]].sort().join('')}`
+const atomKey = (t) => (t.kind === 'seg' ? 's:' + [...t.p].sort().join('') : t.kind === 'area' ? 'S:' + [...t.p].sort().join('') : t.kind === 'ang' ? `a:${t.p[1]}:${[t.p[0], t.p[2]].sort().join('')}`
   : t.kind === 'trig' ? `t:${t.fn}(${atomKey(t.a)})` : 'v:' + t.name);
 const monoKey = (f) => f.map((x) => `${atomKey(x.t)}^${x.e}`).sort().join('*') || '1';
 const cst = (v) => new Map(Math.abs(v) > EPS ? [['1', { c: v, f: [] }]] : []);
@@ -739,6 +741,7 @@ function readLeanModel(src) {
         const f = short(node.f);
         if (f === 'len' || f === 'dist') { const [A, B] = args(node, 2, f); return atomP({ kind: 'seg', p: [A, B] }); }
         if (f === 'ang') { const P = args(node, 3, 'ang'); return atomP({ kind: 'ang', p: P }); }
+        if (f === 'area') { const P = args(node, 3, 'area'); return atomP({ kind: 'area', p: P }); }
         if (f === '∠' || f === 'angle') { st.rad = true; const P = args(node, 3, '∠'); return scaleP(atomP({ kind: 'ang', p: P }), Math.PI / 180); }
         const trig = { sinD: ['sin', 'deg'], cosD: ['cos', 'deg'], tanD: ['tan', 'deg'], sin: ['sin', 'rad'], cos: ['cos', 'rad'], tan: ['tan', 'rad'] }[f];
         if (trig) {
@@ -984,6 +987,8 @@ function shapes(model, lines) {
       if (c.kind === 'trapezoid' || c.kind === 'isoTrapezoid') legs.push([[c.P[0], c.P[3]], [c.P[1], c.P[2]]]);
     }
     for (const t of claimTerms(c)) {
+      // a triangle whose area the question names is a real triangle
+      if (t.kind === 'area') [0, 1, 2].forEach((i) => addTri([t.p[(i + 1) % 3], t.p[i], t.p[(i + 2) % 3]]));
       if (t.kind !== 'ang') continue;
       // an angle the question sets to 0° or 180° may be flat
       const flat = c.type === 'eq' && c.left && c.left.kind === 'ang' && c.right && c.right.kind === 'num' && (Math.abs(c.right.v) < 1e-9 || Math.abs(c.right.v - 180) < 1e-9);
@@ -1268,6 +1273,7 @@ function toDrawing(model, pos, lines) {
     for (const t of claimTerms(c)) {
       if (t.kind === 'seg') addSeg(...t.p);
       if (t.kind === 'ang') { addSeg(t.p[1], t.p[0]); addSeg(t.p[1], t.p[2]); }
+      if (t.kind === 'area') { addSeg(t.p[0], t.p[1]); addSeg(t.p[1], t.p[2]); addSeg(t.p[2], t.p[0]); }
     }
   }
   for (const T of model.triangles) { addSeg(T[0], T[1]); addSeg(T[1], T[2]); addSeg(T[2], T[0]); }

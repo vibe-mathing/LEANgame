@@ -1035,3 +1035,10 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
   .tools { gap: 4px; }
   .tool.lang > span, .acct-login > span { display: none; }
 }
+
+/* The teacher question bank in the top bar, for everyone, where the menu is folded away (app.js bankLink) */
+.tool.bankq { display: none; text-decoration: none; }
+.tool.bankq[aria-current="page"] { border-color: var(--pen); color: var(--pen); background: var(--pen-soft); }
+.bankq .ic svg { width: 17px; height: 17px; }
+@media (max-width: 860px) { .tool.bankq { display: inline-flex; } }
+@media (max-width: 560px) { .bankq .bankq-t { display: none; } .tool.bankq { padding: 0; width: 38px; } }

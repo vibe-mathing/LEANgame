@@ -58,6 +58,7 @@ function renderChrome() {
         <button type="button" class="navlink" data-scroll="how">${t('nav.how')}</button>
       </nav>
       <div class="tools">
+        ${bankLink(route)}
         <span class="addq-slot" id="addQSlot">${addQuestionLink()}</span>
         ${accountSlot()}
         <button type="button" class="tool lang" id="langBtn" aria-label="${t('nav.langLabel')}" title="${t('nav.langLabel')}">${icon('globe')}<span>${t('nav.langShort')}</span></button>
@@ -106,12 +107,20 @@ function renderChrome() {
 }
 
 // Teachers and admins get an "add a question" button in the top bar, at every screen width, so the
-// question bank's editor (#/author) is one tap away. Students see the bank in the menu and the footer.
+// question bank's editor (#/author) is one tap away. The bank itself is for everyone (bankLink below).
 function addQuestionLink() {
   if (!isStaffUser()) return '';
   return `<a class="tool addq" href="#/author" title="${esc(t('nav.addQTitle'))}" aria-label="${esc(t('nav.addQTitle'))}"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></span><span class="addq-t">${t('nav.addQ')}</span></a>`;
 }
 onAuthChange(() => { const el = document.getElementById('addQSlot'); if (el) el.innerHTML = addQuestionLink(); });
+
+// Everyone, signed in or not, gets the teacher question bank (#/bank) in the top bar where the menu
+// is folded away (phones and the app), so it is never only in the footer. Wide screens have the
+// menu link instead (styles.css shows this button only below 860px).
+function bankLink(route) {
+  const here = route.name === 'author' || route.name === 'tq';
+  return `<a class="tool bankq" href="#/bank" title="${esc(t('nav.bank'))}" aria-label="${esc(t('nav.bank'))}"${here ? ' aria-current="page"' : ''}><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="3.5" width="12" height="14" rx="2"/><path d="M5 7.5v11a2 2 0 0 0 2 2h9"/><path d="M11.5 8.5h5M11.5 12h5"/></svg></span><span class="bankq-t">${t('nav.bank')}</span></a>`;
+}
 
 // ---------------------------------------------------------------- router
 

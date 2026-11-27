@@ -157,6 +157,14 @@ imported('side of a line', `theorem zig (A B C D E : Point) (h : Par A B C D) (s
     (s3 : line[ℝ, B, D].SSameSide A C) (h1 : ang A B E = 44) (h2 : ang C D E = 30) : ang B E D = 74 := by sorry`,
   { givens: ['AB ∥ CD', '∢ABE = 44°', '∢CDE = 30°'], goal: '∢BED = 74°', text: /באותו צד של הישר AB/, notes: 0 });
 
+// the area of a triangle (S△ABC in the site's notation, area A B C in Lean), once geo.js reads it
+if (parseClaim('S△ABC = 1', ['A', 'B', 'C']).ok) {
+  imported('area', `theorem tri_area (A B C : Point) (h1 : len A B = 4) (h2 : len A C = 6) (h3 : ang B A C = 30) :
+      area A B C = 6 := by sorry`, { givens: ['AB = 4', 'AC = 6', '∢BAC = 30°'], goal: 'S△ABC = 6', notes: 0 });
+  const r = readLean('theorem t (A B C D : Point) (h : Sbtw ℝ B D C) (g : area A B D * 2 = area A B C) : len B D = len D C := by sorry');
+  check('area inside a product', r.ok && /S△ABD/.test(r.givens[0].claim), JSON.stringify(r.ok ? r.givens : r.errors));
+}
+
 // a false theorem: a counterexample is found, and the drawing is one where the goal holds
 {
   const q = leanToQuestion('theorem f (A B C : Point) (h : len A B = len A C) : ang A B C = 60 := by sorry');
