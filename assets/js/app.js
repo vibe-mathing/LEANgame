@@ -7,7 +7,7 @@ import { renderDiagram, claimToItems } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
 import { icon, glyph, LOGO } from './icons.js';
 import { TOOLS, toolOpen, toolLockText, toolsAfter, fillGivens, findRefs, congConclusions, hintWait, hintSeconds, hintTryLeft, isAdmin,
-  onToolsChange, specialOn, realAdmin, viewAs, setViewAs, toolSettings, durationText } from './tools.js';
+  onToolsChange, specialOn, realAdmin, viewAs, setViewAs, toolSettings, durationText, PROVED_IN, reasonEarned, provedInLabel } from './tools.js';
 import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, initAccounts } from './account.js';
 import { syncProgress } from './auth.js';
 
@@ -501,9 +501,10 @@ function viewTopic() {
       ${groups.map((g) => `
         <h3 class="catalog-title">${g.title}</h3>
         <div class="catalog">
-          ${reasonsOfStage(g.id).map(([, r]) => `
+          ${reasonsOfStage(g.id).map(([rid, r]) => `
             <article class="reason-card k-${r.kind}">
               <div class="rc-top"><span class="rc-kind">${t('kind.' + r.kind)}</span>${r.playable ? `<span class="rc-demo">${icon('check')} ${t('tp.demoTag')}</span>` : ''}</div>
+              ${PROVED_IN[rid] ? `<p class="rc-proved${reasonEarned(rid, isSolved) ? ' is-done' : ''}">${icon(reasonEarned(rid, isSolved) ? 'check' : 'lock')} ${t(reasonEarned(rid, isSolved) ? 'tool.provedDone' : 'tool.provedIn', { q: provedInLabel(rid) })}</p>` : ''}
               <h4>${esc(L(r.short))}</h4>
               <p class="rc-alt">${esc(getLang() === 'he' ? r.short.en : r.short.he)}</p>
               <p>${rich(L(r.statement))}</p>
@@ -672,6 +673,10 @@ function exactReason(query, allowed) {
 }
 
 function bindProblem(root, { stage, n, problem: p }) {
+  // A theorem the student proves in its own problem stays out of their toolbox until then (tools.js).
+  p.allowedAll = p.allowedAll || p.allowed;
+  const earnReasons = () => { p.allowed = p.allowedAll.filter((id) => reasonEarned(id, isSolved)); };
+  earnReasons();
   const saved = progress()[pkey(stage, n)];
   const state = {
     rows: (saved && saved.rows) || [],
@@ -780,7 +785,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     box.hidden = !solved;
     $('#composer', root).classList.toggle('is-dim', solved);
     if (!solved) { box.innerHTML = ''; wasSolved = false; return; }
-    if (!wasSolved) { toolNews = toolsOpenedNow(); syncTools(); }
+    if (!wasSolved) { toolNews = toolsOpenedNow(); theoremNews = !!p.proves && !isSolved(stage, n) && !isAdmin(); syncTools(); }
     const all = problemList();
     const idx = all.findIndex((x) => x.stage === stage && x.n === n);
     const nxt = all[idx + 1];
@@ -790,6 +795,7 @@ function bindProblem(root, { stage, n, problem: p }) {
         <h3>${t('pp.solved.t')}</h3>
         <p>${t('pp.solved.p')}</p>
         ${nxt ? '' : `<p class="muted">${t('pp.solved.last')}</p>`}
+        ${theoremNews ? `<p class="tool-news">${icon('spark')}<span><b>${t('tool.theoremNew', { name: reasonShort(p.proves) })}</b> ${t('tool.theoremNewP')}</span></p>` : ''}
         ${toolNews.map((id) => `<p class="tool-news">${icon(TOOLS[id].icon)}<span><b>${t('tool.new', { name: t('tool.' + id) })}</b> ${t('tool.' + id + '.new')}</span></p>`).join('')}
         <div class="cta-row">
           ${nxt ? `<a class="btn btn-primary" href="#/hs/geometry/${nxt.stage}/${nxt.n}">${t('pp.solved.next')} ${icon('arrow', 'dir')}</a>` : ''}
@@ -917,7 +923,7 @@ function bindProblem(root, { stage, n, problem: p }) {
     sugg.innerHTML = options.length
       ? options.map((o, i) => `<li role="option" id="rs-${i}" class="sugg${o.locked ? ' is-locked' : ''}${i === active ? ' is-active' : ''}" data-i="${i}" aria-disabled="${o.locked}">
           <span class="sg-name">${esc(L(o.r.short))}</span>
-          <span class="sg-text">${o.locked ? `${icon('lock')} ${t('pp.lockedAt', { n: stageNumber(o.r.stage) })}` : rich(L(o.r.statement))}</span>
+          <span class="sg-text">${o.locked ? `${icon('lock')} ${p.allowedAll && p.allowedAll.includes(o.id) ? t('tool.proveFirst', { q: provedInLabel(o.id) }) : t('pp.lockedAt', { n: stageNumber(o.r.stage) })}` : rich(L(o.r.statement))}</span>
         </li>`).join('')
       : `<li class="sugg is-empty" aria-disabled="true">${t('pp.reasonNone')}</li>`;
     sugg.hidden = !reasonInput.value.trim();
@@ -1082,6 +1088,7 @@ function bindProblem(root, { stage, n, problem: p }) {
   const toolsAbort = new AbortController(); // ends a hint wait when the student leaves the page
   let hintWaiting = false;
   let toolNews = []; // tools this solve opened, announced in the "solved" box
+  let theoremNews = false; // this solve proved a theorem that now joins the toolbox
   const openedAt = Date.now();
   let tryTimer = 0; // re-checks the hint when its "try first" time runs out
   const factsEl = $('.facts', root);
@@ -1220,7 +1227,8 @@ function bindProblem(root, { stage, n, problem: p }) {
 
   viewAsSel.addEventListener('change', () => setViewAs(viewAsSel.value));
   // Settings, the user, or the admin's student view changed: redraw everything the tools touch.
-  const offTools = onToolsChange(() => { syncTools(); renderHints(); toolsAfterRows(); });
+  // (renderRows re-checks the proof, since an admin's view can change which theorems are earned.)
+  const offTools = onToolsChange(() => { earnReasons(); syncTools(); renderHints(); renderRows(); });
 
   syncTools();
   renderHints();

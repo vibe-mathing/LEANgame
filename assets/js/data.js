@@ -352,6 +352,32 @@ export const PROBLEMS = {
         { he: 'ומהחפיפה: $AB = AD$.', en: 'And from the congruence: $AB = AD$.' },
       ],
     },
+    {
+      // A theorem the student proves: solving this puts "base angles" (iso_base) in their
+      // toolbox (tools.js: PROVED_IN). Until then the reason stays locked everywhere.
+      n: 4,
+      proves: 'iso_base',
+      title: { he: 'הוכחת משפט זוויות הבסיס', en: 'Proving the base angles theorem' },
+      intro: {
+        he: 'במשולש $ABC$ נתון $AB = AC$. הוכיחו שזוויות הבסיס שוות. אחרי שתוכיחו את המשפט, הוא ייכנס לארגז הכלים שלכם בשם "זוויות הבסיס".',
+        en: 'In triangle $ABC$, $AB = AC$. Prove that the base angles are equal. Once you prove it, the theorem joins your toolbox as "Base angles".',
+      },
+      points: { A: [0, 4], B: [-2.6, 0], C: [2.6, 0] },
+      segments: ['AB', 'AC', 'BC'],
+      config: [],
+      givens: [{ claim: 'AB = AC' }],
+      goal: '∢ABC = ∢ACB',
+      marks: [
+        { type: 'tick', seg: 'AB', n: 1 }, { type: 'tick', seg: 'AC', n: 1 },
+        { type: 'arc', ang: 'ABC', r: 30, goal: true }, { type: 'arc', ang: 'ACB', r: 30, goal: true },
+      ],
+      hints: [
+        { he: 'הטריק: משווים את המשולש לעצמו. $△ABC$ ו-$△ACB$ הם אותו משולש, כשקוראים את הקודקודים בסדר אחר.', en: 'The trick: compare the triangle with itself. $△ABC$ and $△ACB$ are the same triangle, with the vertices read in another order.' },
+        { he: 'כתבו את הנתון פעמיים: $AB = AC$ וגם $AC = AB$. הזווית שביניהן משותפת: $∢BAC = ∢CAB$.', en: 'Write the given twice: $AB = AC$ and also $AC = AB$. The angle between them is shared: $∢BAC = ∢CAB$.' },
+        { he: 'שתי צלעות והזווית שביניהן: $△ABC ≅ △ACB$ לפי צ.ז.צ. שימו לב ש-$B$ מתאימה ל-$C$.', en: 'Two sides and the angle between them: $△ABC ≅ △ACB$ by SAS. Note that $B$ matches $C$.' },
+        { he: 'מהחפיפה, זוויות מתאימות: $∢ABC = ∢ACB$.', en: 'From the congruence, corresponding angles: $∢ABC = ∢ACB$.' },
+      ],
+    },
   ],
   L03: [
     {

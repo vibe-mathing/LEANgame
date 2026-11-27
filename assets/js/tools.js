@@ -122,6 +122,20 @@ export function toolLockText(id) {
 // Tools that open when every problem of `stageId` is solved.
 export const toolsAfter = (stageId) => SETTABLE.filter((id) => current()[id] === stageId);
 
+// ---------------------------------------------------------------- theorems the student proves
+// A problem with `proves: '<reason id>'` is where the student proves that theorem. Until
+// they solve it, the reason stays out of their toolbox, in every problem (the admin
+// always has it). PROVED_IN maps the reason to that problem.
+
+export const PROVED_IN = (() => {
+  const m = {};
+  for (const s of STAGES) for (const p of PROBLEMS[s.id] || []) if (p.proves) m[p.proves] = { stage: s.id, n: p.n };
+  return m;
+})();
+export const reasonEarned = (id, isSolved) => isAdmin() || !PROVED_IN[id] || isSolved(PROVED_IN[id].stage, PROVED_IN[id].n);
+// "2.4": the problem that proves the reason, as the site numbers problems.
+export const provedInLabel = (id) => (PROVED_IN[id] ? `${stageNumber(PROVED_IN[id].stage)}.${PROVED_IN[id].n}` : '');
+
 // The wait before hint number k + 1.
 export const hintSeconds = (k) => {
   const w = current().hintWait;

@@ -958,3 +958,8 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .stools-item .adm-select { width: 100%; }
 .stools-check { grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; cursor: pointer; }
 .stools-check small { grid-column: 2; color: var(--muted); font-size: .76rem; line-height: 1.4; }
+
+/* A theorem the student proves (tools.js: PROVED_IN): its card in the toolbox */
+.rc-proved { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 0; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.rc-proved.is-done { color: var(--ok); background: var(--ok-soft); }
+.rc-proved .ic { width: 14px; height: 14px; }
