@@ -56,6 +56,12 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
         const c = [M[0] + u[0] * off, M[1] + u[1] * off];
         marks += `<path class="dg-tick" d="M${pt([c[0] - nrm[0] * 7, c[1] - nrm[1] * 7])}L${pt([c[0] + nrm[0] * 7, c[1] + nrm[1] * 7])}"/>`;
       }
+    } else if (m.type === 'right') {
+      // the right-angle square at V between the arms toward X and Y
+      const [X, V, Y] = m.ang.split('');
+      const unit = (Q) => { const L = dist(P[V], P[Q]); return [(P[Q][0] - P[V][0]) / L, (P[Q][1] - P[V][1]) / L]; };
+      const u1 = unit(X); const u2 = unit(Y); const s = 13; const v = P[V];
+      marks += `<path class="dg-arc${m.goal ? ' is-goal' : ''}" d="M${pt([v[0] + u1[0] * s, v[1] + u1[1] * s])}L${pt([v[0] + (u1[0] + u2[0]) * s, v[1] + (u1[1] + u2[1]) * s])}L${pt([v[0] + u2[0] * s, v[1] + u2[1] * s])}"/>`;
     } else if (m.type === 'arc') {
       const [X, V, Y] = m.ang.split('');
       const r = angleRadius(X, V, Y, m.r || 30);
@@ -124,9 +130,13 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
 export function claimToItems(claim) {
   if (!claim) return [];
   if (claim.type === 'cong') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];
+  if (claim.type === 'perp') return [{ kind: 'seg', p: claim.a, tone: 'a' }, { kind: 'seg', p: claim.b, tone: 'b' }];
+  // Every segment and angle of each side (sides can be sums such as ∢AOC + ∢COB).
   const items = [];
-  for (const [t, tone] of [[claim.left, 'a'], [claim.right, 'b']]) {
-    if (t.kind === 'seg' || t.kind === 'ang') items.push({ kind: t.kind, p: t.p, tone });
+  for (const [side, tone] of [[claim.L, 'a'], [claim.R, 'b']]) {
+    for (const { t } of (side && side.terms) || []) {
+      if (t.kind === 'seg' || t.kind === 'ang') items.push({ kind: t.kind, p: t.p, tone });
+    }
   }
   return items;
 }

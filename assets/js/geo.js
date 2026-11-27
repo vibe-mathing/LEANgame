@@ -25,6 +25,7 @@ export function liveFormat(s) {
 export function normalizeInput(s) {
   return String(s)
     .replace(/\s+/g, '')
+    .replace(/_\|_|⟂/g, '⊥')
     .replace(/[∠∡]/g, '∢')
     .replace(/(^|[=+\-−*≅~\d])[<>]/g, '$1∢')
     .replace(/[Δ∆▵▲]/g, '△')
@@ -159,6 +160,16 @@ export function parseClaim(input, ctx) {
     if (new Set(P).size < 3 || new Set(Q).size < 3) return fail('repeatPoint');
     return ok({ type: 'cong', P, Q });
   }
+  if (s.includes('⊥')) {
+    const parts = s.split('⊥');
+    if (parts.length !== 2 || !parts.every((x) => /^[A-Z]{2}$/.test(x))) return fail('badPerp');
+    const [a, b] = parts.map((x) => [...x]);
+    const bad = [...a, ...b].find((x) => !points.includes(x));
+    if (bad) return fail('unknownPoint', { p: `$${bad}$` });
+    if (a[0] === a[1] || b[0] === b[1]) return fail('repeatPoint');
+    const coords = Array.isArray(ctx) ? null : ctx.points;
+    return ok({ type: 'perp', a, b, la: lineKey(coords, a[0], a[1]), lb: lineKey(coords, b[0], b[1]) });
+  }
   const parts = s.split('=');
   if (parts.length > 2) return fail('oneRelation');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return fail('noRelation');
@@ -227,10 +238,26 @@ export function inSpan(vectors, target) {
 
 const refVectors = (refRows) => refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
 
+// ---------- lines ----------
+// A line can be named by any two of its points (BC, CB, BD, DC … when D is on BC), so a
+// line is keyed by every point of the diagram that lies on it.
+
+const collinear = (pts, P, Q, X) => {
+  const u = [pts[Q][0] - pts[P][0], pts[Q][1] - pts[P][1]];
+  const v = [pts[X][0] - pts[P][0], pts[X][1] - pts[P][1]];
+  return Math.abs(u[0] * v[1] - u[1] * v[0]) < 1e-6 * Math.hypot(...u) * Math.max(1, Math.hypot(...v));
+};
+
+export function lineKey(pts, P, Q) {
+  if (!pts) return 'l:' + [P, Q].sort().join('');
+  return 'l:' + Object.keys(pts).filter((X) => X === P || X === Q || collinear(pts, P, Q, X)).sort().join('');
+}
+
 // ---------- canonical form ----------
 
 export function claimKey(c) {
   if (!c) return '';
+  if (c.type === 'perp') return 'perp:' + [c.la, c.lb].sort().join('|');
   if (c.type === 'eq') {
     const v = eqVec(c);
     if (!v.size) return 'eq:0';
@@ -271,6 +298,7 @@ function fmtSide(side, of) {
 export function fmtClaim(c) {
   if (!c) return '';
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
+  if (c.type === 'perp') return `${c.a.join('')} ⊥ ${c.b.join('')}`;
   return `${fmtSide(c.L, c.of)} = ${fmtSide(c.R, c.of)}`;
 }
 
@@ -290,6 +318,7 @@ function leanSide(side) {
 
 export function leanClaim(c) {
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
+  if (c.type === 'perp') return `Perp ${c.a.join(' ')} ${c.b.join(' ')}`;
   return `${leanSide(c.L)} = ${leanSide(c.R)}`;
 }
 
@@ -458,7 +487,105 @@ function betweenIdx(problem, p, o, q) {
     && ((r(c.a) === r(p) && r(c.b) === r(q)) || (r(c.a) === r(q) && r(c.b) === r(p))));
 }
 
+// ---------- isosceles triangles and right angles (stage 3) ----------
+
+// "AB = AC": apex A and base B, C, when the two segments share exactly one endpoint.
+function apexOf(c) {
+  if (!isEqOf(c, 'seg')) return null;
+  const [p, q] = c.left.p;
+  const [r, s] = c.right.p;
+  const common = [p, q].filter((x) => x === r || x === s);
+  if (common.length !== 1) return null;
+  const A = common[0];
+  const B = p === A ? q : p;
+  const C = r === A ? s : r;
+  return B === C ? null : { A, B, C };
+}
+
+const sameKeys = (c, keys) => [termKey(c.left), termKey(c.right)].sort().join('|') === [...keys].sort().join('|');
+
+// The angle of a claim "∢XVY = 90°", or null.
+function rightAngle(c) {
+  if (c.type !== 'eq' || c.of !== 'ang') return null;
+  const v = eqVec(c);
+  const angs = [...v.keys()].filter((k) => k.startsWith('a:'));
+  if (angs.length !== 1 || Math.abs((v.get('1') || 0) + 90 * v.get(angs[0])) > 1e-6) return null;
+  return [...c.L.terms, ...c.R.terms].map((x) => x.t).find((t) => termKey(t) === angs[0]);
+}
+
+// Do the arms of angle t lie on the lines la and lb?
+function armsAre(problem, t, la, lb) {
+  const [X, V, Y] = t.p;
+  const l1 = lineKey(problem.points, V, X);
+  const l2 = lineKey(problem.points, V, Y);
+  return (l1 === la && l2 === lb) || (l1 === lb && l2 === la);
+}
+
+// What a claim says about segment AD, for D on the base BC of isosceles △ABC:
+// 'median' (BD = CD), 'bisector' (∢BAD = ∢CAD) or 'altitude' (AD ⊥ BC, or ∢ADB = 90°).
+function saysAboutAD(problem, c, A, B, C, D) {
+  const pts = problem.points;
+  const lAD = lineKey(pts, A, D);
+  const lBC = lineKey(pts, B, C);
+  if (isEqOf(c, 'seg') && sameKeys(c, [segKey(B, D), segKey(C, D)])) return 'median';
+  if (isEqOf(c, 'ang') && sameKeys(c, [angKey(B, A, D, problem.rays), angKey(C, A, D, problem.rays)])) return 'bisector';
+  if (c.type === 'perp' && [c.la, c.lb].sort().join() === [lAD, lBC].sort().join()) return 'altitude';
+  const t = rightAngle(c);
+  if (t && t.p[1] === D && armsAre(problem, t, lAD, lBC)) return 'altitude';
+  return null;
+}
+
 const CHECKS = {
+  perp_def(claim, refRows, problem) {
+    const base = 'perp_def';
+    if (refRows.length !== 1) return { ok: false, msg: { key: 'needRefsN', vars: { rid: 'perp_def', n: 1 } }, proof: base };
+    const ref = refRows[0];
+    const [pc, ac] = claim.type === 'perp' ? [claim, ref.claim] : [ref.claim, claim];
+    const t = pc.type === 'perp' ? rightAngle(ac) : null;
+    const proof = `${base}.${claim.type === 'perp' ? 'mpr' : 'mp'} s${ref.n}`;
+    if (!t) return { ok: false, msg: { key: 'perpDefShape' }, proof };
+    if (!armsAre(problem, t, pc.la, pc.lb)) return { ok: false, msg: { key: 'perpDefNotSame' }, proof };
+    return { ok: true, proof };
+  },
+  iso_base(claim, refRows, problem) {
+    const proof = `iso_base_angles ${refNames(refRows)}`.trim();
+    const legs = refRows.length === 1 ? apexOf(refRows[0].claim) : null;
+    if (!legs) return { ok: false, msg: { key: 'isoNeedLegs' }, proof };
+    const { A, B, C } = legs;
+    if (degenerate(problem, [A, B, C])) return { ok: false, msg: { key: 'degenerate', vars: { t: `$△${A}${B}${C}$` } }, proof };
+    if (!isEqOf(claim, 'ang')) return { ok: false, msg: { key: 'isoBaseNeedAngles' }, proof };
+    if (sameKeys(claim, [angKey(A, B, C, problem.rays), angKey(A, C, B, problem.rays)])) return { ok: true, proof };
+    return { ok: false, msg: { key: 'isoBaseWrong', vars: { t: `$△${A}${B}${C}$`, a: `$∢${A}${B}${C} = ∢${A}${C}${B}$` } }, proof };
+  },
+  iso_converse(claim, refRows, problem) {
+    const proof = `iso_of_angles ${refNames(refRows)}`.trim();
+    const legs = apexOf(claim);
+    if (!legs) return { ok: false, msg: { key: 'isoConvNeedSides' }, proof };
+    const { A, B, C } = legs;
+    if (degenerate(problem, [A, B, C])) return { ok: false, msg: { key: 'degenerate', vars: { t: `$△${A}${B}${C}$` } }, proof };
+    const ref = refRows.length === 1 && isEqOf(refRows[0].claim, 'ang') ? refRows[0] : null;
+    if (!ref) return { ok: false, msg: { key: 'isoNeedBaseAngles' }, proof };
+    if (sameKeys(ref.claim, [angKey(A, B, C, problem.rays), angKey(A, C, B, problem.rays)])) return { ok: true, proof };
+    return { ok: false, msg: { key: 'isoConvWrong', vars: { s: `$${fmtClaim(claim)}$`, a: `$∢${A}${B}${C} = ∢${A}${C}${B}$` } }, proof };
+  },
+  // In an isosceles triangle the median to the base, the apex bisector and the altitude
+  // to the base are the same segment: knowing one of them gives the other two.
+  iso_median(claim, refRows, problem) {
+    const proof = `iso_median ${refNames(refRows)}`.trim();
+    let msg = null;
+    for (const legsRow of refRows) {
+      const legs = apexOf(legsRow.claim);
+      if (!legs || degenerate(problem, [legs.A, legs.B, legs.C])) continue;
+      const { A, B, C } = legs;
+      for (const D of problem.pointNames.filter((x) => strictlyBetween(problem.points, B, x, C))) {
+        if (!saysAboutAD(problem, claim, A, B, C, D)) continue;
+        if (refRows.some((r) => r !== legsRow && saysAboutAD(problem, r.claim, A, B, C, D))) return { ok: true, proof };
+        msg = msg || { key: 'isoMedianNeedOne', vars: { d: `$${A}${D}$` } };
+      }
+      msg = msg || { key: 'isoMedianShape' };
+    }
+    return { ok: false, msg: msg || { key: 'isoNeedLegs' }, proof };
+  },
   given(claim, refRows, problem) {
     const gi = problem.givensParsed.findIndex((g) => claimKey(g) === claimKey(claim));
     if (gi < 0) return { ok: false, msg: { key: 'notGiven' }, proof: 'g?' };

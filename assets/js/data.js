@@ -91,7 +91,7 @@ export const REASONS = {
   around_point: R('L01', 'theorem', 0, 'around_point_sum', ['זוויות סביב נקודה', 'זוויות סביב נקודה', 'סכום הזוויות סביב נקודה הוא $360°$.'], ['Angles around a point', 'Angles around a point', 'The angles around a point sum to $360°$.']),
   bisector_def: R('L01', 'definition', 0, 'bisector_def', ['חוצה זווית', 'הגדרת חוצה זווית', 'חוצה זווית מחלק אותה לשתי זוויות שוות.'], ['Angle bisector', 'Definition of angle bisector', 'An angle bisector splits an angle into two equal angles.'], true),
   midpoint_def: R('L01', 'definition', 0, 'midpoint_def', ['אמצע קטע', 'הגדרת אמצע קטע', 'אמצע קטע מחלק אותו לשני קטעים שווים.'], ['Midpoint', 'Definition of midpoint', 'A midpoint splits a segment into two equal parts.']),
-  perp_def: R('L01', 'definition', 0, 'perp_def', ['ישרים מאונכים', 'הגדרת ישרים מאונכים', 'ישרים מאונכים יוצרים זווית של $90°$.'], ['Perpendicular lines', 'Definition of perpendicular', 'Perpendicular lines form a $90°$ angle.']),
+  perp_def: R('L01', 'definition', 1, 'perp_def', ['ישרים מאונכים', 'הגדרת ישרים מאונכים', 'ישרים מאונכים יוצרים זווית של $90°$, ולהפך: זווית של $90°$ אומרת שהישרים מאונכים.'], ['Perpendicular lines', 'Definition of perpendicular', 'Perpendicular lines form a $90°$ angle, and a $90°$ angle means the lines are perpendicular.'], true),
 
   // L02 congruence
   SAS: R('L02', 'theorem', 3, 'cong_SAS', ['צ.ז.צ', 'משפט חפיפה צ.ז.צ', 'שתי צלעות והזווית שביניהן שוות לשתי צלעות והזווית שביניהן, ולכן המשולשים חופפים.'], ['SAS', 'SAS congruence', 'Two sides and the angle between them match, so the triangles are congruent.'], true),
@@ -102,9 +102,9 @@ export const REASONS = {
   cpct_angle: R('L02', 'theorem', 1, 'cong_angle', ['זוויות מתאימות בחפיפה', 'זוויות מתאימות במשולשים חופפים', 'במשולשים חופפים, זוויות מתאימות שוות.'], ['Corresponding angles', 'Corresponding angles of congruent triangles', 'In congruent triangles, corresponding angles are equal.'], true),
 
   // L03 isosceles
-  iso_base: R('L03', 'theorem', 1, 'iso_base_angles', ['זוויות הבסיס', 'זוויות הבסיס במשולש שווה שוקיים', 'במשולש שווה שוקיים זוויות הבסיס שוות.'], ['Base angles', 'Base angles of an isosceles triangle', 'The base angles of an isosceles triangle are equal.']),
-  iso_converse: R('L03', 'theorem', 1, 'iso_of_angles', ['שתי זוויות שוות', 'משולש עם שתי זוויות שוות', 'משולש שיש בו שתי זוויות שוות הוא שווה שוקיים.'], ['Two equal angles', 'Triangle with two equal angles', 'A triangle with two equal angles is isosceles.']),
-  iso_median: R('L03', 'theorem', 1, 'iso_median', ['תיכון לבסיס', 'הקטע המיוחד במשולש שווה שוקיים', 'במשולש שווה שוקיים התיכון לבסיס הוא גם הגובה לבסיס וגם חוצה את זווית הראש.'], ['Median to the base', 'The special segment of an isosceles triangle', 'In an isosceles triangle the median to the base is also the altitude and the apex angle bisector.']),
+  iso_base: R('L03', 'theorem', 1, 'iso_base_angles', ['זוויות הבסיס', 'זוויות הבסיס במשולש שווה שוקיים', 'במשולש שווה שוקיים זוויות הבסיס שוות.'], ['Base angles', 'Base angles of an isosceles triangle', 'The base angles of an isosceles triangle are equal.'], true),
+  iso_converse: R('L03', 'theorem', 1, 'iso_of_angles', ['שתי זוויות שוות', 'משולש עם שתי זוויות שוות', 'משולש שיש בו שתי זוויות שוות הוא שווה שוקיים.'], ['Two equal angles', 'Triangle with two equal angles', 'A triangle with two equal angles is isosceles.'], true),
+  iso_median: R('L03', 'theorem', 'many', 'iso_median', ['תיכון לבסיס', 'הקטע המיוחד במשולש שווה שוקיים', 'במשולש שווה שוקיים התיכון לבסיס, הגובה לבסיס וחוצה זווית הראש הם אותו קטע: אם הוא אחד מהם, הוא גם שני האחרים.'], ['Median to the base', 'The special segment of an isosceles triangle', 'In an isosceles triangle the median to the base, the altitude to the base and the apex bisector are one segment: if it is one of them, it is the other two.'], true),
 
   // L04 parallel lines
   alt_angles: R('L04', 'theorem', 1, 'par_alt_angles', ['זוויות מתחלפות', 'זוויות מתחלפות בין מקבילים', 'זוויות מתחלפות בין ישרים מקבילים שוות.'], ['Alternate angles', 'Alternate angles between parallels', 'Alternate angles between parallel lines are equal.']),
@@ -178,7 +178,7 @@ export const STAGES = [
     blurb: { he: 'ארבעת משפטי החפיפה, והכלי החזק ביותר בגאומטריה: צלעות וזוויות מתאימות.', en: 'The four congruence theorems, and the strongest tool in geometry: corresponding parts.' },
   },
   {
-    id: 'L03', glyph: 'isosceles', status: 'soon',
+    id: 'L03', glyph: 'isosceles', status: 'open',
     name: { he: 'משולש שווה שוקיים', en: 'Isosceles triangle' },
     blurb: { he: 'זוויות הבסיס, המשפט ההפוך, והקטע שהוא גם תיכון, גם גובה וגם חוצה זווית.', en: 'Base angles, the converse, and the segment that is median, altitude and bisector at once.' },
   },
@@ -344,6 +344,79 @@ export const PROBLEMS = {
         { he: 'הצלע $AC$ משותפת, והיא בדיוק הצלע שבין שתי הזוויות.', en: 'Side $AC$ is shared, and it is exactly the side between the two angles.' },
         { he: 'צלע ושתי הזוויות שלידה: איזה משפט חפיפה זה? כתבו $△ABC ≅ △ADC$.', en: 'A side and the two angles next to it: which congruence theorem is that? Write $△ABC ≅ △ADC$.' },
         { he: 'ומהחפיפה: $AB = AD$.', en: 'And from the congruence: $AB = AD$.' },
+      ],
+    },
+  ],
+  L03: [
+    {
+      n: 1,
+      title: { he: 'התיכון לבסיס', en: 'The median to the base' },
+      intro: { he: 'במשולש $ABC$ הנקודה $D$ נמצאת על הצלע $BC$.', en: 'In triangle $ABC$, point $D$ lies on side $BC$.' },
+      points: { A: [0, 4], B: [-3, 0], C: [3, 0], D: [0, 0] },
+      segments: ['AB', 'AC', 'BC', 'AD'],
+      config: [
+        { type: 'between', a: 'B', o: 'D', b: 'C', lean: 'Sbtw ℝ B D C', text: { he: '$D$ נמצאת על $BC$', en: '$D$ lies on $BC$' } },
+      ],
+      givens: [
+        { claim: 'AB = AC' },
+        { claim: 'BD = DC', text: { he: '$D$ אמצע $BC$', en: '$D$ is the midpoint of $BC$' }, also: ['midpoint_def'] },
+      ],
+      goal: 'AD ⊥ BC',
+      marks: [
+        { type: 'tick', seg: 'AB', n: 1 }, { type: 'tick', seg: 'AC', n: 1 },
+        { type: 'tick', seg: 'BD', n: 2 }, { type: 'tick', seg: 'DC', n: 2 },
+        { type: 'right', ang: 'ADC', goal: true },
+      ],
+      hints: [
+        { he: 'כתבו את שני הנתונים.', en: 'Write down both givens.' },
+        { he: 'המשולש $ABC$ שווה שוקיים, ו-$AD$ הוא התיכון לבסיס. מה עוד נכון לגבי הקטע הזה?', en: 'Triangle $ABC$ is isosceles and $AD$ is the median to the base. What else is true about that segment?' },
+        { he: 'במשולש שווה שוקיים התיכון לבסיס הוא גם הגובה. כתבו $AD ⊥ BC$, הקלידו את שם המשפט, וסמנו את שתי השורות.', en: 'In an isosceles triangle the median to the base is also the altitude. Write $AD ⊥ BC$, type the theorem name and cite both rows.' },
+      ],
+    },
+    {
+      n: 2,
+      title: { he: 'זוויות הבסיס וחפיפה', en: 'Base angles and congruence' },
+      intro: { he: 'במשולש $ABC$ הנקודות $D$ ו-$E$ נמצאות על הצלע $BC$.', en: 'In triangle $ABC$, points $D$ and $E$ lie on side $BC$.' },
+      points: { A: [0, 4], B: [-4, 0], C: [4, 0], D: [-1.5, 0], E: [1.5, 0] },
+      segments: ['AB', 'AC', 'BC', 'AD', 'AE'],
+      config: [
+        { type: 'between', a: 'B', o: 'D', b: 'E', lean: 'Sbtw ℝ B D E', text: { he: '$D$ נמצאת בין $B$ ל-$E$', en: '$D$ lies between $B$ and $E$' } },
+        { type: 'between', a: 'D', o: 'E', b: 'C', lean: 'Sbtw ℝ D E C', text: { he: '$E$ נמצאת בין $D$ ל-$C$', en: '$E$ lies between $D$ and $C$' } },
+      ],
+      givens: [{ claim: 'AB = AC' }, { claim: 'BD = CE' }],
+      goal: 'AD = AE',
+      marks: [
+        { type: 'tick', seg: 'AB', n: 1 }, { type: 'tick', seg: 'AC', n: 1 },
+        { type: 'tick', seg: 'BD', n: 2 }, { type: 'tick', seg: 'CE', n: 2 },
+      ],
+      hints: [
+        { he: 'כתבו את שני הנתונים.', en: 'Write down both givens.' },
+        { he: 'המשולש $ABC$ שווה שוקיים, ולכן זוויות הבסיס שלו שוות. כתבו את זה בשמות של המשולשים $△ABD$ ו-$△ACE$: $∢ABD = ∢ACE$.', en: 'Triangle $ABC$ is isosceles, so its base angles are equal. Write it with the names of triangles $△ABD$ and $△ACE$: $∢ABD = ∢ACE$.' },
+        { he: 'עכשיו יש שתי צלעות והזווית שביניהן.', en: 'Now you have two sides and the angle between them.' },
+        { he: 'ומהחפיפה: $AD = AE$.', en: 'And from the congruence: $AD = AE$.' },
+      ],
+    },
+    {
+      n: 3,
+      title: { he: 'מבפנים החוצה', en: 'From the inside out' },
+      intro: { he: 'במשולש $ABC$ הנקודות $D$ ו-$E$ נמצאות על הצלע $BC$.', en: 'In triangle $ABC$, points $D$ and $E$ lie on side $BC$.' },
+      points: { A: [0, 4], B: [-4, 0], C: [4, 0], D: [-1.5, 0], E: [1.5, 0] },
+      segments: ['AB', 'AC', 'BC', 'AD', 'AE'],
+      config: [
+        { type: 'between', a: 'B', o: 'D', b: 'E', lean: 'Sbtw ℝ B D E', text: { he: '$D$ נמצאת בין $B$ ל-$E$', en: '$D$ lies between $B$ and $E$' } },
+        { type: 'between', a: 'D', o: 'E', b: 'C', lean: 'Sbtw ℝ D E C', text: { he: '$E$ נמצאת בין $D$ ל-$C$', en: '$E$ lies between $D$ and $C$' } },
+      ],
+      givens: [{ claim: 'AD = AE' }, { claim: 'BD = CE' }],
+      goal: 'AB = AC',
+      marks: [
+        { type: 'tick', seg: 'AD', n: 1 }, { type: 'tick', seg: 'AE', n: 1 },
+        { type: 'tick', seg: 'BD', n: 2 }, { type: 'tick', seg: 'CE', n: 2 },
+      ],
+      hints: [
+        { he: 'המשולש $ADE$ שווה שוקיים. מה זה אומר על $∢ADE$ ועל $∢AED$?', en: 'Triangle $ADE$ is isosceles. What does that say about $∢ADE$ and $∢AED$?' },
+        { he: '$∢ADB$ צמודה ל-$∢ADE$, ו-$∢AEC$ צמודה ל-$∢AED$. כתבו את שני הסכומים.', en: '$∢ADB$ is adjacent to $∢ADE$, and $∢AEC$ to $∢AED$. Write both sums.' },
+        { he: 'מכאן, בחישוב: $∢ADB = ∢AEC$.', en: 'So, by calculation: $∢ADB = ∢AEC$.' },
+        { he: 'עכשיו חפיפה של $△ADB$ ו-$△AEC$, ומהחפיפה $AB = AC$.', en: 'Now $△ADB$ and $△AEC$ are congruent, and so $AB = AC$.' },
       ],
     },
   ],

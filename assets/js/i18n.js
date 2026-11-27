@@ -228,6 +228,17 @@ const STR = {
     'err.notInDiagram': 'הטענה הזאת אינה אחת העובדות שבשרטוט.',
     'err.leanRaw': 'Lean לא קיבל את השורה: {text}',
     'lean.between': '{o} בין {a} ל-{b}',
+    'err.badPerp': 'ישרים מאונכים כותבים כך: $AD ⊥ BC$.',
+    'err.perpDefShape': '"ישרים מאונכים" מחבר בין $AD ⊥ BC$ לבין זווית של $90°$, כמו $∢ADB = 90°$: אחד מהם בטענה, והשני בשורה שמסמנים.',
+    'err.perpDefNotSame': 'הזווית הזאת אינה בין שני הישרים האלה.',
+    'err.isoNeedLegs': 'סמנו את השורה שאומרת ששתי השוקיים שוות, למשל $AB = AC$.',
+    'err.isoBaseNeedAngles': 'כאן הטענה היא ששתי זוויות הבסיס שוות.',
+    'err.isoBaseWrong': 'במשולש {t} זוויות הבסיס הן {a}.',
+    'err.isoConvNeedSides': 'כאן הטענה היא ששתי השוקיים שוות, למשל $AB = AC$.',
+    'err.isoNeedBaseAngles': 'סמנו את השורה שאומרת ששתי זוויות הבסיס שוות.',
+    'err.isoConvWrong': 'כדי לקבל {s} צריך ש-{a}.',
+    'err.isoMedianShape': 'הטענה צריכה לומר שהקטע מהקודקוד אל הבסיס הוא תיכון, חוצה זווית או גובה, למשל $AD ⊥ BC$.',
+    'err.isoMedianNeedOne': 'סמנו גם שורה שאומרת ש-{d} הוא תיכון, חוצה זווית או גובה.',
     'lean.triangle': '{t} הוא משולש',
     'lean.checked': 'נבדק ב-Lean',
     'lean.status.online': 'נבדק ב-Lean',
@@ -475,6 +486,17 @@ export const getLang = () => lang;
 export function setLang(l) {
   lang = l === 'en' ? 'en' : 'he';
   document.documentElement.lang = lang;
+    'err.badPerp': 'Write perpendicular lines like this: $AD ⊥ BC$.',
+    'err.perpDefShape': '"Perpendicular lines" links $AD ⊥ BC$ with a $90°$ angle such as $∢ADB = 90°$: one in the claim, the other in the cited row.',
+    'err.perpDefNotSame': 'That angle is not between these two lines.',
+    'err.isoNeedLegs': 'Cite the row that says the two legs are equal, like $AB = AC$.',
+    'err.isoBaseNeedAngles': 'Here the claim is that the two base angles are equal.',
+    'err.isoBaseWrong': 'In {t} the base angles are {a}.',
+    'err.isoConvNeedSides': 'Here the claim is that the two legs are equal, like $AB = AC$.',
+    'err.isoNeedBaseAngles': 'Cite the row that says the two base angles are equal.',
+    'err.isoConvWrong': 'To get {s} you need {a}.',
+    'err.isoMedianShape': 'The claim should say the segment from the apex to the base is a median, a bisector or an altitude, like $AD ⊥ BC$.',
+    'err.isoMedianNeedOne': 'Also cite a row saying {d} is a median, a bisector or an altitude.',
   document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
   try { localStorage.setItem('lg.lang', JSON.stringify(lang)); } catch { /* private mode */ }
 }

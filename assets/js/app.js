@@ -582,7 +582,7 @@ function viewProblem({ stage, n, problem: p }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', '≅', '=', '+', '°'].map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', '≅', '⊥', '=', '+', '°'].map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
