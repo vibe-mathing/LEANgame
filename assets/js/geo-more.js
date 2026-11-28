@@ -57,7 +57,7 @@ export const MORE_REASONS = {
     ['Area ratio of similar triangles', 'Areas of similar triangles', 'The ratio of the areas of similar triangles is the square of the ratio of similarity.']),
   // L06 quadrilaterals: how to recognise each one (the converse theorems)
   quad_props: R('L06', 'theorem', 1, 'quad_props',
-    ['תכונות מרובע', 'תכונות של מלבן, מעוין וריבוע', 'במלבן כל הזוויות ישרות. במעוין כל הצלעות שוות. בריבוע גם וגם. (ראו גם צלעות נגדיות, זוויות נגדיות ואלכסונים.)'],
+    ['תכונות מרובע', 'תכונות של מלבן, מעוין, ריבוע וטרפז שווה שוקיים', 'במלבן כל הזוויות ישרות. במעוין כל הצלעות שוות. בריבוע גם וגם. בטרפז שווה שוקיים השוקיים שוות. (ראו גם צלעות נגדיות, זוויות נגדיות ואלכסונים.)'],
     ['Quadrilateral properties', 'Properties of rectangles, rhombi and squares', 'A rectangle\'s angles are all right angles. A rhombus\'s sides are all equal. A square has both. (See also opposite sides, opposite angles and diagonals.)']),
   quad_test: R('L06', 'theorem', 'many', 'quad_tests',
     ['זיהוי מרובע', 'משפטי זיהוי של מרובעים', 'מקבילית: שני זוגות צלעות נגדיות מקבילות או שוות, זוג צלעות נגדיות שוות ומקבילות, או אלכסונים חוצים זה את זה. מלבן: מקבילית עם זווית ישרה או עם אלכסונים שווים. מעוין: מקבילית עם שתי צלעות סמוכות שוות או עם אלכסונים מאונכים, או מרובע שכל צלעותיו שוות. ריבוע: מלבן עם צלעות סמוכות שוות, או מעוין עם זווית ישרה. טרפז: זוג צלעות נגדיות מקבילות והזוג השני לא. טרפז שווה שוקיים: טרפז עם שוקיים שוות, זוויות בסיס שוות או אלכסונים שווים. דלתון: שני זוגות של צלעות סמוכות שוות.'],
@@ -85,7 +85,7 @@ export const MORE_REASONS = {
     ['משוואת ישר', 'משוואת ישר לפי שיפוע ונקודה', 'הישר ששיפועו $m$ ועובר דרך $(x_0, y_0)$ הוא $y - y_0 = m(x - x_0)$, וכך גם ישר דרך שתי נקודות. (כותבים: $AB: y = -3x + 162$.)'],
     ['Equation of a line', 'Line from a slope and a point', 'The line with slope $m$ through $(x_0, y_0)$ is $y - y_0 = m(x - x_0)$, and likewise the line through two points. (Write: $AB: y = -3x + 162$.)']),
   line_point: R('L11', 'theorem', 'many', 'line_point',
-    ['נקודה על ישרים', 'נקודת חיתוך של ישרים', 'נקודה שנמצאת על שני ישרים (או על ישר ועל ציר) מקיימת את שתי המשוואות, ושיעוריה הם פתרון המערכת.'],
+    ['שיעורי נקודה מתנאים', 'שיעורי נקודה לפי התנאים שהיא מקיימת', 'נקודה מקיימת את המשוואות של הישרים והמעגלים שהיא עליהם, את המרחקים הנתונים שלה מנקודות ידועות, ואם היא קצה של קטע שאמצעו ידוע, את נוסחת האמצע. שיעוריה הם פתרון המערכת, והשרטוט קובע איזה פתרון (למשל "על החלק החיובי של ציר x").'],
     ['A point on lines', 'Where lines meet', 'A point on two lines (or on a line and an axis) satisfies both equations, and its coordinates solve the system.']),
   circle_eq: R('L11', 'theorem', 'many', 'circle_eq',
     ['משוואת מעגל', 'משוואת מעגל', 'המעגל שמרכזו $(a, b)$ ורדיוסו $R$ הוא $(x - a)^2 + (y - b)^2 = R^2$.'],
@@ -206,6 +206,8 @@ function num(str) {
 }
 const close = (a, b) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 const fnum = (v) => { const r = Math.round(v * 1e6) / 1e6; return String(r); };
+// For display: a simple fraction when the number is one (−4/3 rather than −1.333333).
+const frac = (v) => { for (let q = 1; q <= 12; q++) { const p = Math.round(v * q); if (Math.abs(v - p / q) < 1e-9) return q === 1 ? String(p) : `${p}/${q}`; } return fnum(v); };
 // "−3X+162" → { m: −3, b: 162 } (a linear expression in X)
 function linearX(str, V = 'X') {
   const terms = str.replace(/-/g, '+-').split('+').filter(Boolean);
@@ -243,7 +245,7 @@ function analyticClaim(s, ctx) {
     const x = num(xs); const y = num(ys);
     if (x == null || y == null) return null;
     return { ok: true, claim: {
-      type: 'coord', P: [A], x, y, extKey: `coord:${A}:${fnum(x)}:${fnum(y)}`, extStr: `${A}(${fnum(x)}, ${fnum(y)})`,
+      type: 'coord', P: [A], x, y, extKey: `coord:${A}:${fnum(x)}:${fnum(y)}`, extStr: `${A}(${frac(x)}, ${frac(y)})`,
       extLean: `${A} = ![${fnum(x)}, ${fnum(y)}]`, extItems: [],
       extErrs: (pos) => [{ v: Math.hypot(pos[A][0] - x, pos[A][1] - y), tol: 1e-3 }],
     } };
@@ -256,7 +258,7 @@ function analyticClaim(s, ctx) {
     if (v == null) return null;
     const line = API.lineKey(P, A, B);
     return { ok: true, claim: {
-      type: 'slope', a: [A, B], m: v, extKey: `slope:${line}:${fnum(v)}`, extStr: `m_${A}${B} = ${fnum(v)}`,
+      type: 'slope', a: [A, B], m: v, extKey: `slope:${line}:${fnum(v)}`, extStr: `m_${A}${B} = ${frac(v)}`,
       extLean: `slope ${A} ${B} = ${fnum(v)}`, extItems: [{ kind: 'seg', p: [A, B], tone: 'a' }],
       extErrs: (pos) => [{ v: Math.abs((pos[B][1] - pos[A][1]) - v * (pos[B][0] - pos[A][0])), tol: 1e-3 * Math.max(1, Math.abs(pos[B][0] - pos[A][0])) }],
     } };
@@ -280,13 +282,13 @@ function analyticClaim(s, ctx) {
     const sgn = lin.b < 0 ? '−' : '+';
     return { ok: true, claim: {
       type: 'lineq', a: [A, B], vertical: false, m: lin.m, b: lin.b,
-      extKey: `lineq:${line}:${fnum(lin.m)}:${fnum(lin.b)}`, extStr: `${A}${B}: y = ${fnum(lin.m)}x ${sgn} ${fnum(Math.abs(lin.b))}`,
+      extKey: `lineq:${line}:${fnum(lin.m)}:${fnum(lin.b)}`, extStr: `${A}${B}: y = ${[close(lin.m, 0) ? '' : close(lin.m, 1) ? 'x' : close(lin.m, -1) ? '−x' : `${frac(lin.m)}x`, close(lin.b, 0) && !close(lin.m, 0) ? '' : close(lin.m, 0) ? frac(lin.b) : `${sgn} ${frac(Math.abs(lin.b))}`].filter(Boolean).join(' ')}`,
       extLean: `∀ p ∈ line[ℝ, ${A}, ${B}], p 1 = ${fnum(lin.m)} * p 0 + ${fnum(lin.b)}`, extItems: [{ kind: 'seg', p: [A, B], tone: 'a' }],
       extErrs: (pos) => [A, B].map((q) => ({ v: Math.abs(pos[q][1] - (lin.m * pos[q][0] + lin.b)), tol: 1e-3 })),
     } };
   }
-  // a circle equation
-  if ((m = s.match(new RegExp(`^\\(X([+-]${NUM.slice(2)})?\\)²\\+\\(Y([+-]${NUM.slice(2)})?\\)²=(${NUM})$`)))) {
+  // a circle equation; x² or y² stands for a centre on that axis: (x + 24)² + y² = 100
+  if ((m = s.replace(/^X²/, '(X)²').replace(/\+Y²=/, '+(Y)²=').match(new RegExp(`^\\(X([+-]${NUM.slice(2)})?\\)²\\+\\(Y([+-]${NUM.slice(2)})?\\)²=(${NUM})$`)))) {
     const a = m[1] ? -num(m[1].replace(/^\+/, '')) : 0;
     const b = m[2] ? -num(m[2].replace(/^\+/, '')) : 0;
     const r2 = num(m[3]);
@@ -691,12 +693,14 @@ export function install(api) {
     },
     quad_props(claim, refRows, problem) {
       const proof = `quad_props ${refNames(refRows)}`.trim();
-      const q = refRows.find((r) => quadClaim(r.claim, ['rectangle', 'rhombus', 'square']));
+      const q = refRows.find((r) => quadClaim(r.claim, ['rectangle', 'rhombus', 'square', 'isoTrapezoid']));
       if (!q) return fail2('reasonNoFit', proof, { rid: 'quad_props' });
       const [A, B, C, D] = q.claim.P;
       const strs = [];
-      if (q.claim.kind !== 'rhombus') strs.push(`∢${D}${A}${B}=90`, `∢${A}${B}${C}=90`, `∢${B}${C}${D}=90`, `∢${C}${D}${A}=90`);
-      if (q.claim.kind !== 'rectangle') strs.push(`${A}${B}=${B}${C}`, `${B}${C}=${C}${D}`, `${C}${D}=${D}${A}`, `${D}${A}=${A}${B}`, `${A}${B}=${C}${D}`, `${B}${C}=${D}${A}`);
+      // an isosceles trapezoid ABCD (bases AB and DC): its legs are equal
+      if (q.claim.kind === 'isoTrapezoid') strs.push(`${A}${D}=${B}${C}`);
+      else if (q.claim.kind !== 'rhombus') strs.push(`∢${D}${A}${B}=90`, `∢${A}${B}${C}=90`, `∢${B}${C}${D}=90`, `∢${C}${D}${A}=90`);
+      if (q.claim.kind === 'rhombus' || q.claim.kind === 'square') strs.push(`${A}${B}=${B}${C}`, `${B}${C}=${C}${D}`, `${C}${D}=${D}${A}`, `${D}${A}=${A}${B}`, `${A}${B}=${C}${D}`, `${B}${C}=${D}${A}`);
       return done(fits(problem, claim, strs, refRows.filter((r) => r !== q)), 'quad_props', strs, proof);
     },
     cyclic_test(claim, refRows, problem) {
@@ -758,7 +762,18 @@ export function install(api) {
       const proof = `by coord_calc ${refNames(refRows)}`.trim();
       const c = coordsOf(refRows);
       if (claim.type !== 'eq' || !Object.keys(c).length) return anFail('coord_calc', proof);
-      const sys = makeSystem([], eqVec(claim), c);
+      // An angle is keyed by one point on each of its rays (a:V:XY); any cited point on the same ray
+      // gives the same angle, so name the ray by a cited point.
+      const onRay = (V, X) => (c[X] ? X : Object.keys(c).find((Y) => Y !== V && problem.rays[V] && problem.rays[V][Y] === problem.rays[V][X]));
+      const target = new Map();
+      for (const [key, v] of eqVec(claim)) {
+        const k2 = key.replace(/a:([A-Z]):([A-Z])([A-Z])/g, (m, V, X, Y) => {
+          const X2 = onRay(V, X); const Y2 = onRay(V, Y);
+          return X2 && Y2 ? `a:${V}:${X2}${Y2}` : m;
+        });
+        target.set(k2, (target.get(k2) || 0) + v);
+      }
+      const sys = makeSystem([], target, c);
       if (!sys) return anFail('coord_calc', proof);
       const g = evalTerms(sys.G, sys.vars.map((v) => v.v0));
       return Math.abs(g.v) <= 1e-7 * Math.max(g.mag, 1e-9) ? { ok: true, proof } : anFail('coord_calc', proof);
@@ -786,6 +801,8 @@ export function install(api) {
         if (X >= Y || close(c[X][0], c[Y][0])) continue;
         if (close(claim.m, (c[Y][1] - c[X][1]) / (c[Y][0] - c[X][0]))) return { ok: true, proof };
       }
+      // read off a cited equation of the same line, y = mx + b
+      if (refRows.some((r) => r.claim.type === 'lineq' && !r.claim.vertical && sameLine(problem, ...r.claim.a, ...claim.a) && close(r.claim.m, claim.m))) return { ok: true, proof };
       return anFail('coord_slope', proof);
     },
     slope_perp(claim, refRows, problem) {
@@ -820,29 +837,94 @@ export function install(api) {
       if (claim.type !== 'lineq') return anFail('line_eq', proof);
       const c = coordsOf(refRows);
       const on = Object.keys(c).filter((Q) => onLineXY(problem, claim.a, Q));
-      if (claim.vertical) return on.length >= 2 && on.every((Q) => close(c[Q][0], claim.c)) ? { ok: true, proof } : anFail('line_eq', proof);
+      // Is a cited line horizontal or vertical? From its equation, its slope, or two cited points on it.
+      const kindOf = (a) => {
+        for (const r of refRows) {
+          const l = r.claim;
+          if (l.type === 'lineq' && sameLine(problem, ...l.a, ...a)) return l.vertical ? 'v' : close(l.m, 0) ? 'h' : null;
+          if (l.type === 'slope' && sameLine(problem, ...l.a, ...a) && close(l.m, 0)) return 'h';
+        }
+        const pts = Object.keys(c).filter((Q) => onLineXY(problem, a, Q));
+        for (const X of pts) for (const Y of pts) {
+          if (X >= Y) continue;
+          if (close(c[X][1], c[Y][1])) return 'h';
+          if (close(c[X][0], c[Y][0])) return 'v';
+        }
+        if (a.every((Q) => Math.abs(problem.points[Q][1]) < 1e-9)) return 'h'; // the x-axis in the drawing
+        if (a.every((Q) => Math.abs(problem.points[Q][0]) < 1e-9)) return 'v'; // the y-axis
+        return null;
+      };
+      // a line perpendicular to a horizontal line is vertical (and the other way), parallel keeps it
+      const turned = () => {
+        for (const r of refRows) {
+          const l = r.claim;
+          if (l.type !== 'perp' && l.type !== 'par') continue;
+          const other = sameLine(problem, ...l.a, ...claim.a) ? l.b : sameLine(problem, ...l.b, ...claim.a) ? l.a : null;
+          if (!other) continue;
+          const k = kindOf(other);
+          if (k) return l.type === 'par' ? k : k === 'h' ? 'v' : 'h';
+        }
+        return null;
+      };
+      if (claim.vertical) {
+        if (on.length >= 2 && on.every((Q) => close(c[Q][0], claim.c))) return { ok: true, proof };
+        return turned() === 'v' && on.some((Q) => close(c[Q][0], claim.c)) ? { ok: true, proof } : anFail('line_eq', proof);
+      }
+      if (close(claim.m, 0) && turned() === 'h' && on.some((Q) => close(c[Q][1], claim.b))) return { ok: true, proof };
       const fitsPt = (Q) => close(c[Q][1], claim.m * c[Q][0] + claim.b);
       const slope = refRows.find((r) => r.claim.type === 'slope' && sameLine(problem, ...r.claim.a, ...claim.a));
       if (slope && close(slope.claim.m, claim.m) && on.some(fitsPt)) return { ok: true, proof };
       if (on.length >= 2 && on.every(fitsPt) && on.some((X) => on.some((Y) => !close(c[X][0], c[Y][0])))) return { ok: true, proof };
       return anFail('line_eq', proof);
     },
-    // a point from the lines (and axes) it lies on: the intersection of lines, or where a line meets an axis
+    // A point's coordinates from the conditions it meets (cited): the lines it lies on (equations), the
+    // axes it lies on (read off the drawing), its distance from a point whose coordinates are cited
+    // (a row "QD = 16"), a circle it lies on (an equation row), or being the far end of a segment whose
+    // midpoint and other end are cited (a row "AE = EF" with E between A and F). The claimed point must be
+    // the drawing's point (the drawing picks the branch, e.g. "on the positive x-axis"), it must meet every
+    // condition, and the conditions must pin it down (two independent ones at that point).
     line_point(claim, refRows, problem) {
-      const proof = `line_point ${refNames(refRows)}`.trim();
+      const proof = `coord_point ${refNames(refRows)}`.trim();
       if (claim.type !== 'coord') return anFail('line_point', proof);
       const Q = claim.P[0];
-      const rows = []; // a·x + b·y = c
+      const { x, y } = claim;
+      const p = problem.points[Q];
+      if (Math.hypot(p[0] - x, p[1] - y) > 1e-6 * Math.max(1, Math.hypot(x, y))) return anFail('line_point', proof);
+      const c = coordsOf(refRows);
+      const conds = []; // { f: value at (x, y), g: gradient [gx, gy] }
+      const lin = (a, b, k) => conds.push({ f: a * x + b * y - k, g: [a, b], s: Math.max(1, Math.abs(k)) });
       for (const r of refRows) {
         const l = r.claim;
-        if (l.type !== 'lineq' || !onLineXY(problem, l.a, Q)) continue;
-        rows.push(l.vertical ? [1, 0, l.c] : [-l.m, 1, l.b]);
+        if (l.type === 'lineq' && onLineXY(problem, l.a, Q)) { if (l.vertical) lin(1, 0, l.c); else lin(-l.m, 1, l.b); }
+        if (l.type === 'circeq' && Math.abs((p[0] - l.cx) ** 2 + (p[1] - l.cy) ** 2 - l.r2) < 1e-6 * Math.max(1, l.r2)) {
+          conds.push({ f: (x - l.cx) ** 2 + (y - l.cy) ** 2 - l.r2, g: [2 * (x - l.cx), 2 * (y - l.cy)], s: Math.max(1, l.r2) });
+        }
+        if (l.type === 'eq' && l.left && l.right) {
+          const [seg, val] = l.left.kind === 'seg' && l.right.kind === 'num' ? [l.left, l.right] : l.right.kind === 'seg' && l.left.kind === 'num' ? [l.right, l.left] : [null, null];
+          if (seg && seg.p.includes(Q)) {
+            const other = seg.p.find((v) => v !== Q);
+            if (c[other]) {
+              const [a, b] = c[other];
+              conds.push({ f: (x - a) ** 2 + (y - b) ** 2 - val.v ** 2, g: [2 * (x - a), 2 * (y - b)], s: Math.max(1, val.v ** 2) });
+            }
+          }
+          // the far end of a segment from its midpoint: AE = EF with E between A and F, A and E cited
+          if (l.left.kind === 'seg' && l.right.kind === 'seg') {
+            for (const [s1, s2] of [[l.left.p, l.right.p], [l.right.p, l.left.p]]) {
+              const E = s1.find((v) => s2.includes(v));
+              if (!E || !s2.includes(Q)) continue;
+              const A = s1.find((v) => v !== E);
+              if (!c[A] || !c[E] || !between(problem, A, E, Q)) continue;
+              lin(1, 0, 2 * c[E][0] - c[A][0]);
+              lin(0, 1, 2 * c[E][1] - c[A][1]);
+            }
+          }
+        }
       }
-      const p = problem.points[Q];
-      if (Math.abs(p[1]) < 1e-9) rows.push([0, 1, 0]); // on the x-axis
-      if (Math.abs(p[0]) < 1e-9) rows.push([1, 0, 0]); // on the y-axis
-      if (!rows.every(([a, b, cc]) => close(a * claim.x + b * claim.y, cc))) return anFail('line_point', proof);
-      const rank2 = rows.some((r1) => rows.some((r2) => Math.abs(r1[0] * r2[1] - r1[1] * r2[0]) > 1e-9));
+      if (Math.abs(p[1]) < 1e-9) lin(0, 1, 0); // on the x-axis
+      if (Math.abs(p[0]) < 1e-9) lin(1, 0, 0); // on the y-axis
+      if (!conds.length || !conds.every((k) => Math.abs(k.f) <= 1e-6 * k.s)) return anFail('line_point', proof);
+      const rank2 = conds.some((k1) => conds.some((k2) => Math.abs(k1.g[0] * k2.g[1] - k1.g[1] * k2.g[0]) > 1e-9 * Math.max(1, Math.hypot(...k1.g) * Math.hypot(...k2.g))));
       return rank2 ? { ok: true, proof } : anFail('line_point', proof);
     },
     circle_eq(claim, refRows, problem) {

@@ -84,6 +84,10 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   const tr = problem({ points: { A: [0, 0], B: [10, 0], C: [7, 4], D: [3, 4] }, segments: ['AB', 'BC', 'CD', 'DA', 'AC', 'BD'], givens: ['AB ∥ DC', 'AD = BC', '∢DAB + ∢BCD = 180°'], goal: 'ABCD טרפז שווה שוקיים' });
   proof('isosceles trapezoid test', tr, [R('AB ∥ DC', 'given'), R('AD = BC', 'given'), R('ABCD טרפז שווה שוקיים', 'quad_test', [1, 2])], { rows: [true, true, true], solved: true });
   proof('cyclic test and props', tr, [R('∢DAB + ∢BCD = 180°', 'given'), R('ABCD בר חסימה', 'cyclic_test', [1]), R('∢ACB = ∢ADB', 'cyclic_props', [2])], { rows: [true, true, true] });
+  const itr = problem({ points: { A: [0, 0], B: [10, 0], C: [7, 4], D: [3, 4] }, segments: ['AB', 'BC', 'CD', 'DA'], givens: ['ABCD טרפז שווה שוקיים'], goal: 'AD = BC' });
+  proof('isosceles trapezoid legs, not bases', itr, [R('ABCD טרפז שווה שוקיים', 'given'), R('AD = BC', 'quad_props', [1]), R('AB = DC', 'quad_props', [1])], { rows: [true, true, false] });
+  const rect = problem({ points: { A: [0, 0], B: [6, 0], C: [6, 4], D: [0, 4] }, segments: ['AB', 'BC', 'CD', 'DA'], givens: ['ABCD מלבן'], goal: '∢DAB = 90°' });
+  proof('rectangle angle, not equal sides', rect, [R('ABCD מלבן', 'given'), R('∢DAB = 90°', 'quad_props', [1]), R('AB = BC', 'quad_props', [1])], { rows: [true, true, false] });
   const kite = problem({ points: { A: [0, 3], B: [-2, 0], C: [0, -5], D: [2, 0] }, segments: ['AB', 'BC', 'CD', 'DA'], givens: ['AB = AD', 'CB = CD'], goal: 'ABCD חוסם מעגל' });
   proof('kite, then tangential', kite, [R('AB = AD', 'given'), R('CB = CD', 'given'), R('ABCD דלתון', 'quad_test', [1, 2]), R('ABCD חוסם מעגל', 'tangential_test', [3])], { rows: [true, true, true, true], solved: true });
 }
@@ -110,6 +114,22 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
     R('B(9;0)', 'given'), R('BK = 45', 'coord_calc', [7, 8]), R('S△BKC = 607.5', 'coord_calc', [1, 7, 8]),
   ], { rows: Array(10).fill(true), solved: true });
   proof('a wrong slope refused', p, [R('C(45;27)', 'given'), R('M(22.5;19.5)', 'given'), R('m_MC = 1/2', 'coord_slope', [1, 2])], { rows: [true, true, false] });
+}
+
+// ---- analytic: a point from a distance, a circle or a midpoint; vertical lines
+{
+  const p = problem({
+    points: { O: [0, 0], M: [3, 5], E: [3, 0], B: [0, 1], C: [0, 9], D: [16, 0], A: [1, 9], F: [3, 7], G: [2, 8] },
+    segments: ['OD', 'ME', 'BC', 'AF'],
+    givens: ['O(0;0)', 'OD = 16', '(x − 3)² + (y − 5)² = 25', 'M(3;5)', 'ME ⊥ OD', 'A(1;9)', 'G(2;8)', 'AG = GF'],
+    goal: 'D(16;0)',
+  });
+  proof('point from a distance on an axis', p, [R('O(0;0)', 'given'), R('OD = 16', 'given'), R('D(16;0)', 'line_point', [1, 2])], { rows: [true, true, true], solved: true });
+  proof('the wrong branch refused', p, [R('O(0;0)', 'given'), R('OD = 16', 'given'), R('D(-16;0)', 'line_point', [1, 2])], { rows: [true, true, false] });
+  proof('circle meets an axis', p, [R('(x − 3)² + (y − 5)² = 25', 'given'), R('B(0;1)', 'line_point', [1]), R('C(0;9)', 'line_point', [1])], { rows: [true, true, true] });
+  proof('far end from the midpoint', p, [R('A(1;9)', 'given'), R('G(2;8)', 'given'), R('AG = GF', 'given'), R('F(3;7)', 'line_point', [1, 2, 3])], { rows: [true, true, true, true] });
+  proof('vertical line through a point', p, [R('M(3;5)', 'given'), R('ME ⊥ OD', 'given'), R('ME: x = 3', 'line_eq', [1, 2])], { rows: [true, true, true] });
+  proof('a vertical line without the ⊥ row refused', p, [R('M(3;5)', 'given'), R('ME: x = 3', 'line_eq', [1])], { rows: [true, false] });
 }
 
 console.log(`${passed} passed, ${failed} failed`);

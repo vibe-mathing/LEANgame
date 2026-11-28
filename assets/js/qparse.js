@@ -239,6 +239,18 @@ const MULTI = [
     re: /([A-Z])\s*=?\s*\(\s*(-?\d*(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)\s*[,;]\s*(-?\d*(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)\s*\)/g,
     fn: (m) => [claimItem(`${m[1]}(${m[2]};${m[3]})`, m[0])],
   },
+  { // m_AB = −3 / שיפוע AB הוא −3: a slope (geo-more.js)
+    re: /(?:[mM]_|שיפוע\s+(?:ה?ישר\s+)?)([A-Z])([A-Z])\s*(?:=|הוא)\s*([-−]?\d*(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)(?!\d|\.\d)/g,
+    fn: (m) => [claimItem(`m_${m[1]}${m[2]} = ${m[3].replace('−', '-')}`, m[0])],
+  },
+  { // AB: y = −3x + 162, AB: x = 5: a line's equation (geo-more.js), kept whole before the split at ':'
+    re: /([A-Z])([A-Z])\s*:\s*([xyXY])\s*=\s*([-−]?\s*(?:\d+(?:\.\d+)?)?(?:√\d+)?(?:\/\d+)?\s*[xX]?(?:\s*[+\-−]\s*\d+(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)?)(?!\d|\.\d)/g,
+    fn: (m) => [claimItem(`${m[1]}${m[2]}: ${m[3]} = ${m[4].replace(/−/g, '-').replace(/\s+/g, '')}`, m[0])],
+  },
+  { // (x − 3)² + (y − 5)² = 25: a circle's equation (geo-more.js), kept whole before the split at brackets
+    re: /\(\s*[xX]\s*([+\-−]\s*[\d.]+)?\s*\)\s*(?:²|\^2)\s*\+\s*\(\s*[yY]\s*([+\-−]\s*[\d.]+)?\s*\)\s*(?:²|\^2)\s*=\s*(\d+(?:\.\d+)?)/g,
+    fn: (m) => [claimItem(`(x${(m[1] || '').replace(/\s+/g, '').replace('−', '-')})²+(y${(m[2] || '').replace(/\s+/g, '').replace('−', '-')})²=${m[3]}`, m[0])],
+  },
   { // A, B ו-C על המעגל שמרכזו O
     re: new RegExp(`(?:ה?נקודות\\s+)?([A-Z](?:\\s*,\\s*[A-Z])*(?:\\s*ו-?\\s*[A-Z])?)\\s+(?:נמצאות\\s+|נמצאת\\s+|נמצא\\s+|מונחות\\s+)?על\\s+(?:ה)?(?:מעגל|היקף(?:\\s+ה?מעגל)?)(?:\\s+(?:ש)?מרכזו\\s+(?:הוא\\s+|ב-?\\s*)?([A-Z])(?![A-Z]))?`, 'g'),
     fn: (m) => [{ kind: 'fact', fact: 'circle', pts: m[1].match(/[A-Z]/g), o: m[2] || null }],
