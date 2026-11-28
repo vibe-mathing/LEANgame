@@ -4,7 +4,8 @@
 // Each case is a small problem and proof rows. A case says which rows must pass, and that the goal is
 // reached or not. Wrong rows (missing a cited row, a wrong value) must be refused.
 
-import { prepareProblem, checkProof, parseClaim, fmtClaim } from '../assets/js/geo.js';
+import { prepareProblem, checkProof, parseClaim, fmtClaim, claimKey, liveFormat } from '../assets/js/geo.js';
+import { leanOfClaim } from '../assets/js/leanconv.js';
 import { REASONS } from '../assets/js/data.js';
 import { buildReview } from '../assets/js/qparse.js';
 
@@ -153,6 +154,15 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   // π in the editor text is kept
   const rv = buildReview({ pts: [{ id: 'O', x: 0, y: 0 }, { id: 'B', x: -1.5, y: 0 }], segs: [['O', 'B']], circs: [{ o: 'O', r: 'B' }] }, 'נתון: 2πOB = 3π.', {});
   check('π in a given is kept', JSON.stringify(rv.givens.map((g) => g.claim)) === '["2πOB = 3π"]', JSON.stringify(rv.givens.map((g) => g.claim)));
+  // π is shown as π (not 306.305), in the game and in Lean, and the shown claim reads back the same
+  const price = parseClaim('30π*OB² + 10*2π*OB = 97.5π', p).claim;
+  check('a π claim is shown with π', fmtClaim(price) === '30πOB² + 20πOB = 97.5π', fmtClaim(price));
+  check('the shown π claim reads back', claimKey(parseClaim(fmtClaim(price), p).claim) === claimKey(price));
+  check('π in Lean is Real.pi', leanOfClaim(price) === '30 * Real.pi * len O B ^ 2 + 20 * Real.pi * len O B = 97.5 * Real.pi', leanOfClaim(price));
+  check('plain numbers are not π', fmtClaim(parseClaim('OB = 3.14', p).claim) === 'OB = 3.14' && fmtClaim(parseClaim('OB = 1.5', p).claim) === 'OB = 1.5');
+  // the input box: '<' after a number turns into ∢ only before a three-letter angle
+  check('typing 2<ABC gives an angle', liveFormat('2<ABC') === '2∢ABC', liveFormat('2<ABC'));
+  check('typing 60>OB or AB/40<60 keeps the comparison', liveFormat('60>OB') === '60>OB' && liveFormat('AB/40<60') === 'AB/40<60');
 }
 
 console.log(`${passed} passed, ${failed} failed`);

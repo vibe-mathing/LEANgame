@@ -41,9 +41,12 @@ function rational(v, maxDen = 1000) {
 }
 
 const SQFREE = [2, 3, 5, 6, 7, 10, 11, 13, 14, 15, 17, 19, 21, 22, 23, 26, 29, 30];
-// v = (p/q)·√n, or null
+// v = (p/q)·√n or (p/q)·π, or null
 function numParts(v) {
   const r = rational(v);
+  // (p/q)·π, from π in a claim: 97.5π, not the near fraction 156522/511 that the 1e-9 tolerance finds
+  const t = rational(v / Math.PI, 12);
+  if (t && t.p && (!r || r.q > t.q)) return { p: t.p, q: t.q, n: 1, pi: true };
   if (r) return { p: r.p, q: r.q, n: 1 };
   for (const n of SQFREE) {
     const s = rational(v / Math.sqrt(n));
@@ -61,6 +64,7 @@ function leanNum(v, warn) {
   if (!x) { if (warn) warn(v); return String(+v.toPrecision(12)); }
   const { p, q, n } = x;
   const coef = q === 1 ? String(p) : isDec(q) ? decStr(p, q) : `(${p} / ${q})`;
+  if (x.pi) return p === 1 && q === 1 ? 'Real.pi' : `${coef} * Real.pi`;
   if (n === 1) return coef;
   return p === 1 && q === 1 ? `Real.sqrt ${n}` : `${coef} * Real.sqrt ${n}`;
 }
@@ -70,7 +74,7 @@ function termStr(a, atom) {
   const x = numParts(a);
   if (!x) return `${+a.toPrecision(6)}${atom}`;
   const { p, q, n } = x;
-  const root = n > 1 ? `√${n}` : '';
+  const root = x.pi ? 'π' : n > 1 ? `√${n}` : '';
   if (q === 1 || isDec(q)) {
     const num = q === 1 ? String(p) : decStr(p, q);
     return `${num === '1' && (root || atom) ? '' : num}${root}${atom}`;

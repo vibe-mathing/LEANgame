@@ -22,7 +22,9 @@ const fail = (key, vars) => ({ ok: false, error: { key, vars } });
 // "less than" / "greater than".
 export function liveFormat(s) {
   return String(s)
-    .replace(/(^|[=+\-−*/≅<>∥⊥∼]\s*|\d|sin|cos|tan)[<>]/gi, '$1∢')
+    .replace(/(^|[=+\-−*/≅<>∥⊥∼]\s*|sin|cos|tan)[<>]/gi, '$1∢')
+    // after a number only before a three-letter angle (2<ABC); 60>OB and AB/40<60 compare
+    .replace(/(\d)[<>](?=[A-Za-z]{3}(?![A-Za-z]))/g, '$1∢')
     .replace(/[a-z]/g, (c) => c.toUpperCase());
 }
 
@@ -543,14 +545,20 @@ function numParts(v) {
     const qr = Math.round(q * 1000) / 1000;
     if (qr !== 0 && Math.abs(q - qr) < 1e-9) return { q: qr, n };
   }
+  // π in a claim is read as its value (geo-more.js); show 97.5π rather than 306.305
+  const qp = v / Math.PI;
+  const qpr = Math.round(qp * 1000) / 1000;
+  if (qpr !== 0 && Math.abs(qp - qpr) < 1e-9) return { q: qpr, n: 1, pi: true };
   return { q: r, n: 1 };
 }
 const fmtNum = (v) => {
-  const { q, n } = numParts(v);
+  const { q, n, pi } = numParts(v);
+  if (pi) return `${q === 1 ? '' : q}π`;
   return n === 1 ? String(q) : `${q === 1 ? '' : q}√${n}`;
 };
 const leanNum = (v) => {
-  const { q, n } = numParts(v);
+  const { q, n, pi } = numParts(v);
+  if (pi) return `${q === 1 ? '' : q + ' * '}Real.pi`;
   return n === 1 ? String(q) : `${q === 1 ? '' : q + ' * '}Real.sqrt ${n}`;
 };
 
