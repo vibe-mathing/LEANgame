@@ -408,3 +408,63 @@ export function findAddition(p, rows, upto, text) {
   }
   return null;
 }
+
+// A theorem row whose claim is the theorem's statement with an angle (or a segment) written as its
+// parts. ∢AOC + ∢COD + ∢DOB = 180° by adjacent angles is ∢AOC + ∢COB = 180° with ∢COB split into
+// ∢COD + ∢DOB. The game writes the addition facts (auto), then the theorem's own statement with the
+// reason and rows the student chose, then the claim as a calculation from them. Every row passes
+// checkProof, so the checker and Lean are unchanged and nothing false gets in.
+//   rid, refs: the student's reason and cited rows. { rows, theorem: true }, or null when the row
+//   passes as written or no merge of one or two addition facts makes it pass.
+const NO_MERGE = new Set(['given', 'algebra', ...ADD_REASONS, ...NO_BRIDGE]);
+const MAX_MERGES = 2;
+
+// The claim with X + Y on one side replaced by Z, for the addition fact X + Y = Z; else null.
+function mergeFact(claim, fact) {
+  if (fact.L.terms.length !== 2 || fact.R.terms.length !== 1 || fact.L.k || fact.R.k) return null;
+  const [kx, ky] = fact.L.terms.map(({ t }) => termKey(t));
+  for (const side of ['L', 'R']) {
+    const terms = claim[side].terms;
+    const ix = terms.findIndex(({ t }) => termKey(t) === kx);
+    const iy = terms.findIndex(({ t }) => termKey(t) === ky);
+    if (ix < 0 || iy < 0 || (terms[ix].c ?? 1) !== (terms[iy].c ?? 1)) continue;
+    const kept = terms.filter((_, i) => i !== ix && i !== iy);
+    kept.splice(Math.min(ix, iy), 0, { ...terms[ix], t: fact.R.terms[0].t });
+    return { type: 'eq', of: claim.of, L: claim.L, R: claim.R, [side]: { ...claim[side], terms: kept } };
+  }
+  return null;
+}
+
+export function findTheoremAddition(p, rows, upto, text, rid, refs = []) {
+  if (!rid || NO_MERGE.has(rid) || rid.startsWith('cons_') || !REASONS[rid]) return null;
+  const parsed = parseClaim(text, p);
+  if (!parsed.ok || parsed.claim.type !== 'eq' || !parsed.claim.L || !parsed.claim.R) return null;
+  const before = rows.slice(0, upto);
+  const mine = { text, reason: rid, refs: [...refs].sort((a, b) => a - b) };
+  if (checkProof(p, [...before, mine]).results[upto].ok) return null;
+  const res = checkProof(p, before).results;
+  // the rows: facts (n = upto+1…), the theorem's statement, the claim citing all of them
+  const build = (facts, merged) => {
+    const thm = fmtClaim(merged);
+    const c = parseClaim(thm, p);
+    if (!c.ok || claimKey(c.claim) !== claimKey(merged)) return null;
+    const out = [
+      ...facts.map((f) => ({ text: f.text, reason: f.reason, refs: [], auto: true })),
+      { ...mine, text: thm },
+    ];
+    out.push({ text, reason: 'algebra', refs: out.map((_, i) => upto + 1 + i) });
+    const check = checkProof(p, [...before, ...out]).results.slice(upto);
+    return check.every((r) => r.ok) ? { rows: out, theorem: true } : null;
+  };
+  const search = (claim, facts) => {
+    if (facts.length >= MAX_MERGES) return null;
+    for (const f of additionFacts(p, claim, res, upto)) {
+      const merged = mergeFact(claim, f.claim);
+      if (!merged) continue;
+      const done = build([...facts, f], merged) || search(merged, [...facts, f]);
+      if (done) return done;
+    }
+    return null;
+  };
+  return search(parsed.claim, []);
+}

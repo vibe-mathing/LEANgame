@@ -12,7 +12,7 @@ import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, init
 import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
 import { mountConstructions } from './constructions-ui.js';
-import { building, addBuildPoint, buildSaid, dropBuild, backspace, findAddition } from './play-extras.js';
+import { building, addBuildPoint, buildSaid, dropBuild, backspace, findAddition, findTheoremAddition } from './play-extras.js';
 import { curriculumOf, inLevel, REASON_ALIASES, AAS_NAMES, STAGE_CURRICULUM, EXAM, TOPIC_LEVELS, LEVELS, MINISTRY } from './curriculum.js';
 import { currentUser } from './auth.js';
 import { PX, DEV_SKIP, insertPick, newReasons, findSkip } from './play-extras.js';
@@ -337,8 +337,8 @@ function viewHome() {
           <div class="demo-body">
             <div class="demo-diagram"></div>
             <div class="demo-facts">
-              <div><b>${t('pp.given')}:</b> ${mathSpan('AB = AC')}, ${mathSpan('∢BAD = ∢CAD')}</div>
               <div><b>${t('pp.goal')}:</b> ${mathSpan('BD = CD')}</div>
+              <div><b>${t('pp.given')}:</b> ${mathSpan('AB = AC')}, ${mathSpan('∢BAD = ∢CAD')}</div>
             </div>
           </div>
           <div class="demo-table">
@@ -683,6 +683,8 @@ function viewProblem({ stage, n, problem: p, bank }) {
   const prev = list.find((x) => x.n === n - 1);
   const next = list.find((x) => x.n === n + 1);
   const renamed = renamedAngles(p);
+  // "How to write a proof" shows only in the game's first question (stage 1, question 1).
+  const firstQuestion = !bank && stage === STAGES[0].id && n === 1;
 
   return `
   <div class="pp">
@@ -711,6 +713,10 @@ function viewProblem({ stage, n, problem: p, bank }) {
           </div>
           <p class="dg-tip">${esc(PX('tip'))}</p>
           <dl class="facts">
+            <div class="fact-group goal">
+              <dt title="${t('pp.goalLong')}">${t('pp.goal')}</dt>
+              <dd><ul><li data-claim="${esc(p.goal)}" tabindex="0">${mathSpan(fmtClaim(p.goalParsed))}</li></ul></dd>
+            </div>
             <div class="fact-group">
               <dt>${t('pp.given')}</dt>
               <dd><ul>${p.givens.map((g, i) => `<li data-claim="${esc(g.claim)}" data-g="${i}" tabindex="0">${g.text ? `${rich(L(g.text))} <small>${t('pp.meaning')} ${mathSpan(fmtClaim(p.givensParsed[i]))}</small>` : mathSpan(fmtClaim(p.givensParsed[i]))}</li>`).join('')}</ul></dd>
@@ -719,10 +725,6 @@ function viewProblem({ stage, n, problem: p, bank }) {
               <dt>${t('pp.fromDiagram')}</dt>
               <dd><ul>${p.config.map((c) => `<li>${rich(L(c.text))}</li>`).join('')}${renamed.map((names) => `<li data-claim="${esc(`∢${names[0].join('')} = ∢${names[1].join('')}`)}" tabindex="0">${t('pp.sameAngle', { names: joinList(names.map((x) => mathSpan('∢' + x.join('')))) })}</li>`).join('')}</ul><p class="fact-note">${t('pp.fromDiagramNote')}</p></dd>
             </div>` : ''}
-            <div class="fact-group goal">
-              <dt title="${t('pp.goalLong')}">${t('pp.goal')}</dt>
-              <dd><ul><li data-claim="${esc(p.goal)}" tabindex="0">${mathSpan(fmtClaim(p.goalParsed))}</li></ul></dd>
-            </div>
           </dl>
           <details class="lean-peek">
             <summary>${icon('code')} ${t('pp.inLean')}</summary>
@@ -750,10 +752,10 @@ function viewProblem({ stage, n, problem: p, bank }) {
             <div class="ptable">
               <div class="prow phead" aria-hidden="true"><span>#</span><span>${t('pp.colClaim')}</span><span>${t('pp.colReason')}</span><span></span></div>
               <ol class="prows" id="rows"></ol>
-              <div class="pempty" id="empty">
+              ${firstQuestion ? `<div class="pempty" id="empty">
                 <p class="pempty-t">${t('pp.empty.t')}</p>
                 <ol>${[1, 2, 3].map((i) => `<li>${rich(t('pp.empty.' + i))}</li>`).join('')}</ol>
-              </div>
+              </div>` : ''}
             </div>
             <div class="cpct-panel" id="cpctPanel" hidden></div>
             <div class="blocked" id="blocked" hidden>${icon('info')} ${t('pp.blocked')}</div>
@@ -1052,7 +1054,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
         ${state.showLean && r.lean ? `<code class="plean${r.ok ? '' : ' is-err'}" dir="ltr">${leanHTML(r.lean)}</code>` : ''}
       </li>`;
     }).join('');
-    $('#empty', root).hidden = state.rows.length > 0;
+    const empty = $('#empty', root);
+    if (empty) empty.hidden = state.rows.length > 0;
     $('#blocked', root).hidden = !result.blocked;
     // a given already in the proof is marked, and clicking it again adds nothing
     $$('.facts li[data-g]', root).forEach((li) => li.classList.toggle('is-used', givenRow(li) >= 0));
@@ -1264,22 +1267,27 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     return skipMemo.val;
   }
   // A calculation that also needs an angle or segment addition read off the diagram (for every
-  // student, play-extras.js findAddition): with "algebra" chosen, or with no reason at all.
+  // student, play-extras.js findAddition): with "algebra" chosen, or with no reason at all. With a
+  // theorem chosen whose statement the claim splits (∢AOC + ∢COD + ∢DOB = 180° by adjacent angles),
+  // findTheoremAddition: the facts, the theorem's own statement, then the claim as a calculation.
   let addMemo = { key: null, val: null };
   function currentAddition() {
-    if (state.reason ? state.reason !== 'algebra' : reasonInput.value.trim()) return null;
+    if (!state.reason && reasonInput.value.trim()) return null;
     const v = input.value.trim();
     if (!v || (!state.reason && currentAuto())) return null;
-    const key = `${v}|${upto()}|${rowsKey()}|${p.allowed.join()}`;
+    const theorem = state.reason && state.reason !== 'algebra' ? state.reason : null;
+    const refs = [...state.refs].sort((a, b) => a - b);
+    const key = `${v}|${upto()}|${rowsKey()}|${p.allowed.join()}|${theorem || ''}|${theorem ? refs.join() : ''}`;
     if (addMemo.key !== key) {
       let val = null;
-      try { val = findAddition(p, state.rows, upto(), v); } catch (e) { console.warn('[addition]', e); }
+      try { val = theorem ? findTheoremAddition(p, state.rows, upto(), v, theorem, refs) : findAddition(p, state.rows, upto(), v); } catch (e) { console.warn('[addition]', e); }
       addMemo = { key, val };
     }
     return addMemo.val;
   }
   // The fact rows go in first; the claim cites them (filled in by itself only when no reason was chosen).
   function additionRows(ad) {
+    if (ad.theorem) return ad; // the theorem row already carries the student's reason and rows
     const n = ad.rows.length;
     const at = upto();
     let last = ad.rows[n - 1];
