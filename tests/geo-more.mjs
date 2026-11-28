@@ -182,5 +182,23 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   check('the converter gives two radii too', conv.includes('len O A = r1') && conv.includes('len O B = r2') && conv.includes('len O C = r1'), conv);
 }
 
+// ---- an inequality through a ratio of positive quantities (035581 winter 2019 Q4 ד)
+{
+  // △ABC with the bisector AD: BD/DC = AB/AC, and the areas of ABD and ADC are in the ratio BD/DC
+  const p = problem({
+    points: { A: [1, 4], B: [0, 0], C: [6, 0], D: [2.2, 0] },
+    segments: ['AB', 'AC', 'BC', 'AD'],
+    givens: ['BD/DC = AB/AC', 'S△ABD/S△ADC = BD/DC', 'AC > AB', 'cos∢ABC > cos∢ACB'],
+    goal: 'S△ADC > S△ABD',
+  });
+  const G = [R('BD/DC = AB/AC', 'given'), R('S△ABD/S△ADC = BD/DC', 'given'), R('AC > AB', 'given')];
+  proof('a/b = c/d and c > d give a > b', p, [...G, R('S△ADC > S△ABD', 'algebra', [1, 2, 3])], { rows: [true, true, true, true], solved: true });
+  proof('written with <', p, [...G, R('S△ABD < S△ADC', 'algebra', [1, 2, 3])], { rows: [true, true, true, true] });
+  proof('with a coefficient', p, [...G, R('2S△ADC > 2S△ABD', 'algebra', [1, 2, 3])], { rows: [true, true, true, true] });
+  proof('the wrong direction refused', p, [...G, R('S△ABD > S△ADC', 'algebra', [1, 2, 3])], { rows: [true, true, true, false] });
+  proof('without the ratio rows refused', p, [...G, R('S△ADC > S△ABD', 'algebra', [3])], { rows: [true, true, true, false] });
+  proof('a cosine is not taken as positive', p, [R('cos∢ABC > cos∢ACB', 'given'), R('AC/AB = cos∢ABC/cos∢ACB', 'given'), R('AC > AB', 'algebra', [1, 2])], { rows: [true, false, false] });
+}
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

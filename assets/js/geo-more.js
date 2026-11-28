@@ -6,6 +6,7 @@
 // geo.js calls install() once, at the end of its module body, with its CHECKS table and helpers.
 // Nothing here imports geo.js, so there is no import cycle. New reasons go into REASONS (data.js)
 // from here too, so data.js and geo.js only carry the two hook lines.
+import { addTo, factorsOf, keyOf, mulKeys, follows as algFollows } from './algebra.js';
 //
 // Lean: every new reason has a Lean name (`lean`); the statements are in ~/LeanGame (built 2026-11-27;
 // scripts/check_axioms.py: 0 counterexamples). The checker's Catalog does not map these ids yet:
@@ -968,6 +969,7 @@ export function install(api) {
   if (linear) {
     CHECKS.algebra = (claim, refRows, problem) => {
       const out = linear(claim, refRows, problem);
+      if (!out.ok && claim.type === 'ineq' && ratioIneq(claim, refRows, eqVec)) return { ok: true, proof: out.proof.replace('linarith', 'nlinarith') };
       if (out.ok || claim.type !== 'eq' || !refRows.length) return out;
       const polys = refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
       if (!polys.length) return out;
@@ -976,6 +978,48 @@ export function install(api) {
       return out;
     };
   }
+}
+
+// An inequality through a ratio of positive quantities, which the linear check cannot do: from
+// S△FBK/S△FKC = KB/KC, KB/KC = FB/FC and FB > FC, S△FBK > S△FKC. The claim a > b follows when a
+// cited row says c > d and the cited equations give a/b = c/d, where a, b, c, d are each one term
+// with a positive coefficient made of lengths, areas and angles (all positive) or a positive number.
+// (a/b = c/d > 1 and b > 0 give a > b.) sin/cos/tan are left out: a cosine may be negative.
+const posMono = (side, eqVec) => {
+  const v = eqVec({ type: 'eq', L: side, R: { terms: [], k: 0 } });
+  if (v.size !== 1) return null;
+  const [[key, c]] = [...v];
+  if (!(c > 0) || (key !== '1' && !key.split('*').every((f) => /^(s|S|Q|a):/.test(f)))) return null;
+  return { key, c };
+};
+const invKey = (k) => { const f = factorsOf(k); for (const [a, e] of f) f.set(a, -e); return keyOf(f); };
+export function ratioIneq(claim, refRows, eqVec) {
+  const [hi, lo] = claim.op === '>' ? [claim.L, claim.R] : [claim.R, claim.L];
+  const a = posMono(hi, eqVec);
+  const b = posMono(lo, eqVec);
+  if (!a || !b) return false;
+  const eqs = refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
+  for (const r of refRows) {
+    const g = r.claim;
+    if (g.type !== 'ineq') continue;
+    const [gh, gl] = g.op === '>' ? [g.L, g.R] : [g.R, g.L];
+    const c = posMono(gh, eqVec);
+    const d = posMono(gl, eqVec);
+    if (!c || !d) continue;
+    // a/b − c/d = 0 or b/a − d/c = 0, as ratios (linear in the ratios the rows name, whichever way
+    // up they are written), or multiplied out (a·d − b·c)
+    for (const [x, y, u, w] of [[a, b, c, d], [b, a, d, c]]) {
+      const ratio = new Map();
+      addTo(ratio, mulKeys(x.key, invKey(y.key)), x.c / y.c);
+      addTo(ratio, mulKeys(u.key, invKey(w.key)), -u.c / w.c);
+      if (!ratio.size || algFollows(eqs, ratio)) return true;
+    }
+    const cross = new Map();
+    addTo(cross, mulKeys(a.key, d.key), a.c * d.c);
+    addTo(cross, mulKeys(b.key, c.key), -b.c * c.c);
+    if (eqs.length && algFollows(eqs, cross)) return true;
+  }
+  return false;
 }
 
 // A rounded answer (the user's rule, high school/README_he.md "תשובות מעוגלות"): a row "AC = 15.32"
