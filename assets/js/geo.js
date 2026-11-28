@@ -33,7 +33,8 @@ export function normalizeInput(s) {
     .replace(/\|\||\/\//g, '∥')
     .replace(/[∠∡]/g, '∢')
     .replace(/(sin|cos|tan)[<>]/gi, '$1∢')
-    .replace(/(^|[=+\-−*/≅~<>∥⊥∼\d])[<>]/g, '$1∢')
+    // "<ABC" and "<A" are angles; before a number or a segment, '<' compares (AB/40 < 60)
+    .replace(/(^|[=+\-−*/≅~<>∥⊥∼\d])[<>](?=[A-Za-z]{3}(?![A-Za-z])|[A-Za-z](?![A-Za-z]))/g, '$1∢')
     .replace(/[Δ∆▵▲]/g, '△')
     .replace(/[▭◻▢⬜■▯]/g, '□')
     .replace(/~=|=~|≡|≃|≌/g, '≅')
@@ -354,7 +355,10 @@ export function parseClaim(input, ctx) {
   if (!all.length) return fail('onlyNumbers');
   const types = new Set(all.map((x) => kindType(x.t)));
   if (L.deg || R.deg) types.add('ang');
-  if (types.size > 1) return fail('mixedTypes');
+  // A question marked mixedUnits (a price: 30 per m² of cloth plus 10 per m of ribbon) may add
+  // lengths and areas; angles never mix with lengths.
+  const mixOk = parseCtx && parseCtx.mixedUnits && !types.has('ang');
+  if (types.size > 1 && !mixOk) return fail('mixedTypes');
   const of = [...types][0] === 'ang' ? 'ang' : 'len';
   if (op !== '=') return ok({ type: 'ineq', op, L, R, of });
   let left = simpleTerm(L, of);

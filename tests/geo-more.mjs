@@ -6,6 +6,7 @@
 
 import { prepareProblem, checkProof, parseClaim, fmtClaim } from '../assets/js/geo.js';
 import { REASONS } from '../assets/js/data.js';
+import { buildReview } from '../assets/js/qparse.js';
 
 let passed = 0;
 let failed = 0;
@@ -15,8 +16,8 @@ const check = (name, cond, info = '') => {
   console.log(`✗ ${name}${info ? `\n    ${info}` : ''}`);
 };
 
-function problem({ points, segments, config = [], givens = [], goal, names }) {
-  const p = prepareProblem({ n: 1, title: {}, intro: {}, points, segments, config, givens: givens.map((claim) => ({ claim })), goal, marks: [], hints: [], ...(names ? { names } : {}) }, 'L11');
+function problem({ points, segments, config = [], givens = [], goal, names, mixedUnits }) {
+  const p = prepareProblem({ n: 1, title: {}, intro: {}, points, segments, config, givens: givens.map((claim) => ({ claim })), goal, marks: [], hints: [], ...(names ? { names } : {}), ...(mixedUnits ? { mixedUnits } : {}) }, 'L11');
   p.allowed = Object.keys(REASONS);
   return p;
 }
@@ -130,6 +131,28 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   proof('far end from the midpoint', p, [R('A(1;9)', 'given'), R('G(2;8)', 'given'), R('AG = GF', 'given'), R('F(3;7)', 'line_point', [1, 2, 3])], { rows: [true, true, true, true] });
   proof('vertical line through a point', p, [R('M(3;5)', 'given'), R('ME ⊥ OD', 'given'), R('ME: x = 3', 'line_eq', [1, 2])], { rows: [true, true, true] });
   proof('a vertical line without the ⊥ row refused', p, [R('M(3;5)', 'given'), R('ME: x = 3', 'line_eq', [1])], { rows: [true, false] });
+}
+
+// ---- a price question (mixedUnits): an area and a length added together
+{
+  const base = { points: { O: [0, 0], A: [-1, 0], B: [-1.5, 0], C: [0, 1.5] }, segments: ['OB', 'OC'], givens: ['OB = 1.5'], goal: 'OB = 1.5' };
+  const plain = problem(base);
+  const r0 = parseClaim('30π*OB² + 20π*OB = 97.5π', plain);
+  check('lengths and areas do not mix in a plain question', !r0.ok && r0.error.key === 'mixedTypes', JSON.stringify(r0.error));
+  const p = problem({ ...base, mixedUnits: true });
+  check('they mix in a price question', parseClaim('30π*OB² + 20π*OB = 97.5π', p).ok);
+  const ra = parseClaim('OB + ∢BOC = 91.5', p);
+  check('angles still do not mix with lengths', !ra.ok && ra.error.key === 'mixedTypes', JSON.stringify(ra.error));
+  proof('the price of cloth and ribbon', p, [R('OB = 1.5', 'given'), R('30π*OB² = 67.5π', 'algebra', [1]), R('10*2π*OB = 30π', 'algebra', [1]),
+    R('30π*OB² + 10*2π*OB = 97.5π', 'algebra', [2, 3])], { rows: [true, true, true, true] });
+  proof('a wrong price refused', p, [R('OB = 1.5', 'given'), R('30π*OB² + 20π*OB = 90π', 'algebra', [1])], { rows: [true, false] });
+  // '<' after a number compares; before an angle name it is still the angle sign
+  for (const s of ['OB/40 < 60', '300 > 2OB', 'OB/3 > OC/5']) check(`"${s}" is an inequality`, parseClaim(s, plain).ok && parseClaim(s, plain).claim.type === 'ineq');
+  const ang = parseClaim('2<BOC = 180', plain);
+  check('"2<BOC" is still an angle', ang.ok && ang.claim.of === 'ang', JSON.stringify(ang.error));
+  // π in the editor text is kept
+  const rv = buildReview({ pts: [{ id: 'O', x: 0, y: 0 }, { id: 'B', x: -1.5, y: 0 }], segs: [['O', 'B']], circs: [{ o: 'O', r: 'B' }] }, 'נתון: 2πOB = 3π.', {});
+  check('π in a given is kept', JSON.stringify(rv.givens.map((g) => g.claim)) === '["2πOB = 3π"]', JSON.stringify(rv.givens.map((g) => g.claim)));
 }
 
 console.log(`${passed} passed, ${failed} failed`);

@@ -547,7 +547,7 @@ function headExpr(s) {
   while (toks.length && (OP_END.test(out[out.length - 1]) || OP_START.test(toks[0]))) out.push(toks.shift());
   return out.join(' ');
 }
-const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△□°.,√²+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△□°.,√²+\-*/()=<>∥⊥≅∼\s])*/g;
+const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△□°.,√²π+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△□°.,√²π+\-*/()=<>∥⊥≅∼\s])*/g;
 
 function relations(clause, ctx) {
   const items = [];
@@ -1463,5 +1463,6 @@ export function playable(stored, id) {
     if (Object.keys(names).length) out.names = names;
   }
   if (pr.rounding && Number.isInteger(pr.rounding.min) && pr.rounding.min >= 0 && pr.rounding.min <= 6) out.rounding = { min: pr.rounding.min };
+  if (pr.mixedUnits === true) out.mixedUnits = true; // a price question: lengths and areas may be added (geo.js)
   return out;
 }
