@@ -795,6 +795,23 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
   .topic-card.featured { grid-column: span 2; grid-row: auto; min-height: 320px; }
   .mapping { grid-template-columns: 1fr; }
 }
+@media (min-width: 1041px) {
+  /* two columns: the whole question (title, diagram, goal, givens) fits the window without scrolling.
+     app.js fitProblem sets --dg-max, the height the rest of the problem column leaves the diagram, and
+     the column's max-height; the facts from the diagram and the Lean box scroll inside the column.
+     The padding keeps the diagram card's shadow inside the scrolling box. */
+  .pp-problem { gap: 12px; overflow-y: auto; scrollbar-width: thin; padding: 4px 8px 10px; margin: -4px -8px 0; }
+  .pp-problem > * { flex-shrink: 0; }
+  .pp { padding-top: 16px; }
+  .pp-bar { margin-bottom: 14px; }
+  .diagram-card .dg { display: block; max-height: var(--dg-max, none); }
+  .dg-tip { margin-top: -4px; }
+  .facts { gap: 8px; }
+  .fact-group { padding: 8px 12px; }
+  .fact-group ul { display: flex; flex-wrap: wrap; gap: 2px 26px; }
+  .fact-group.diag ul { gap: 2px 20px; font-size: .92rem; }
+  .fact-note { margin-top: 2px; }
+}
 
 @media (max-width: 860px) {
   .mainnav { display: none; }

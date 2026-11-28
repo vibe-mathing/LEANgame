@@ -873,6 +873,29 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   // the construction tool (constructions-ui.js) adds its row at the end of the proof
   mountConstructions({ root, p, dg, addRow: (row) => { state.rows.push(row); renderRows(); } });
 
+  // Two columns (a computer screen): the whole question, down to its goal and givens, fits the window
+  // with the page at the top. The diagram gets the height the rest leaves (--dg-max, styles.css), from
+  // 160px up to its own size. The column is as tall as the window below where it starts, and what is
+  // below the givens (the facts from the diagram, the Lean box) scrolls inside it.
+  const fitAbort = new AbortController();
+  const fitProblem = () => {
+    const col = $('.pp-problem', root);
+    const svg = col && col.querySelector('#diagram svg.dg');
+    const givens = col && [...col.querySelectorAll('.fact-group:not(.diag)')].pop();
+    if (!svg || !givens) return;
+    if (!matchMedia('(min-width: 1041px)').matches) { col.style.removeProperty('--dg-max'); col.style.maxHeight = ''; return; }
+    const h = svg.getBoundingClientRect().height;
+    const toGivens = givens.getBoundingClientRect().bottom - col.getBoundingClientRect().top + col.scrollTop;
+    const top = $('.pp-grid', root).getBoundingClientRect().top + scrollY + (parseFloat(getComputedStyle(col).marginTop) || 0);
+    const room = innerHeight - 14 - top;
+    col.style.setProperty('--dg-max', `${Math.max(160, Math.floor(room - (toGivens - h)))}px`);
+    col.style.maxHeight = `${Math.floor(room)}px`;
+  };
+  const fitWatch = new ResizeObserver(() => fitProblem());
+  for (const sel of ['.pp-head', '.facts', '.dg-tip']) { const el = $(sel, root); if (el) fitWatch.observe(el); }
+  addEventListener('resize', fitProblem, { signal: fitAbort.signal });
+  fitProblem();
+
   // Tap or click a point, segment or angle in the diagram: it goes into the claim (play-extras.js).
   // With a finger the claim field is not focused, so the phone keyboard stays closed.
   const ppEl = $('.pp', root);
@@ -1776,6 +1799,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   updatePreview();
   renderRows();
   return () => {
+    fitAbort.abort();
+    fitWatch.disconnect();
     if (resetArmed) clearTimeout(resetArmed);
     document.removeEventListener('pointerdown', outside);
     toolsAbort.abort();
