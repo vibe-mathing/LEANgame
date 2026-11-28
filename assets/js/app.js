@@ -12,6 +12,8 @@ import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, init
 import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
 import { mountConstructions } from './constructions-ui.js';
+import { curriculumOf, inLevel, REASON_ALIASES, AAS_NAMES, STAGE_CURRICULUM, EXAM, TOPIC_LEVELS, LEVELS, MINISTRY } from './curriculum.js';
+import { currentUser } from './auth.js';
 import { PX, DEV_SKIP, insertPick, newReasons, findSkip } from './play-extras.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -233,6 +235,38 @@ const reasonShort = reasonLabel;
 // inside a sentence (an error message) the name is never cut short
 const reasonFull = (id) => esc(L(REASONS[id]?.name));
 const reasonsOfStage = (stageId) => Object.entries(REASONS).filter(([, r]) => r.stage === stageId);
+
+// ---------------------------------------------------------------- the curriculum (curriculum.js)
+// Level chips "3 · 4 · 5": a level that studies it is lit.
+const levelChips = (lv) => `<span class="lv-chips" aria-label="${esc(t('cur.levelsAria', { lv: lv.join(', ') || '—' }))}">${LEVELS.map((n) => `<span class="lv${lv.includes(n) ? ' on' : ''}">${n}</span>`).join('')}</span>`;
+// What the curriculum says about a reason, for its toolbox card.
+function reasonCurriculum(id) {
+  const c = curriculumOf(id);
+  if (!c) return '';
+  const lvText = (ls) => ls.map((n) => t('cur.units', { n })).join(', ');
+  const notes = [];
+  if (c.ms) notes.push(`<span class="cur-tag ms">${t('cur.ms')}</span>`);
+  if (c.out) notes.push(`<span class="cur-tag out">${t('cur.out', { lv: lvText(c.out) })}</span>`);
+  if (c.practice) notes.push(`<span class="cur-tag aux">${t('cur.practice', { lv: lvText(c.practice) })}</span>`);
+  if (c.aux) notes.push(`<span class="cur-tag aux">${t('cur.aux', { lv: lvText(c.aux) })}</span>`);
+  if (c.opt) notes.push(`<span class="cur-tag opt">${t('cur.opt')}</span>`);
+  return `<div class="rc-cur">${levelChips(c.lv)}${notes.join('')}</div>`;
+}
+// Where a stage is taught, level by level.
+function stageWhere(stageId) {
+  const w = STAGE_CURRICULUM[stageId];
+  if (!w) return '';
+  const parts = LEVELS.filter((n) => w[n]).map((n) => `<li><b>${t('cur.units', { n })}</b> ${w[n] === 'ms' ? t('cur.msShort') : esc(L(w[n]))}</li>`);
+  return `<div class="stage-where"><span class="unlocks-label">${t('cur.where')}</span><ul>${parts.join('')}</ul></div>`;
+}
+// The level a reader sees the toolbox for: their track, or what they picked (this tab only).
+const toolboxLevel = () => {
+  let v = null;
+  try { v = sessionStorage.getItem('lg.curLevel'); } catch { /* ignore */ }
+  if (v === 'all' || LEVELS.includes(+v)) return v;
+  const tr = viewAs() || (currentUser() && currentUser().track);
+  return LEVELS.includes(+tr) ? String(tr) : 'all';
+};
 // "a, b and c" / "a, b ו-c"
 const joinList = (items) => (items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + t('pp.and') + items[items.length - 1]);
 const refsText = (refs) => (refs && refs.length ? ` <span class="refs" dir="ltr">(${[...refs].sort((a, b) => a - b).join(', ')})</span>` : '');
@@ -276,6 +310,7 @@ function viewHome() {
     return `<${tag} class="topic-card st-${tp.status}${tp === featured ? ' featured' : ''}" ${attrs}>
       <div class="tc-top"><span class="tc-glyph">${glyph(tp.glyph, 'topic')}</span><span class="badge b-${tp.status}">${t('status.' + tp.status)}</span></div>
       <h3>${L(tp.name)}</h3>
+      ${TOPIC_LEVELS[tp.id] ? `<p class="tc-levels">${levelChips(TOPIC_LEVELS[tp.id])}<span>${t('cur.unitsWord')}</span></p>` : ''}
       <p>${rich(L(tp.blurb))}</p>
       ${open ? `<div class="tc-foot"><span>${t('topic.levels', { n: tp.levels })}</span><span class="tc-go">${t('topic.enter')} ${icon('arrow', 'dir')}</span></div>` : ''}
       ${tp === featured ? featuredArt() : ''}
@@ -537,6 +572,7 @@ function viewTopic() {
           <div class="stage-top"><span class="stage-label">${t('tp.stage', { n: idx + 1 })}</span><span class="badge b-${open ? 'open' : 'soon'}">${open ? t('status.open') : t('status.soon')}</span></div>
           <h3>${L(s.name)}</h3>
           <p class="stage-blurb">${rich(L(s.blurb))}</p>
+          ${stageWhere(s.id)}
           <div class="unlocks"><span class="unlocks-label">${t('tp.unlocks')}</span>${reasonsOfStage(s.id).map(([id]) => `<span class="chip">${reasonLabel(id)}</span>`).join('')}</div>
           ${toolsAfter(s.id).length ? `<div class="unlocks"><span class="unlocks-label">${t('tool.onFinish')}</span>${toolsAfter(s.id).map((id) => `<span class="chip chip-tool" title="${esc(t('tool.' + id + '.title') + ' ' + toolLockText(id))}">${icon(toolOpen(id, isSolved) ? TOOLS[id].icon : 'lock')}${esc(t('tool.' + id))}</span>`).join('')}</div>` : ''}
           ${open ? `<div class="stage-foot">
@@ -581,16 +617,39 @@ function viewTopic() {
     </div>
   </section>
 
+  <section class="section" id="bagrut">
+    <div class="wrap">
+      <h2 class="h2">${t('cur.examTitle')}</h2>
+      <p class="section-lead">${t('cur.examLead')}</p>
+      <div class="exam-grid">
+        ${LEVELS.map((n) => `
+          <article class="exam-card paper">
+            <h3>${t('cur.units', { n })}</h3>
+            <p><b>${t('cur.papers')}</b> ${esc(L(EXAM[n].papers))}</p>
+            <p><b>${t('cur.geoPart')}</b> ${esc(L(EXAM[n].geometry))}</p>
+            <p class="exam-out"><b>${t('cur.notIn')}</b> ${esc(L(EXAM[n].out))}</p>
+          </article>`).join('')}
+      </div>
+      <p class="note exam-rules">${icon('info')} <span>${t('cur.rules')} <a href="${MINISTRY.page}" target="_blank" rel="noopener">${t('cur.srcPage')} ↗</a> · <a href="${MINISTRY.notTaught}" target="_blank" rel="noopener">${t('cur.srcOut')} ↗</a> · <a href="${MINISTRY.grading}" target="_blank" rel="noopener">${t('cur.srcGrading')} ↗</a></span></p>
+    </div>
+  </section>
+
   <section class="section" id="toolbox">
     <div class="wrap">
       <h2 class="h2">${t('tp.toolbox')}</h2>
       <p class="section-lead">${t('tp.toolboxText')}</p>
+      <label class="cur-filter">${t('cur.filter')}
+        <select class="adm-select small" data-cur-level>
+          ${['all', ...LEVELS.map(String)].map((v) => `<option value="${v}"${v === toolboxLevel() ? ' selected' : ''}>${v === 'all' ? t('cur.allLevels') : t('cur.units', { n: v })}</option>`).join('')}
+        </select>
+      </label>
       ${groups.map((g) => `
         <h3 class="catalog-title">${g.title}</h3>
         <div class="catalog">
           ${reasonsOfStage(g.id).map(([rid, r]) => `
-            <article class="reason-card k-${r.kind}">
+            <article class="reason-card k-${r.kind}${toolboxLevel() !== 'all' && !inLevel(rid, toolboxLevel()) ? ' lv-dim' : ''}" data-rid="${rid}">
               <div class="rc-top"><span class="rc-kind">${t('kind.' + r.kind)}</span>${r.playable ? `<span class="rc-demo">${icon('check')} ${t('tp.demoTag')}</span>` : ''}</div>
+              ${reasonCurriculum(rid)}
               ${PROVED_IN[rid] ? `<p class="rc-proved${reasonEarned(rid, isSolved) ? ' is-done' : ''}">${icon(reasonEarned(rid, isSolved) ? 'check' : 'lock')} ${t(reasonEarned(rid, isSolved) ? 'tool.provedDone' : 'tool.provedIn', { q: provedInLabel(rid) })}</p>` : ''}
               <h4>${esc(L(r.name))}</h4>
               <p class="rc-alt">${esc(getLang() === 'he' ? r.name.en : r.name.he)}</p>
@@ -605,6 +664,12 @@ function viewTopic() {
 function bindTopic(root) {
   const j = root.querySelector('.journey');
   if (j) { void j.offsetWidth; j.classList.add('in'); }
+  // Toolbox by level: reasons outside the chosen level's curriculum are dimmed, not hidden.
+  const lvSel = root.querySelector('[data-cur-level]');
+  if (lvSel) lvSel.addEventListener('change', () => {
+    try { sessionStorage.setItem('lg.curLevel', lvSel.value); } catch { /* ignore */ }
+    $$('.reason-card[data-rid]', root).forEach((card) => card.classList.toggle('lv-dim', lvSel.value !== 'all' && !inLevel(card.dataset.rid, lvSel.value)));
+  });
   return null;
 }
 
@@ -747,7 +812,7 @@ function matchReasons(query, allowed, usable = () => true) {
   const scored = [];
   for (const [id, r] of Object.entries(REASONS)) {
     if (!usable(id)) continue;
-    const names = [r.short.he, r.short.en, r.name.he, r.name.en, r.lean];
+    const names = [r.short.he, r.short.en, r.name.he, r.name.en, r.lean, ...(REASON_ALIASES[id] || [])];
     let score = 0;
     for (const nm of names) {
       const whole = squash(nm);
@@ -1153,12 +1218,14 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   function openSugg() {
     options = matchReasons(reasonInput.value, p.allowed, (id) => REASONS[id].playable || p.givens.some((g) => (g.also || []).includes(id)));
     active = options.findIndex((o) => !o.locked);
-    sugg.innerHTML = options.length
+    // "צ.ז.ז" is not a congruence theorem in the Bagrut: say what to write instead.
+    const aas = AAS_NAMES.includes(squash(reasonInput.value));
+    sugg.innerHTML = (aas ? `<li class="sugg is-empty is-note" aria-disabled="true">${t('cur.aas')}</li>` : '') + (options.length
       ? options.map((o, i) => `<li role="option" id="rs-${i}" class="sugg${o.locked ? ' is-locked' : ''}${i === active ? ' is-active' : ''}" data-i="${i}" aria-disabled="${o.locked}">
           <span class="sg-name">${esc(L(o.r.name))}</span>
           <span class="sg-text">${o.locked ? `${icon('lock')} ${p.allowedAll && p.allowedAll.includes(o.id) ? t('tool.proveFirst', { q: provedInLabel(o.id) }) : t('pp.lockedAt', { n: stageNumber(o.r.stage) })}` : rich(L(o.r.statement))}</span>
         </li>`).join('')
-      : `<li class="sugg is-empty" aria-disabled="true">${t('pp.reasonNone')}</li>`;
+      : aas ? '' : `<li class="sugg is-empty" aria-disabled="true">${t('pp.reasonNone')}</li>`);
     sugg.hidden = !reasonInput.value.trim();
     reasonInput.setAttribute('aria-expanded', String(!sugg.hidden));
     reasonInput.setAttribute('aria-activedescendant', active >= 0 ? `rs-${active}` : '');

@@ -1056,3 +1056,34 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .bankq .ic svg { width: 17px; height: 17px; }
 @media (max-width: 860px) { .tool.bankq { display: inline-flex; } }
 @media (max-width: 560px) { .bankq .bankq-t { display: none; } .tool.bankq { padding: 0; width: 38px; } }
+
+/* ---------------------------------------------------------------- the curriculum (curriculum.js) */
+.lv-chips { display: inline-flex; gap: 3px; direction: ltr; }
+.lv { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: .76rem; font-weight: 700;
+  background: var(--paper-2); color: var(--muted); opacity: .55; }
+.lv.on { background: var(--pen-soft); color: var(--pen); opacity: 1; }
+.tc-levels { display: flex; align-items: center; gap: 8px; font-size: .8rem !important; color: var(--muted) !important; }
+.featured .tc-levels { color: rgba(255,255,255,.8) !important; }
+.featured .lv { background: rgba(255,255,255,.12); color: rgba(255,255,255,.7); }
+.featured .lv.on { background: #fff; color: var(--pen); }
+.rc-cur { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cur-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 8px; border-radius: 6px; font-size: .74rem; font-weight: 600;
+  background: var(--paper-2); color: var(--ink-2); }
+.cur-tag.ms { background: var(--ok-soft); color: var(--ok); }
+.cur-tag.out { background: var(--err-soft); color: var(--err); }
+.cur-tag.aux { background: color-mix(in srgb, var(--hl) 28%, transparent); color: var(--ink); }
+.reason-card.lv-dim { opacity: .45; }
+.reason-card.lv-dim:hover { opacity: .8; }
+.cur-filter { display: inline-flex; align-items: center; gap: 10px; margin-top: 18px; font-weight: 600; color: var(--ink-2); }
+.stage-where { margin-top: 12px; font-size: .86rem; }
+.stage-where ul { list-style: none; display: grid; gap: 2px; margin-top: 4px; padding: 0; }
+.stage-where li { color: var(--ink-2); }
+.stage-where b { color: var(--pen); font-weight: 700; margin-inline-end: 4px; }
+.exam-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 28px; }
+.exam-card { padding: 22px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 10px; }
+.exam-card h3 { font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; color: var(--pen); }
+.exam-card p { color: var(--ink-2); font-size: .94rem; }
+.exam-card .exam-out { color: var(--err); }
+.exam-rules { margin-top: 22px; display: flex; align-items: flex-start; max-width: 90ch; line-height: 1.6; }
+.exam-rules a { color: var(--pen); }
+.sugg.is-note { color: var(--err); white-space: normal; }

@@ -19,30 +19,47 @@ export const TOPICS = [
       en: 'Angles, congruence, quadrilaterals, similarity and circles. Two-column proofs with a live diagram.',
     },
   },
+  // The other topics follow the Ministry's new curriculum; the levels that study each one are
+  // in curriculum.js (TOPIC_LEVELS).
   {
     id: 'trigonometry', track: 'hs', status: 'next', glyph: 'trig',
     name: { he: 'טריגונומטריה', en: 'Trigonometry' },
-    blurb: { he: 'פונקציות טריגונומטריות, זהויות, ומשפטי הסינוסים והקוסינוסים.', en: 'sin, cos and tan, identities, and the laws of sines and cosines.' },
+    blurb: { he: 'במשולש ישר זווית בכל הרמות. משפט הסינוסים ושטח בעזרת סינוס ב-4 וב-5 יח"ל. משפט הקוסינוסים, זהויות ומשוואות ב-5 יח"ל.', en: 'Right triangles at every level. The law of sines and the sine area formula at 4 and 5 units. The law of cosines, identities and equations at 5 units.' },
   },
   {
     id: 'analytic', track: 'hs', status: 'planned', glyph: 'analytic',
     name: { he: 'גאומטריה אנליטית', en: 'Analytic geometry' },
-    blurb: { he: 'ישרים, מעגלים ומרחקים במערכת צירים.', en: 'Lines, circles and distances on coordinate axes.' },
+    blurb: { he: 'הישר בכל הרמות, והמעגל ב-4 וב-5 יח"ל. ב-5 יח"ל גם פרבולה, אליפסה, היפרבולה ומקומות גאומטריים.', en: 'The line at every level, and the circle at 4 and 5 units. At 5 units also the parabola, ellipse, hyperbola and loci.' },
   },
   {
     id: 'algebra', track: 'hs', status: 'planned', glyph: 'algebra',
-    name: { he: 'אלגברה ופונקציות', en: 'Algebra and functions' },
-    blurb: { he: 'משוואות, אי-שוויונים וחקירת פונקציות.', en: 'Equations, inequalities and analyzing functions.' },
+    name: { he: 'פונקציות ומודלים', en: 'Functions and models' },
+    blurb: { he: 'מודל ליניארי ומודל ריבועי, תכנון ליניארי, גדילה ודעיכה, ופונקציות מעריכיות ולוגריתמיות.', en: 'Linear and quadratic models, linear programming, growth and decay, and exponential and logarithmic functions.' },
+  },
+  {
+    id: 'statistics', track: 'hs', status: 'planned', glyph: 'probability',
+    name: { he: 'הסתברות וסטטיסטיקה', en: 'Probability and statistics' },
+    blurb: { he: 'הסתברות, מדדי מרכז ופיזור, והתפלגות נורמלית. רגרסיה ב-4 יח"ל, ונוסחת ברנולי ב-5 יח"ל.', en: 'Probability, measures of center and spread, and the normal distribution. Regression at 4 units, Bernoulli\'s formula at 5 units.' },
+  },
+  {
+    id: 'space', track: 'hs', status: 'planned', glyph: 'space',
+    name: { he: 'גאומטריה במרחב ווקטורים', en: 'Solid geometry and vectors' },
+    blurb: { he: 'גופים וראייה מרחבית ב-3 יח"ל. גופים ווקטורים ב-4 וב-5 יח"ל, וב-5 יח"ל גם ישרים ומישורים במרחב.', en: 'Solids and spatial vision at 3 units. Solids and vectors at 4 and 5 units, and lines and planes in space at 5 units.' },
   },
   {
     id: 'sequences', track: 'hs', status: 'planned', glyph: 'sequences',
-    name: { he: 'סדרות', en: 'Sequences' },
-    blurb: { he: 'סדרות חשבוניות והנדסיות, סכומים ואינדוקציה.', en: 'Arithmetic and geometric sequences, sums and induction.' },
+    name: { he: 'סדרות ואינדוקציה', en: 'Sequences and induction' },
+    blurb: { he: 'סדרות חשבוניות והנדסיות ב-4 וב-5 יח"ל. אינדוקציה מתמטית ב-5 יח"ל.', en: 'Arithmetic and geometric sequences at 4 and 5 units. Mathematical induction at 5 units.' },
   },
   {
     id: 'calculus', track: 'hs', status: 'planned', glyph: 'calculus',
     name: { he: 'חשבון דיפרנציאלי ואינטגרלי', en: 'Calculus' },
-    blurb: { he: 'גבולות, נגזרות ואינטגרלים ברמת 5 יחידות.', en: 'Limits, derivatives and integrals at the 5-unit level.' },
+    blurb: { he: 'נגזרות, חקירה ואינטגרלים ב-4 וב-5 יח"ל. ב-5 יח"ל גם פונקציות טריגונומטריות, והאינטגרל כפונקציית ההצטברות.', en: 'Derivatives, curve sketching and integrals at 4 and 5 units. At 5 units also trigonometric functions, and the integral as an accumulation function.' },
+  },
+  {
+    id: 'complex', track: 'hs', status: 'planned', glyph: 'complex',
+    name: { he: 'מספרים מרוכבים', en: 'Complex numbers' },
+    blurb: { he: 'הצגה אלגברית וקוטבית, משפט דה-מואבר ומקומות גאומטריים במישור המרוכב. 5 יח"ל.', en: 'Algebraic and polar form, De Moivre\'s theorem and loci in the complex plane. 5 units.' },
   },
 ];
 
