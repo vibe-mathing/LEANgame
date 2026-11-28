@@ -462,7 +462,7 @@ export function claimToItems(claim) {
   const items = [];
   const add = (t, tone) => {
     if (t.kind === 'seg' || t.kind === 'ang') items.push({ kind: t.kind, p: t.p, tone });
-    else if (t.kind === 'area') items.push({ kind: 'tri', p: t.p, tone }); // the triangle, shaded
+    else if (t.kind === 'area' || t.kind === 'area4') items.push({ kind: 'tri', p: t.p, tone }); // the triangle, shaded
     else if (t.kind === 'trig') add(t.a, tone);
     else if (t.kind === 'mono') for (const x of t.f) add(x.t, tone);
   };

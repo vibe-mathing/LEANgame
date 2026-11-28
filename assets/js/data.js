@@ -167,7 +167,12 @@ export const REASONS = {
   law_cosines: R('L11', 'theorem', 0, 'law_cosines', ['משפט הקוסינוסים', 'משפט הקוסינוסים', 'ריבוע צלע שווה לסכום ריבועי שתי האחרות, פחות פעמיים מכפלתן בקוסינוס הזווית שביניהן.'], ['Law of cosines', 'Law of cosines', 'A side squared equals the other two squared, minus twice their product times the cosine of the angle between them.'], true),
   // S△ABC in claims (geo.js parseAtom). With the sine no rows are cited; with a height, the row
   // that says it is perpendicular.
-  tri_area: R('L11', 'theorem', 'many', 'tri_area_sin', ['שטח משולש', 'שטח משולש', 'שטח משולש הוא חצי צלע כפול הגובה אליה ($S△ABC = \\frac{BC·AH}{2}$), או חצי מכפלת שתי צלעות בסינוס הזווית שביניהן ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], ['Triangle area', 'Triangle area', 'The area of a triangle is half a side times the height to it ($S△ABC = \\frac{BC·AH}{2}$), or half of two sides times the sine of the angle between them ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], true),
+  // Opens with the quadrilaterals (stage 6), together with quad_area; the sine form needs stage 11.
+  tri_area: R('L06', 'theorem', 'many', 'tri_area_sin', ['שטח משולש', 'שטח משולש', 'שטח משולש הוא חצי צלע כפול הגובה אליה ($S△ABC = \\frac{BC·AH}{2}$), או חצי מכפלת שתי צלעות בסינוס הזווית שביניהן ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], ['Triangle area', 'Triangle area', 'The area of a triangle is half a side times the height to it ($S△ABC = \\frac{BC·AH}{2}$), or half of two sides times the sine of the angle between them ($S△ABC = \\frac{AB·AC·\\sin∢BAC}{2}$).'], true),
+  // S□ABCD in claims (geo.js parseAtom; Lean area4). Split along a diagonal (no rows), or by the
+  // quadrilateral's type, citing the row that names it (and a height row for a parallelogram or a
+  // trapezoid). The user's rule: a triangle is never half of a quadrilateral.
+  quad_area: R('L06', 'theorem', 'many', 'area4', ['שטח מרובע', 'שטח מרובע', 'שטח מרובע קמור הוא סכום שטחי שני המשולשים שאלכסון מחלק אותו אליהם. לפי הסוג: ריבוע $AB^2$, מלבן $AB·BC$, מעוין ודלתון $\\frac{AC·BD}{2}$, מקבילית צלע כפול הגובה אליה, טרפז חצי סכום הבסיסים כפול הגובה.'], ['Quadrilateral area', 'Quadrilateral area', 'The area of a convex quadrilateral is the sum of the two triangles a diagonal splits it into. By type: square $AB^2$, rectangle $AB·BC$, rhombus and kite $\\frac{AC·BD}{2}$, parallelogram a side times the height to it, trapezoid half the sum of the bases times the height.'], true),
 };
 
 // The proposed order of geometry levels (to be aligned with the curriculum).

@@ -175,7 +175,7 @@ export function normalizeText(text) {
   let s = String(text || '').normalize('NFC').replace(/\r/g, '')
     .replace(/[״“”„]/g, '"').replace(/[׳‘’`]/g, "'").replace(/[־–—]/g, '-').replace(/ /g, ' ');
   s = s.replace(/[A-Za-z]+/g, (w) => (/^(sin|cos|tan)$/i.test(w) ? w.toLowerCase() : w.toUpperCase()));
-  s = s.replace(/\|\||\/\//g, '∥').replace(/_\|_|⟂/g, '⊥').replace(/[∠∡]/g, '∢').replace(/[Δ∆▵▲]/g, '△')
+  s = s.replace(/\|\||\/\//g, '∥').replace(/_\|_|⟂/g, '⊥').replace(/[∠∡]/g, '∢').replace(/[Δ∆▵▲]/g, '△').replace(/[▭◻▢⬜■▯]/g, '□')
     .replace(/~=|=~|≡|≃|≌/g, '≅').replace(/~/g, '∼').replace(/[º˚]/g, '°').replace(/\^2/g, '²')
     .replace(/[·×]/g, '*').replace(/−/g, '-');
   s = s.replace(/ישרת?\s+(?:ה)?זוו?ית/g, RIGHT);
@@ -535,7 +535,7 @@ function headExpr(s) {
   while (toks.length && (OP_END.test(out[out.length - 1]) || OP_START.test(toks[0]))) out.push(toks.shift());
   return out.join(' ');
 }
-const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△°.,√²+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△°.,√²+\-*/()=<>∥⊥≅∼\s])*/g;
+const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△□°.,√²+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△□°.,√²+\-*/()=<>∥⊥≅∼\s])*/g;
 
 function relations(clause, ctx) {
   const items = [];
@@ -580,7 +580,7 @@ function classify(clause, ctx) {
   rest = rel.rest;
   // Anything left that still names a point or a number was not understood.
   const left = rest.replace(/[\s,.:;'"()\-]+/g, ' ').trim();
-  if (/[A-Z∢△0-9=<>∥⊥≅∼]/.test(left)) items.push({ kind: 'unknown', src: clause.trim() });
+  if (/[A-Z∢△□0-9=<>∥⊥≅∼]/.test(left)) items.push({ kind: 'unknown', src: clause.trim() });
   return { items, setupBits };
 }
 
@@ -596,12 +596,12 @@ function analyzePart(part, ctx) {
     });
   }
   work = work.replace(/([A-Z])\s*,\s*(?=[A-Z](?![A-Z]))/g, `$1${LIST}`);
-  const clauses = work.split(new RegExp(`\\s*[,()]\\s*|\\s+ו-?\\s*(?=[A-Z∢△${SLOT}])|\\s+וכן\\s+|\\s+ו(?=(?:ה|ב)?(?:נקוד|קטע|ישר|זווי|משולש|מרובע|מעגל|אלכסונ|צלע))`));
+  const clauses = work.split(new RegExp(`\\s*[,()]\\s*|\\s+ו-?\\s*(?=[A-Z∢△□${SLOT}])|\\s+וכן\\s+|\\s+ו(?=(?:ה|ב)?(?:נקוד|קטע|ישר|זווי|משולש|מרובע|מעגל|אלכסונ|צלע))`));
   for (let c of clauses) {
     if (!c || !c.trim()) continue;
     c = c.replace(new RegExp(LIST, 'g'), ', ');
     // a clause that starts with "ו-" before math ("ו-AD ⊥ BC" after a comma): the "ו" is a word, not a minus
-    c = c.replace(new RegExp(`^\\s*ו-?\\s*(?=[A-Z∢△${SLOT}]|sin|cos|tan)`), '');
+    c = c.replace(new RegExp(`^\\s*ו-?\\s*(?=[A-Z∢△□${SLOT}]|sin|cos|tan)`), '');
     c = c.replace(new RegExp(`${SLOT}(\\d+)${SLOT_END}`, 'g'), (m, i) => {
       const s = stash[+i];
       pieces.push({ text: s.text, items: s.items, setup: s.setup ? s.text : '' });
@@ -756,7 +756,7 @@ function resolveShape(it, ctx, existing) {
 
 // Wrap point names and short math in $…$ so the player typesets them left-to-right.
 export function wrapMath(s) {
-  return String(s || '').replace(/\$[^$]*\$|(?:sin|cos|tan)?[∢△]?[A-Z]{1,4}(?:\s*[=<>∥⊥≅∼]\s*(?:sin|cos|tan)?[∢△]?[A-Z0-9°.]+)*/g, (m) => (m.startsWith('$') ? m : `$${m}$`));
+  return String(s || '').replace(/\$[^$]*\$|(?:sin|cos|tan)?[∢△□]?[A-Z]{1,4}(?:\s*[=<>∥⊥≅∼]\s*(?:sin|cos|tan)?[∢△□]?[A-Z0-9°.]+)*/g, (m) => (m.startsWith('$') ? m : `$${m}$`));
 }
 
 // ---------------------------------------------------------------- the drawing as a witness
@@ -769,9 +769,9 @@ function termVal(t, pos) {
   if (t.kind === 'seg') return { v: dist(pos[t.p[0]], pos[t.p[1]]), dim: 1 };
   if (t.kind === 'ang') return { v: angDeg(pos, ...t.p), dim: 0, ang: true };
   if (t.kind === 'trig') return { v: Math[t.fn](angDeg(pos, ...t.a.p) / DEG), dim: 0 };
-  if (t.kind === 'area') {
-    const [a, b, c] = t.p.map((x) => pos[x]);
-    return { v: Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2, dim: 2 };
+  if (t.kind === 'area' || t.kind === 'area4') {
+    const Q = t.p.map((x) => pos[x]); // the shoelace formula, for a triangle or a quadrilateral
+    return { v: Math.abs(Q.reduce((s, q, i) => s + q[0] * Q[(i + 1) % Q.length][1] - Q[(i + 1) % Q.length][0] * q[1], 0)) / 2, dim: 2 };
   }
   let v = 1; let dim = 0;
   for (const x of t.f) { const r = termVal(x.t, pos); v *= r.v ** x.e; dim += r.dim * x.e; }
@@ -1275,7 +1275,7 @@ export function reviewReport(review, drawing) {
   const used = new Set();
   const mark = (s) => { for (const ch of String(s).match(/[A-Z]/g) || []) used.add(ch); };
   // not point names: sin/cos/tan, and the S of an area (S△ABC, S(ABC))
-  const letters = (s) => String(s).replace(/sin|cos|tan/gi, '').replace(/S(?=\s*[△(])/g, '');
+  const letters = (s) => String(s).replace(/sin|cos|tan/gi, '').replace(/S(?=\s*[△□(])/g, '');
   review.givens.forEach((g) => mark(letters(g.claim)));
   if (goalClaim) mark(letters(goalClaim));
   (review.facts || []).forEach((f) => [f.p, f.a, f.b, f.o, f.l1, f.l2, f.line, ...(f.pts || [])].forEach((x) => x && mark(x)));

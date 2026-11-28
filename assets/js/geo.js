@@ -35,6 +35,7 @@ export function normalizeInput(s) {
     .replace(/(sin|cos|tan)[<>]/gi, '$1∢')
     .replace(/(^|[=+\-−*/≅~<>∥⊥∼\d])[<>]/g, '$1∢')
     .replace(/[Δ∆▵▲]/g, '△')
+    .replace(/[▭◻▢⬜■▯]/g, '□')
     .replace(/~=|=~|≡|≃|≌/g, '≅')
     .replace(/~/g, '∼')
     .replace(/[º˚]/g, '°')
@@ -45,7 +46,7 @@ export function normalizeInput(s) {
     .toUpperCase();
 }
 
-const safe = (s) => s.replace(/[^A-Z0-9°∢△≅=<>∥∼².,+\-*/√]/g, '');
+const safe = (s) => s.replace(/[^A-Z0-9°∢△□≅=<>∥∼².,+\-*/√]/g, '');
 
 // ---------- keys ----------
 
@@ -160,7 +161,16 @@ function parseAtom(body, points, rays) {
     if (new Set(pts).size < 3) return fail('repeatPoint');
     return { ok: true, term: { kind: 'area', p: pts, key: 'S:' + [...pts].sort().join('') } };
   }
-  if (/^S(△|\()/.test(body)) return fail('badArea');
+  // The area of a quadrilateral: S□ABCD (also S(ABCD)), its vertices in order around it. Every
+  // naming of the same quadrilateral (starting anywhere, either direction) is the same area.
+  if ((m = body.match(/^S(?:□|\()([A-Z])([A-Z])([A-Z])([A-Z])\)?$/))) {
+    const pts = [m[1], m[2], m[3], m[4]];
+    const bad = pts.find((x) => !points.includes(x));
+    if (bad) return fail('unknownPoint', { p: `$${bad}$` });
+    if (new Set(pts).size < 4) return fail('repeatPoint');
+    return { ok: true, term: { kind: 'area4', p: pts, key: 'Q:' + quadKey('parallelogram', pts) } };
+  }
+  if (/^S(△|□|\()/.test(body)) return fail('badArea');
   if ((m = body.match(/^(SIN|COS|TAN)(∢.*)$/))) {
     const r = parseAtom(m[2], points, rays);
     if (!r.ok) return r;
@@ -274,8 +284,8 @@ function dimOf(t) {
   if (t.kind === 'ang') return 'ang';
   if (t.kind === 'seg') return 'L1';
   if (t.kind === 'trig') return 'L0';
-  if (t.kind === 'area') return 'L2';
-  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : x.t.kind === 'area' ? 2 * x.e : 0), 0);
+  if (t.kind === 'area' || t.kind === 'area4') return 'L2';
+  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : x.t.kind === 'area' || x.t.kind === 'area4' ? 2 * x.e : 0), 0);
 }
 const kindType = (t) => (dimOf(t) === 'ang' ? 'ang' : dimOf(t));
 
@@ -546,6 +556,7 @@ function atomStr(t) {
   if (t.kind === 'ang') return '∢' + t.p.join('');
   if (t.kind === 'trig') return t.fn + atomStr(t.a);
   if (t.kind === 'area') return 'S△' + t.p.join('');
+  if (t.kind === 'area4') return 'S□' + t.p.join('');
   // a monomial: AB·CD, AB², BC/AB, BC/sin∢BAC (each denominator after its own /)
   const pw = (x) => atomStr(x.t) + (Math.abs(x.e) === 1 ? '' : POW[Math.abs(x.e)] || '^' + Math.abs(x.e));
   const top = t.f.filter((x) => x.e > 0).map(pw).join('·') || '1';
@@ -603,6 +614,7 @@ function leanAtom(t) {
   if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
   if (t.kind === 'trig') return `${t.fn}D (${leanAtom(t.a)})`;
   if (t.kind === 'area') return `area ${t.p.join(' ')}`;
+  if (t.kind === 'area4') return `area4 ${t.p.join(' ')}`;
   const pw = (x) => leanAtom(x.t) + (Math.abs(x.e) === 1 ? '' : ` ^ ${Math.abs(x.e)}`);
   const top = t.f.filter((x) => x.e > 0).map(pw).join(' * ') || '1';
   const den = t.f.filter((x) => x.e < 0).map(pw);
@@ -1337,6 +1349,79 @@ const STAGE_CHECKS = {
     if (need) return fail2('areaNeedPerp', proof, need);
     return fail2('areaNoForm', proof, { s: `$${name}$` });
   },
+  // The area of a convex quadrilateral, S□ABCD (Lean: area4). Split along a diagonal into two
+  // triangles (S□ABCD = S△ABC + S△ACD, no rows), or by its type, citing the row that names the type:
+  // square AB² or AC²/2; rectangle AB·BC; rhombus and kite AC·BD/2; parallelogram a side times the
+  // height to it (citing DH ⊥ AB, H on line AB) or AB·AD·sin∢DAB; trapezoid half the sum of the
+  // bases times the height. A triangle is never half of a quadrilateral here (the user's rule).
+  quad_area(claim, refRows, problem) {
+    const term = claim.type === 'eq' ? [...claim.L.terms, ...claim.R.terms].map((x) => x.t).find((t) => t.kind === 'area4') : null;
+    if (!term) return fail2('quadAreaNeedArea', 'area4');
+    const T = term.p;
+    const name = `S□${T.join('')}`;
+    const P = problem.points;
+    const turn = [0, 1, 2, 3].map((i) => vcross(vsub(P[T[(i + 1) % 4]], P[T[i]]), vsub(P[T[(i + 2) % 4]], P[T[(i + 1) % 4]])));
+    if (!(turn.every((x) => x > 1e-9) || turn.every((x) => x < -1e-9))) return fail2('quadAreaConvex', 'area4', { q: `$${T.join('')}$` });
+    const [A, B, C, D] = T;
+    if (matches(problem, claim, [`${name}=S△${A}${B}${C}+S△${A}${C}${D}`])) return { ok: true, proof: 'area4_split_ac' };
+    if (matches(problem, claim, [`${name}=S△${A}${B}${D}+S△${B}${C}${D}`])) return { ok: true, proof: 'area4_split_bd' };
+    const same = (Q) => quadKey('parallelogram', Q) === quadKey('parallelogram', T);
+    const typed = refRows.filter((r) => r.claim.type === 'quad' && same(r.claim.P));
+    if (!typed.length) return fail2('quadAreaNeedType', 'area4', { q: `$${T.join('')}$` });
+    const proofOf = (lean) => `${lean} ${refNames(refRows)}`.trim();
+    const IS = { square: ['square', 'rectangle', 'rhombus', 'kite', 'parallelogram'], rectangle: ['rectangle', 'parallelogram'], rhombus: ['rhombus', 'kite', 'parallelogram'], parallelogram: ['parallelogram'], kite: ['kite'], isoTrapezoid: ['trapezoid'], trapezoid: ['trapezoid'] };
+    let need = null;
+    // a side XY and the height to it from a vertex Z of the other side: H on line XY, ZH ⊥ XY cited
+    const heights = (X, Y, Zs, form) => {
+      const u = vsub(P[Y], P[X]);
+      for (const Z of Zs) {
+        for (const H of problem.pointNames) {
+          if (H === Z) continue;
+          const w = vsub(P[H], P[X]);
+          if (Math.abs(vcross(u, w)) > 1e-6 * vlen(u) * Math.max(1, vlen(w))) continue;
+          if (!matches(problem, claim, [form(`${Z}${H}`)])) continue;
+          const lh = lineKey(P, Z, H);
+          const lb = lineKey(P, X, Y);
+          if (refRows.some((r) => r.claim.type === 'perp' && ((r.claim.la === lh && r.claim.lb === lb) || (r.claim.la === lb && r.claim.lb === lh)))) return true;
+          need = need || { h: `$${Z}${H} ⊥ ${X}${Y}$` };
+        }
+      }
+      return false;
+    };
+    for (const row of typed) {
+      const Q = row.claim.P;
+      const [a, b, c, d] = Q;
+      const kinds = IS[row.claim.kind] || [];
+      const sides = [[a, b], [b, c], [c, d], [d, a]];
+      if (kinds.includes('square')) {
+        if (matches(problem, claim, sides.map(([x, y]) => `${name}=${x}${y}²`))) return { ok: true, proof: proofOf('area_sq') };
+        if (matches(problem, claim, [`${name}=${a}${c}²/2`, `${name}=${b}${d}²/2`])) return { ok: true, proof: proofOf('area_sq_diag') };
+      }
+      if (kinds.includes('rectangle') && matches(problem, claim, [0, 1, 2, 3].map((i) => `${name}=${sides[i][0]}${sides[i][1]}*${sides[(i + 1) % 4][0]}${sides[(i + 1) % 4][1]}`))) {
+        return { ok: true, proof: proofOf('area_rect') };
+      }
+      if ((kinds.includes('rhombus') || kinds.includes('kite')) && matches(problem, claim, [`${name}=${a}${c}*${b}${d}/2`])) {
+        return { ok: true, proof: proofOf(kinds.includes('rhombus') ? 'area_rh' : 'area_kite') };
+      }
+      if (kinds.includes('parallelogram')) {
+        for (let i = 0; i < 4; i++) {
+          const [x, y] = sides[i];
+          const others = Q.filter((v) => v !== x && v !== y);
+          if (heights(x, y, others, (h) => `${name}=${x}${y}*${h}`)) return { ok: true, proof: proofOf('area_pg_perp') };
+          const [p, v, q] = [Q[(i + 3) % 4], Q[i], Q[(i + 1) % 4]];
+          if (matches(problem, claim, [`${name}=${v}${p}*${v}${q}*SIN∢${p}${v}${q}`])) return { ok: true, proof: proofOf('area_pg_sine') };
+        }
+      }
+      if (kinds.includes('trapezoid')) {
+        // bases AB and DC (the order a trapezoid is named in)
+        for (const [[x, y], [z, t]] of [[[a, b], [d, c]], [[d, c], [a, b]]]) {
+          if (heights(x, y, [z, t], (h) => `${name}=${a}${b}*${h}/2+${d}${c}*${h}/2`)) return { ok: true, proof: proofOf('area_trap_perp') };
+        }
+      }
+    }
+    if (need) return fail2('areaNeedPerp', proofOf('area4'), need);
+    return fail2('quadAreaNoForm', proofOf('area4'), { s: `$${name}$` });
+  },
   tri_sum(claim, refRows, problem) {
     const proof = 'tri_angle_sum';
     const v = claim.type === 'eq' && claim.of === 'ang' ? eqVec(claim) : null;
@@ -1986,7 +2071,7 @@ function claimPoints(c) {
   const out = new Set();
   const term = (t) => {
     if (!t) return;
-    if (t.kind === 'seg' || t.kind === 'ang' || t.kind === 'area') t.p.forEach((x) => out.add(x));
+    if (t.kind === 'seg' || t.kind === 'ang' || t.kind === 'area' || t.kind === 'area4') t.p.forEach((x) => out.add(x));
     else if (t.kind === 'trig') term(t.a);
     else if (t.kind === 'mono') t.f.forEach((x) => term(x.t));
   };

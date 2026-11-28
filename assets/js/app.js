@@ -697,7 +697,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', 'S△', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 8, '∼': 9, '/': 9, 'S△': 11 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', 'S△', 'S□', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 6, '∼': 9, '/': 9, 'S△': 6, 'S□': 6 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
