@@ -166,7 +166,8 @@ const fake = (claim, n) => ({ n, ok: true, parsed: { ok: true, claim } });
 
 // For a claim the student wrote without a reason (and that is not a plain calculation): the rows that
 // get there, ending with the claim itself as a calculation. Rows: givens the proof has not written yet,
-// one theorem row, and the claim. null when nothing that short works.
+// one theorem row, and the claim. A claim that is itself a given or a theorem's statement (in any
+// order) is one row with that reason. null when nothing that short works.
 //   p: the prepared problem; rows: the proof; upto: where the claim goes (index); text: the claim.
 // Returns { rows: [{ text, reason, refs, skip: true }, ...] }; every row checks out in checkProof.
 export function findSkip(p, rows, upto, text) {
@@ -206,8 +207,9 @@ export function findSkip(p, rows, upto, text) {
     return null;
   };
 
-  // Keep only the givens that a row cites, and number the rows again.
-  const assemble = (bridge, algRefs) => {
+  // Keep only the givens that a row cites, and number the rows again. The claim's own row is a
+  // calculation, or (finalReason) the given or theorem it is.
+  const assemble = (bridge, algRefs, finalReason = 'algebra') => {
     const usedG = missing.map((_, i) => upto + 1 + i).filter((k) => algRefs.includes(k) || (bridge && bridge.refs.includes(k)));
     const map = new Map();
     usedG.forEach((k, j) => map.set(k, upto + 1 + j));
@@ -216,11 +218,19 @@ export function findSkip(p, rows, upto, text) {
     const out = [
       ...usedG.map((k) => ({ ...givenRows[k - upto - 1], skip: true })),
       ...(bridge ? [{ text: bridge.text, reason: bridge.reason, refs: re(bridge.refs), skip: true }] : []),
-      { text, reason: 'algebra', refs: re(algRefs), skip: true },
+      { text, reason: finalReason, refs: re(algRefs), skip: true },
     ];
     const check = checkProof(p, [...before, ...out]).results.slice(upto);
     return check.every((r) => r.ok) ? { rows: out } : null;
   };
+
+  // The claim is itself a given, or a theorem's statement with its terms in any order: one row with
+  // that reason, not the theorem in its own words plus a calculation that only reorders it.
+  const asGiven = assemble(null, [], 'given');
+  if (asGiven) return asGiven;
+  const asIs = reasonFor(text);
+  const one = asIs && assemble(null, asIs.refs, asIs.reason);
+  if (one) return one;
 
   // Only givens were missing.
   const direct = follows(null);
