@@ -37,6 +37,8 @@ const TXT = {
     buildCancel: 'ביטול',
     backspace: 'מחיקת התו האחרון',
     digits: 'ספרות',
+    addLine: 'צריך גם עובדה מהשרטוט, והתוכנה תוסיף אותה: {steps}.',
+    addDone: 'התוכנה הוסיפה את העובדה מהשרטוט: {steps}.',
   },
   en: {
     tip: 'Tap a point, side or angle in the diagram to add it to the claim.',
@@ -62,6 +64,8 @@ const TXT = {
     buildCancel: 'Cancel',
     backspace: 'Delete the last character',
     digits: 'Digits',
+    addLine: 'This also needs a fact from the diagram, which the game adds: {steps}.',
+    addDone: 'The game added the fact from the diagram: {steps}.',
   },
 };
 
@@ -298,4 +302,99 @@ export function backspace(value, start, end) {
   const cut = m ? m[0].length : [...before].pop().length;
   const head = before.slice(0, before.length - cut);
   return { value: head + value.slice(a), caret: head.length };
+}
+
+// ---------------------------------------------------------------- a calculation through angle or segment addition
+// "∢COD + ∢DOB = 80°" by calculation from ∢COB = 80° needs ∢COD + ∢DOB = ∢COB, a fact read off the
+// diagram (angle addition), and so does "∢DOB = 40°" from ∢COD = ∢DOB. When a calculation follows only
+// with such facts, the game writes them as rows of their own first (angle or segment addition, filled
+// in by itself) and the calculation cites them, so every step stays in the proof and Lean checks each
+// row. Each added fact passes the checker's own addition check, and the rows are checked again at the
+// end, so nothing false gets in.
+
+const ADD_REASONS = new Set(['angle_add', 'segment_add']);
+const MAX_FACTS = 16;
+
+// The addition facts the diagram gives that share an angle or a segment with `claim`.
+function additionFacts(p, claim, results, upto) {
+  const want = new Map();
+  atomsOf(claim, want);
+  const names = p.pointNames || Object.keys(p.points);
+  const texts = [];
+  const verts = new Set([...want.values()].filter((t) => t.kind === 'ang').map((t) => t.p[1]));
+  for (const V of verts) {
+    const others = names.filter((x) => x !== V);
+    for (const [X, Z] of pairs(others)) {
+      for (const Y of others) if (Y !== X && Y !== Z) texts.push(`∢${X}${V}${Y} + ∢${Y}${V}${Z} = ∢${X}${V}${Z}`);
+    }
+  }
+  if ([...want.values()].some((t) => t.kind === 'seg')) {
+    for (const [X, Z] of pairs(names)) {
+      for (const Y of names) if (Y !== X && Y !== Z) texts.push(`${X}${Y} + ${Y}${Z} = ${X}${Z}`);
+    }
+  }
+  const out = [];
+  const seen = new Set();
+  for (const text of texts) {
+    const c = parseClaim(text, p);
+    if (!c.ok) continue;
+    const key = claimKey(c.claim);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const has = new Map();
+    atomsOf(c.claim, has);
+    if (![...has.keys()].some((k) => want.has(k))) continue;
+    const a = autoReason(p, results, c.claim, upto);
+    if (a && ADD_REASONS.has(a.reason)) out.push({ text, claim: c.claim, reason: a.reason });
+    if (out.length >= MAX_FACTS) break;
+  }
+  return out;
+}
+
+// For a claim that is not a calculation from the rows before it (`upto`) but is one with one or two
+// addition facts from the diagram: { rows: [fact rows (auto), the claim (algebra)] }, else null.
+export function findAddition(p, rows, upto, text) {
+  const parsed = parseClaim(text, p);
+  if (!parsed.ok || (parsed.claim.type !== 'eq' && parsed.claim.type !== 'ineq')) return null;
+  const target = parsed.claim;
+  const before = rows.slice(0, upto);
+  const res = checkProof(p, before).results;
+  if (autoReason(p, res, target, upto)) return null; // a plain calculation, a given or a fact itself
+  const facts = additionFacts(p, target, res, upto);
+  if (!facts.length) return null;
+  // a fact is written with the names the student already uses (∢COD, not ∢DOC)
+  const spell = new Map();
+  for (const c of [target, ...res.filter((r) => r.ok && r.parsed.ok).map((r) => r.parsed.claim)]) {
+    const m = new Map();
+    atomsOf(c, m);
+    for (const [k, t] of m) if (!spell.has(k)) spell.set(k, termText(t));
+  }
+  const order = [...spell.keys()];
+  const rank = (t) => (order.includes(termKey(t)) ? order.indexOf(termKey(t)) : order.length);
+  const factText = (f) => {
+    const side = (s) => [...s.terms].sort((a, b) => rank(a.t) - rank(b.t)).map(({ t }) => spell.get(termKey(t)) || termText(t)).join(' + ');
+    const named = `${side(f.claim.L)} = ${side(f.claim.R)}`;
+    const c = parseClaim(named, p);
+    return c.ok && claimKey(c.claim) === claimKey(f.claim) ? named : f.text;
+  };
+  const tryFacts = (list) => {
+    const extra = list.map((f, i) => fake(f.claim, upto + 1 + i));
+    const a = autoReason(p, [...res, ...extra], target, upto + list.length);
+    if (!a || a.reason !== 'algebra' || !extra.every((x) => a.refs.includes(x.n))) return null;
+    const out = [
+      ...list.map((f) => ({ text: factText(f), reason: f.reason, refs: [], auto: true })),
+      { text, reason: 'algebra', refs: a.refs },
+    ];
+    const check = checkProof(p, [...before, ...out]).results.slice(upto);
+    return check.every((r) => r.ok) ? { rows: out } : null;
+  };
+  for (const f of facts) {
+    const done = tryFacts([f]);
+    if (done) return done;
+  }
+  for (const pair of pairs(facts)) {
+    const done = tryFacts(pair);
+    if (done) return done;
+  }
+  return null;
 }

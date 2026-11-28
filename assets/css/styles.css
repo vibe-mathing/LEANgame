@@ -1141,3 +1141,7 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
   .numkeys { display: flex; flex-wrap: nowrap; gap: 3px; }
   .numkeys .numkey { min-width: 0; height: 40px; font-variant-numeric: tabular-nums; }
 }
+@media (max-width: 600px) {
+  /* a long claim in a proof row wraps at its spaces instead of running into the reason column */
+  .pclaim .math { white-space: normal; min-width: 0; }
+}

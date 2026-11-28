@@ -12,7 +12,7 @@ import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, init
 import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
 import { mountConstructions } from './constructions-ui.js';
-import { building, addBuildPoint, buildSaid, dropBuild, backspace } from './play-extras.js';
+import { building, addBuildPoint, buildSaid, dropBuild, backspace, findAddition } from './play-extras.js';
 import { curriculumOf, inLevel, REASON_ALIASES, AAS_NAMES, STAGE_CURRICULUM, EXAM, TOPIC_LEVELS, LEVELS, MINISTRY } from './curriculum.js';
 import { currentUser } from './auth.js';
 import { PX, DEV_SKIP, insertPick, newReasons, findSkip } from './play-extras.js';
@@ -1263,6 +1263,36 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     }
     return skipMemo.val;
   }
+  // A calculation that also needs an angle or segment addition read off the diagram (for every
+  // student, play-extras.js findAddition): with "algebra" chosen, or with no reason at all.
+  let addMemo = { key: null, val: null };
+  function currentAddition() {
+    if (state.reason ? state.reason !== 'algebra' : reasonInput.value.trim()) return null;
+    const v = input.value.trim();
+    if (!v || (!state.reason && currentAuto())) return null;
+    const key = `${v}|${upto()}|${rowsKey()}|${p.allowed.join()}`;
+    if (addMemo.key !== key) {
+      let val = null;
+      try { val = findAddition(p, state.rows, upto(), v); } catch (e) { console.warn('[addition]', e); }
+      addMemo = { key, val };
+    }
+    return addMemo.val;
+  }
+  // The fact rows go in first; the claim cites them (filled in by itself only when no reason was chosen).
+  function additionRows(ad) {
+    const n = ad.rows.length;
+    const at = upto();
+    let last = ad.rows[n - 1];
+    if (!state.reason) last = { ...last, auto: true };
+    else if (state.refs.size) {
+      // the rows the student cited, with the added facts, when they are enough
+      const mine = { ...last, refs: [...new Set([...state.refs, ...ad.rows.slice(0, -1).map((_, i) => at + 1 + i)])].sort((a, b) => a - b) };
+      const trial = [...state.rows.slice(0, at), ...ad.rows.slice(0, -1), mine];
+      if (checkProof(p, trial).results[trial.length - 1].ok) last = mine;
+    }
+    return { rows: [...ad.rows.slice(0, -1), last] };
+  }
+  const applyAddition = (ad) => applySkip(additionRows(ad), 'addDone');
   // "row 2: ∢AOC + ∢COB = 180° (adjacent angles), then row 3: algebra (1, 2)"
   function skipStepsHTML(sk, first) {
     return sk.rows.map((r, i) => {
@@ -1281,10 +1311,12 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     if (rid && !quick) chosen.innerHTML = `<b>${reasonShort(rid)}</b><button type="button" class="mini" data-clear aria-label="${t('pp.reasonClear')}">${icon('x')}</button>`;
     const auto = currentAuto();
     const line = $('#autoLine', root);
-    const sk = auto ? null : currentSkip();
-    line.hidden = (!auto && !sk) || !!reasonInput.value.trim();
-    line.classList.toggle('is-skip', !!sk);
+    const ad = auto ? null : currentAddition();
+    const sk = auto || ad ? null : currentSkip();
+    line.hidden = (!auto && !sk && !ad) || !!reasonInput.value.trim();
+    line.classList.toggle('is-skip', !!(sk || ad));
     if (auto) line.innerHTML = `${icon('spark')} ${t('pp.autoNote', { r: `<b>${reasonShort(auto.reason)}</b>${refsText(auto.refs)}` })}`;
+    else if (ad) line.innerHTML = `${icon('spark')} <span>${PX('addLine', { steps: skipStepsHTML(additionRows(ad), upto() + 1) })}</span>`;
     else if (sk) line.innerHTML = `${icon('spark')} <span>${PX('skipLine', { steps: skipStepsHTML(sk, upto() + 1) })}</span>`;
   }
 
@@ -1421,6 +1453,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       if (!exact) { showMsg(`${icon('info')} ${t('pp.pickFromList')}`); reasonInput.focus(); openSugg(); return; }
       state.reason = exact;
     }
+    const ad = currentAddition();
+    if (ad) { applyAddition(ad); return; }
     if (state.reason) {
       row = { text, reason: state.reason, refs: [...state.refs].sort((a, b) => a - b) };
     } else {
@@ -1448,13 +1482,13 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
 
   // Skip steps: the rows go in where the claim was going; later rows move down, and their references
   // to the edited row or after it move with them. The student is told which rows the game wrote.
-  function applySkip(sk) {
+  function applySkip(sk, done = 'skipDone') {
     const at = upto();
     const editing = state.editing != null;
     const extra = sk.rows.length - (editing ? 1 : 0);
     const later = state.rows.slice(editing ? at + 1 : at).map((r) => ({ ...r, refs: (r.refs || []).map((k) => (k > at ? k + extra : k)) }));
     state.rows = [...state.rows.slice(0, at), ...sk.rows.map((r) => ({ ...r })), ...later];
-    const note = `${icon('spark')} <span>${PX('skipDone', { steps: skipStepsHTML(sk, at + 1) })}</span>`;
+    const note = `${icon('spark')} <span>${PX(done, { steps: skipStepsHTML(sk, at + 1) })}</span>`;
     resetComposer();
     renderRows();
     showMsg(note);
