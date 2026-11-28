@@ -2294,13 +2294,28 @@ export function renamedAngles(problem) {
 export function leanTheorem(problem, results, upto) {
   const name = `geo_${problem.stage}_${String(problem.n).padStart(4, '0')}`;
   const renamed = renamedAngles(problem).flatMap((names) => names.slice(1).map((n) => `ang ${names[0].join(' ')} = ang ${n.join(' ')}`));
+  // One radius per circle. The points of one circle fact share it; facts around the same centre
+  // share it when their drawn radii agree (2%). Two circles, even around one centre (OA = 1,
+  // OB = 1.5), get r1 and r2; a single circle keeps r.
+  const radii = [];
+  const radiusOf = (o, p) => {
+    const d = dist(problem, o, p);
+    let r = radii.find((x) => x.o === o && Math.abs(x.d - d) <= 0.02 * Math.max(x.d, d));
+    if (!r) radii.push((r = { o, d }));
+    return r;
+  };
+  const cfgLean = problem.config.map((c) => {
+    if (c.type === 'circle' && c.on && c.on.length) { const r = radiusOf(c.o, c.on[0]); return c.on.map((p) => [`len ${c.o} ${p} = `, r]); }
+    if (c.type === 'tangent') return [[`IsTangent ${c.p} ${c.t} ${c.o} `, radiusOf(c.o, c.t)]];
+    return null;
+  });
+  const rName = (r) => (radii.length === 1 ? 'r' : `r${radii.indexOf(r) + 1}`);
   const hyps = [
-    ...problem.config.map((c, i) => `(cfg${i + 1} : ${c.lean})`),
+    ...problem.config.map((c, i) => `(cfg${i + 1} : ${cfgLean[i] ? cfgLean[i].map(([s, r]) => s + rName(r)).join(' ∧ ') : c.lean})`),
     ...renamed.map((s, i) => `(ray${i + 1} : ${s})`),
     ...problem.givensParsed.map((g, i) => `(g${i + 1} : ${leanClaim(g)})`),
   ];
-  // circle and tangent facts name the radius r (len O A = r, IsTangent P A O r): bind it
-  const radius = problem.config.some((c) => /\br\b/.test(c.lean || '')) ? ' (r : ℝ)' : '';
+  const radius = radii.length ? ` (${radii.map(rName).join(' ')} : ℝ)` : '';
   const lines = [`theorem ${name} (${problem.pointNames.join(' ')} : Point)${radius}`];
   hyps.forEach((h, i) => lines.push(`    ${h}${i === hyps.length - 1 ? ' :' : ''}`));
   if (!hyps.length) lines[0] += ' :';

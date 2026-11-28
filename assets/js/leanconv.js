@@ -180,15 +180,22 @@ export function problemToLean(problem, opts = {}) {
     if (!r.ok) throw new Error(`${what} does not parse: ${s} (${r.error.key})`);
     return r.claim;
   };
-  const radius = new Map();
-  const rad = (o) => { if (!radius.has(o)) radius.set(o, `r${radius.size + 1}`); return radius.get(o); };
+  // One radius per circle. The points of one circle fact share it; facts around the same centre share
+  // it when their drawn radii agree (2%), so two circles around one centre get r1 and r2.
+  const radius = new Map(); // { o, d } → r1, r2, …
+  const rad = (o, p) => {
+    const d = pos[o] && pos[p] ? Math.hypot(pos[o][0] - pos[p][0], pos[o][1] - pos[p][1]) : 0;
+    let key = [...radius.keys()].find((k) => k.o === o && Math.abs(k.d - d) <= 0.02 * Math.max(k.d, d));
+    if (!key) radius.set((key = { o, d }), `r${radius.size + 1}`);
+    return radius.get(key);
+  };
   const hyps = [];
   const cfg = (prop, note) => hyps.push({ prop, note: `מהשרטוט: ${note}`, kind: 'cfg' });
   for (const c of problem.config || []) {
     switch (c.type) {
       case 'between': cfg(`Sbtw ℝ ${c.a} ${c.o} ${c.b}`, plain(he(c.text)) || `${c.o} נמצאת בין ${c.a} ל-${c.b}`); break;
-      case 'circle': for (const p of c.on) cfg(`len ${c.o} ${p} = ${rad(c.o)}`, `${p} על המעגל שמרכזו ${c.o}`); break;
-      case 'tangent': cfg(`IsTangent ${c.p} ${c.t} ${c.o} ${rad(c.o)}`, `${c.p}${c.t} משיק למעגל בנקודה ${c.t}`); break;
+      case 'circle': { const r = c.on.length ? rad(c.o, c.on[0]) : null; for (const p of c.on) cfg(`len ${c.o} ${p} = ${r}`, `${p} על המעגל שמרכזו ${c.o}`); break; }
+      case 'tangent': cfg(`IsTangent ${c.p} ${c.t} ${c.o} ${rad(c.o, c.t)}`, `${c.p}${c.t} משיק למעגל בנקודה ${c.t}`); break;
       case 'par': cfg(`Par ${c.a.join(' ')} ${c.b.join(' ')}`, `${c.a.join('')} ∥ ${c.b.join('')}`); break;
       case 'midpoint': cfg(`IsMidpoint ${c.m} ${c.a[0]} ${c.a[1]}`, `${c.m} אמצע ${c.a.join('')}`); break;
       default: warnings.push(H(`עובדה מהשרטוט מסוג ${c.type} לא נכנסה`, `A diagram fact of type ${c.type} was left out`));

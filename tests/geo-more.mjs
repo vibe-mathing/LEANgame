@@ -4,8 +4,8 @@
 // Each case is a small problem and proof rows. A case says which rows must pass, and that the goal is
 // reached or not. Wrong rows (missing a cited row, a wrong value) must be refused.
 
-import { prepareProblem, checkProof, parseClaim, fmtClaim, claimKey, liveFormat } from '../assets/js/geo.js';
-import { leanOfClaim } from '../assets/js/leanconv.js';
+import { prepareProblem, checkProof, parseClaim, fmtClaim, claimKey, liveFormat, leanTheorem } from '../assets/js/geo.js';
+import { leanOfClaim, problemToLean } from '../assets/js/leanconv.js';
 import { REASONS } from '../assets/js/data.js';
 import { buildReview } from '../assets/js/qparse.js';
 
@@ -163,6 +163,23 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   // the input box: '<' after a number turns into ∢ only before a three-letter angle
   check('typing 2<ABC gives an angle', liveFormat('2<ABC') === '2∢ABC', liveFormat('2<ABC'));
   check('typing 60>OB or AB/40<60 keeps the comparison', liveFormat('60>OB') === '60>OB' && liveFormat('AB/40<60') === 'AB/40<60');
+}
+
+// ---- the Lean statement: one radius per circle, also for two circles around one centre
+{
+  const circle = (o, on) => ({ type: 'circle', o, on, lean: on.map((x) => `len ${o} ${x} = r`).join(' ∧ ') });
+  const p = problem({
+    points: { O: [0, 0], A: [-1, 0], B: [-1.5, 0], C: [0, 1] },
+    segments: ['OB'],
+    config: [circle('O', ['A']), circle('O', ['B']), circle('O', ['C'])],
+    givens: ['OA = 1', 'OB = 1.5'],
+    goal: 'OB = 1.5',
+  });
+  const th = leanTheorem(p);
+  check('two circles around O get two radii', th.includes('(r1 r2 : ℝ)') && th.includes('len O A = r1') && th.includes('len O B = r2'), th);
+  check('points of one circle share its radius', th.includes('len O C = r1'), th);
+  const conv = problemToLean({ ...p, givens: p.givens, goal: p.goal }).lean;
+  check('the converter gives two radii too', conv.includes('len O A = r1') && conv.includes('len O B = r2') && conv.includes('len O C = r1'), conv);
 }
 
 console.log(`${passed} passed, ${failed} failed`);
