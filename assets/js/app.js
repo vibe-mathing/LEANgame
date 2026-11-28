@@ -766,6 +766,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
                 <div class="symkeys" role="group" aria-label="symbols">
                   ${['∢', '△', 'S△', 'S□', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 6, '∼': 9, '/': 9, 'S△': 6, 'S□': 6 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}<button type="button" class="symkey symkey-del" data-sym="⌫" title="${esc(PX('backspace'))}" aria-label="${esc(PX('backspace'))}">⌫</button>
                 </div>
+                <div class="symkeys numkeys" role="group" aria-label="${esc(PX('digits'))}">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.'].map((d) => `<button type="button" class="symkey numkey" data-sym="${d}">${d}</button>`).join('')}</div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
               <span class="cmp-label" id="reasonLabel">${t('pp.reason')}</span>
@@ -1442,7 +1443,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   let typingNow = false; // the claim or reason field had the focus when the row was sent (Enter)
   $('#composer', root).addEventListener('submit', () => { typingNow = [input, reasonInput].includes(document.activeElement); }, true);
   // A sign key or the angle button doesn't take the focus from the claim, so an open keyboard stays open.
-  for (const el of [$('.symkeys', root), angleBtn]) el.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+  for (const el of [...$$('.symkeys', root), angleBtn]) el.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
   $('#cancelEdit', root).addEventListener('click', () => { resetComposer(); renderRows(); });
 
   // Skip steps: the rows go in where the claim was going; later rows move down, and their references

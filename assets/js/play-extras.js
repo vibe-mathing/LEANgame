@@ -36,6 +36,7 @@ const TXT = {
     tri2: 'ועוד קודקוד אחד',
     buildCancel: 'ביטול',
     backspace: 'מחיקת התו האחרון',
+    digits: 'ספרות',
   },
   en: {
     tip: 'Tap a point, side or angle in the diagram to add it to the claim.',
@@ -60,6 +61,7 @@ const TXT = {
     tri2: 'One more vertex',
     buildCancel: 'Cancel',
     backspace: 'Delete the last character',
+    digits: 'Digits',
   },
 };
 

@@ -1135,3 +1135,9 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
   .composer { gap: 4px; }
   .cmp-label { margin-top: 2px; }
 }
+/* digits under the sign keys on a phone or tablet, so "∢A = 37.5°" needs no keyboard (app.js .numkeys) */
+.numkeys { display: none; }
+@media (max-width: 600px), (pointer: coarse) {
+  .numkeys { display: flex; flex-wrap: nowrap; gap: 3px; }
+  .numkeys .numkey { min-width: 0; height: 40px; font-variant-numeric: tabular-nums; }
+}
