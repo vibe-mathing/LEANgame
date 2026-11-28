@@ -238,6 +238,14 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   check('the editor reads arcs and circumferences', JSON.stringify(rv.givens.map((g) => g.claim)) === '["OA = 5","⌒AB = 2.5π"]' && rv.goal && /^P/.test(rv.goal.claim) && !(rv.unknown || []).length,
     JSON.stringify({ g: rv.givens.map((g) => g.claim), goal: rv.goal, u: rv.unknown }));
   check('"על היקף המעגל שמרכזו O" is still a circle fact', (rv.facts || []).some((f) => f.fact === 'circle' && f.o === 'O'), JSON.stringify(rv.facts));
+  // fractions are shown as fractions (and read back as the same claim); other numbers stay decimals
+  for (const [s, want] of [['⌒AB = π*OA*∢AOB/180', '⌒AB = πOA·∢AOB/180'], ['OB/1.5 = 8.67', '2OB/3 = 8.67'], ['OA/OB = 5/3', 'OA/OB = 5/3'],
+    ['OA = 0.667OB', 'OA = 0.667OB'], ['OD² = 1407 + 342√3', 'OD² = 1999.361'], ['OA = √52', 'OA = 2√13'], ['OA = 2π/3', 'OA = 2π/3']]) {
+    const r = read(s);
+    const shown = r.ok ? fmtClaim(r.claim) : JSON.stringify(r.error);
+    const back = /\.\d{3}\b/.test(want) || claimKey(read(shown).claim) === claimKey(r.claim); // a rounded decimal can't read back
+    check(`"${s}" is shown as "${want}"`, shown === want && back, shown);
+  }
 }
 
 console.log(`${passed} passed, ${failed} failed`);

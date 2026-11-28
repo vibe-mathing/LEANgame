@@ -543,7 +543,8 @@ export function claimKey(c) {
 // ---------- formatting ----------
 
 // A number as a student would write it: 6√3 rather than 10.392.
-const ROOTS = [2, 3, 5, 6, 7];
+// The square-free numbers up to 300 (√52 is 2√13, √2016 is 12√14); one of them at most fits.
+const ROOTS = Array.from({ length: 299 }, (_, i) => i + 2).filter((n) => ![4, 9, 25, 49, 121, 169, 289].some((d) => n % d === 0));
 function numParts(v) {
   const r = Math.round(v * 1000) / 1000;
   if (Math.abs(v - r) < 1e-9) return { q: r, n: 1 };
@@ -589,15 +590,37 @@ export function fmtTerm(t) {
 }
 
 // One side, the number first: 180° − ∢BCA rather than −∢BCA + 180°.
+// A coefficient that fmtNum cannot show exactly but is a fraction p/q (q ≤ 1000, p ≤ 100000), or p/q·π:
+// shown as AB/3, ∢EAB/180, πOA·∢AOB/180 rather than 0.333AB, 0.006∢EAB, 0.017OA·∢AOB. null otherwise.
+// The tolerance is tight (1e-12): a fraction the student typed is off by ~1e-15, and a number like
+// 1407 + 342√3 must not pass for 1045666/523.
+function fracParts(a) {
+  const np = numParts(a);
+  if (Math.abs((np.pi ? np.q * Math.PI : np.q * Math.sqrt(np.n)) - a) < 1e-9 * Math.max(1, a)) return null;
+  for (const pi of [false, true]) {
+    const v = pi ? a / Math.PI : a;
+    for (let q = 2; q <= 1000; q++) {
+      const p = Math.round(v * q);
+      if (p > 100000) break;
+      if (p > 0 && Math.abs(v * q - p) < 1e-12 * Math.max(1, v * q)) return { p, q, pi };
+    }
+  }
+  return null;
+}
+
 function fmtSide(side, of) {
   const unit = of === 'ang' ? '°' : '';
   const parts = [];
   const hasK = Math.abs(side.k) > EPS || !side.terms.length;
-  if (hasK) parts.push((side.k < 0 ? '−' : '') + fmtNum(Math.abs(side.k)) + unit);
+  const kf = hasK && of !== 'ang' ? fracParts(Math.abs(side.k)) : null; // 5/3, 2π/3 rather than 1.667, 2.094
+  if (hasK) parts.push((side.k < 0 ? '−' : '') + (kf ? `${kf.p === 1 && kf.pi ? '' : kf.p}${kf.pi ? 'π' : ''}/${kf.q}` : fmtNum(Math.abs(side.k))) + unit);
   side.terms.forEach(({ c, t }, i) => {
     const a = Math.abs(c);
     const s = atomStr(t);
-    const body = Math.abs(a - 1) < EPS ? s : fmtNum(a) + (s.startsWith('1/') ? s.slice(1) : s);
+    const fr = Math.abs(a - 1) < EPS ? null : fracParts(a);
+    const body = Math.abs(a - 1) < EPS ? s
+      : fr ? `${fr.p === 1 ? '' : fr.p}${fr.pi ? 'π' : ''}${fr.p === 1 && !fr.pi && s.startsWith('1/') ? s : s.startsWith('1/') ? s.slice(1) : s}/${fr.q}`
+      : fmtNum(a) + (s.startsWith('1/') ? s.slice(1) : s);
     const first = i === 0 && !hasK;
     parts.push(first ? (c < 0 ? '−' : '') + body : (c < 0 ? ' − ' : ' + ') + body);
   });
