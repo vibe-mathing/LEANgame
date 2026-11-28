@@ -213,7 +213,8 @@ const GOAL_RE = /(?:^|[\s,:(])ו?(?:הוכיחו|הוכיחי|הוכח|הראו|
 const ASK_RE = /(?:^|[\s,:(])ו?(?:חשבו|חשבי|חשב|מצאו|מצאי|מצא|מהו|מהי|מה\s+גודל|מה\s+אורך|FIND|COMPUTE|CALCULATE)(?:\s*:|\s+|$)(?:את\s+)?(?:ה?(?:גודל|אורך|ערך)\s+)?(?:של\s+)?/;
 const GIVEN_RE = /(?:^|(?<=[\s,(]))ו?(?:נתון|נתונה|נתונים|נתונות|ידוע|GIVEN)(?:\s*:|\s+ש-?|\s+כי|\s+|$)/g;
 
-const QUAD_WORDS = [['טרפז שווה שוקיים', 'isoTrapezoid'], ['טרפז ש"ש', 'isoTrapezoid'], ['מקבילית', 'parallelogram'], ['מלבן', 'rectangle'],
+const QUAD_WORDS = [['בר חסימה במעגל', 'cyclic'], ['בר חסימה', 'cyclic'], ['חוסם מעגל', 'tangential'], // geo-more.js kinds
+  ['טרפז שווה שוקיים', 'isoTrapezoid'], ['טרפז ש"ש', 'isoTrapezoid'], ['מקבילית', 'parallelogram'], ['מלבן', 'rectangle'],
   ['מעויין', 'rhombus'], ['מעוין', 'rhombus'], ['ריבוע', 'square'], ['דלתון', 'kite'], ['טרפז', 'trapezoid']];
 const QW = QUAD_WORDS.map(([w]) => w.replace(/"/g, '"')).join('|');
 const quadKind = (w) => (QUAD_WORDS.find(([x]) => x === w) || [])[1];
@@ -233,6 +234,11 @@ const claimItem = (claim, src, extra = {}) => ({ kind: 'claim', claim, src, ...e
 
 // Patterns that join several things with "ו" or commas; they run before a part is cut into clauses.
 const MULTI = [
+  { // A(0, 12), A = (0, 12): a point's coordinates (analytic geometry, geo-more.js), kept whole before
+    // the text is split at commas and brackets
+    re: /([A-Z])\s*=?\s*\(\s*(-?\d*(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)\s*[,;]\s*(-?\d*(?:\.\d+)?(?:√\d+)?(?:\/\d+)?)\s*\)/g,
+    fn: (m) => [claimItem(`${m[1]}(${m[2]};${m[3]})`, m[0])],
+  },
   { // A, B ו-C על המעגל שמרכזו O
     re: new RegExp(`(?:ה?נקודות\\s+)?([A-Z](?:\\s*,\\s*[A-Z])*(?:\\s*ו-?\\s*[A-Z])?)\\s+(?:נמצאות\\s+|נמצאת\\s+|נמצא\\s+|מונחות\\s+)?על\\s+(?:ה)?(?:מעגל|היקף(?:\\s+ה?מעגל)?)(?:\\s+(?:ש)?מרכזו\\s+(?:הוא\\s+|ב-?\\s*)?([A-Z])(?![A-Z]))?`, 'g'),
     fn: (m) => [{ kind: 'fact', fact: 'circle', pts: m[1].match(/[A-Z]/g), o: m[2] || null }],
@@ -400,8 +406,8 @@ const SINGLE = [
     fn: (m) => [{ kind: 'fact', fact: 'cross', o: m[1], diagOf: m[2] || null }],
     setup: true,
   },
-  { // מעגל שמרכזו O / O מרכז המעגל
-    re: /(?:ה)?מעגל\s+(?:ש)?מרכזו\s+(?:הוא\s+|ב-?\s*)?([A-Z])(?![A-Z])|([A-Z])\s+(?:הוא\s+|היא\s+)?מרכז\s+(?:ה)?מעגל/g,
+  { // מעגל שמרכזו O / O מרכז המעגל (not inside "משיק למעגל שמרכזו O", which the tangent rule reads)
+    re: /(?<!משיקה?\s+ל(?:ה)?)(?:ה)?מעגל\s+(?:ש)?מרכזו\s+(?:הוא\s+|ב-?\s*)?([A-Z])(?![A-Z])|([A-Z])\s+(?:הוא\s+|היא\s+)?מרכז\s+(?:ה)?מעגל/g,
     fn: (m) => [{ kind: 'fact', fact: 'center', o: m[1] || m[2] }],
     setup: true,
   },
@@ -412,8 +418,8 @@ const SINGLE = [
   },
   { re: /([A-Z])([A-Z])\s+(?:הוא\s+)?(?:ה)?קוטר/g, fn: (m) => [{ kind: 'fact', fact: 'diam', a: m[1], b: m[2] }], setup: true },
   { // PA משיק למעגל בנקודה A
-    re: /([A-Z])([A-Z])\s+(?:הוא\s+|היא\s+)?(?:ה)?משיקה?(?:\s+ל(?:ה)?מעגל)?(?:\s+(?:ש)?מרכזו\s+[A-Z])?(?:\s+ב(?:נקודה\s+)?-?\s*([A-Z])(?![A-Z]))?/g,
-    fn: (m) => [{ kind: 'fact', fact: 'tangent', a: m[1], b: m[2], t: m[3] || null }],
+    re: /([A-Z])([A-Z])\s+(?:הוא\s+|היא\s+)?(?:ה)?משיקה?(?:\s+ל(?:ה)?מעגל)?(?:\s+(?:ש)?מרכזו\s+([A-Z]))?(?:\s+ב(?:נקודה\s+)?-?\s*([A-Z])(?![A-Z]))?/g,
+    fn: (m) => [{ kind: 'fact', fact: 'tangent', a: m[1], b: m[2], t: m[4] || null, o: m[3] || null }],
     setup: true,
   },
   { re: /(∢[A-Z]{1,3})\s+(?:היא\s+|הוא\s+)?ישרה/g, fn: (m) => [claimItem(`${m[1]} = 90°`, m[0])] },
@@ -798,6 +804,7 @@ export function drawingScale(parsedGivens, pos) {
 // drawing can't say (a length given as a number and no scale).
 export function claimErrors(c, pos, scale) {
   if (!c) return null;
+  if (typeof c.extErrs === 'function') return c.extErrs(pos, scale); // claim types from geo-more.js
   const quadErr = (kind, P) => {
     const [A, B, C, D] = P;
     const par = (a, b) => ({ v: lineAngle(pos, a, b), tol: ANG_TOL });
@@ -1145,7 +1152,15 @@ export function buildReview(drawing, text, { title = '', stage = null } = {}) {
     const key = r.ok ? claimKey(r.claim) : g.claim;
     if (seen.has(key)) continue;
     seen.add(key);
-    givens.push({ claim: r.ok ? canonClaim(r.claim) : g.claim, text: g.text || null, also: g.also || [], note: g.note || null, src: g.src || '', foot: g.foot || null, bis: g.bis || null });
+    // The canonical form, unless it loses precision: a constant like 2√3·sin80° is shown with three
+    // decimals, so then the teacher's own wording is kept (it reads back exactly).
+    let claim = g.claim;
+    if (r.ok) {
+      const canon = canonClaim(r.claim);
+      const back = parseClaim(canon, ctx);
+      claim = back.ok && claimKey(back.claim) === key ? canon : g.claim;
+    }
+    givens.push({ claim, text: g.text || null, also: g.also || [], note: g.note || null, src: g.src || '', foot: g.foot || null, bis: g.bis || null });
   }
   let goal = null;
   if (parsed.goal && parsed.goal.ask) {
@@ -1202,11 +1217,18 @@ function tangentFacts(parsed, drawing, pos) {
   const circs = (drawing.circs || []).filter((c) => pos[c.o] && pos[c.r]);
   for (const f of parsed.facts.filter((x) => x.fact === 'tangent')) {
     // the touching point is the letter on a circle
-    const onCircle = (n) => circs.find((c) => pos[n] && Math.abs(dist(pos[c.o], pos[n]) - dist(pos[c.o], pos[c.r])) < 1e-6 * dist(pos[c.o], pos[c.r]));
-    const T = f.t || [f.a, f.b].find((n) => onCircle(n));
+    const onCircles = (n) => circs.filter((c) => pos[n] && Math.abs(dist(pos[c.o], pos[n]) - dist(pos[c.o], pos[c.r])) < 1e-6 * dist(pos[c.o], pos[c.r]));
+    const T = f.t || [f.a, f.b].find((n) => onCircles(n).length);
     const P = [f.a, f.b].find((n) => n !== T);
-    const circ = T && onCircle(T);
-    if (T && P && circ) out.push({ fact: tangentFact(P, T, circ.o), src: f.src });
+    let cs = T && P ? onCircles(T) : [];
+    // "משיק למעגל שמרכזו N": that circle. Otherwise, when T is on several circles (two circles that
+    // touch at T), every circle the line really touches at T: their common tangent.
+    if (f.o) cs = cs.filter((c) => c.o === f.o);
+    else if (cs.length > 1) {
+      const touch = cs.filter((c) => pos[P] && Math.abs(90 - angDeg(pos, c.o, T, P)) <= ANG_TOL);
+      cs = touch.length ? touch : cs.slice(0, 1);
+    }
+    for (const c of cs) out.push({ fact: tangentFact(P, T, c.o), src: f.src });
   }
   return out;
 }
@@ -1419,5 +1441,15 @@ export function playable(stored, id) {
     if (m.goal) x.goal = true;
     out.marks.push(x);
   }
+  // Named parameters (r = OX, α = ∢OCX, S = S△MEO) and rounded answers, used by the bagrut questions:
+  // geo-more.js replaces a name by its term before a claim is read.
+  if (pr.names && typeof pr.names === 'object') {
+    const names = {};
+    for (const [k, v] of Object.entries(pr.names).slice(0, 8)) {
+      if (/^[A-Za-zα-ωΑ-Ω]{1,2}$/.test(k) && typeof v === 'string' && /^[A-Z∢△□]{2,7}$/.test(v)) names[k] = v;
+    }
+    if (Object.keys(names).length) out.names = names;
+  }
+  if (pr.rounding && Number.isInteger(pr.rounding.min) && pr.rounding.min >= 0 && pr.rounding.min <= 6) out.rounding = { min: pr.rounding.min };
   return out;
 }

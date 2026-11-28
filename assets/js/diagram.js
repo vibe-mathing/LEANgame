@@ -451,6 +451,7 @@ export function provenMarks(problem, results) {
 // color, right side in another.
 export function claimToItems(claim) {
   if (!claim) return [];
+  if (claim.extItems) return claim.extItems; // claim types from geo-more.js
   if (claim.type === 'cong') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];
   if (claim.type === 'perp' || claim.type === 'par') return [{ kind: 'seg', p: claim.a, tone: 'a' }, { kind: 'seg', p: claim.b, tone: 'b' }];
   if (claim.type === 'sim') return [{ kind: 'tri', p: claim.P, tone: 'a' }, { kind: 'tri', p: claim.Q, tone: 'b' }];

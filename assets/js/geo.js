@@ -7,6 +7,7 @@
 import { REASONS, STAGES } from './data.js';
 import { getLang } from './i18n.js';
 import * as alg from './algebra.js';
+import { install as installMore, expandNames, moreClaim } from './geo-more.js';
 
 const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 const others = (k) => [0, 1, 2].filter((x) => x !== k);
@@ -289,8 +290,10 @@ export function parseClaim(input, ctx) {
   const points = Array.isArray(ctx) ? ctx : ctx.pointNames;
   const rays = Array.isArray(ctx) ? null : ctx.rays;
   parseCtx = Array.isArray(ctx) || !ctx.points || !ctx.rays ? null : ctx;
-  const s = normalizeInput(input);
+  const s = normalizeInput(expandNames(input, ctx));
   if (!s) return fail('empty');
+  const ext = moreClaim(s, ctx); // claim types from geo-more.js ("CL משיק למעגל" …)
+  if (ext) return ext;
   // △ABC ≅ △DEF and △ABC ∼ △DEF: the letter order is the correspondence.
   for (const [sym, type, badKey] of [['≅', 'cong', 'badCong'], ['∼', 'sim', 'badSim']]) {
     if (!s.includes(sym)) continue;
@@ -485,6 +488,7 @@ const quadKey = (kind, P) => QUADS[kind].sym.map((o) => o.map((i) => P[i]).join(
 
 export function claimKey(c) {
   if (!c) return '';
+  if (c.extKey) return c.extKey;
   if (c.type === 'perp' || c.type === 'par') return c.type + ':' + [c.la, c.lb].sort().join('|');
   if (c.type === 'drawn') return 'drawn:' + [...c.a].sort().join('');
   if (c.type === 'equi') return 'equi:' + [...c.P].sort().join('');
@@ -576,6 +580,7 @@ export function quadName(kind) {
 
 export function fmtClaim(c) {
   if (!c) return '';
+  if (c.extStr) return c.extStr;
   if (c.type === 'cong') return `△${c.P.join('')} ≅ △${c.Q.join('')}`;
   if (c.type === 'sim') return `△${c.P.join('')} ∼ △${c.Q.join('')}`;
   if (c.type === 'drawn') return c.a.join('');
@@ -617,6 +622,7 @@ function leanSide(side) {
 }
 
 export function leanClaim(c) {
+  if (c.extLean) return c.extLean;
   if (c.type === 'cong') return `Cong ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'sim') return `Sim ${c.P.join(' ')} ${c.Q.join(' ')}`;
   if (c.type === 'drawn') return 'True';
@@ -2210,3 +2216,7 @@ export function leanTheorem(problem, results, upto) {
   }
   return lines.join('\n');
 }
+
+// More reasons (tangent–chord, area ratios, chords, law of sines with 2R, quadrilateral tests, analytic
+// geometry …), named parameters, more claim types and the numeric fallback for "חשבון": geo-more.js.
+installMore({ CHECKS, REASONS, matches, fail2, gives, refNames, circles, tangents, triples, sideOf, between, degenerate, eqVec, parseClaim, QUADS, claimKey, lineKey });
