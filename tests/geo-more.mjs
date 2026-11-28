@@ -76,6 +76,18 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   proof('rounded answer', q, [...base, R('CX = 8.66', 'algebra', [2, 3, 4])], { rows: [true, true, true, true, true], solved: true });
   proof('too few decimals refused', q, [...base, R('CX = 8.6', 'algebra', [2, 3, 4])], { rows: [true, true, true, true, false] });
   proof('too far refused', q, [...base, R('CX = 8.68', 'algebra', [2, 3, 4])], { rows: [true, true, true, true, false] });
+  const exact = problem({ points: p.points, segments: p.segments, config: q.config,
+    givens: ['OX = 5', '∢OCX = 30°'], goal: 'CX = 5√3' });
+  exact.rounding = { min: 2 };
+  const longDecimal = parseClaim('CX = 1.414213562', { ...exact, leanScalars: true }).claim;
+  check('Lean receives the decimal as written', longDecimal.R.products[0].factors[0][0] === '1.414213562');
+  for (const [value, ok, rounded] of [['5√3', true, false], ['8.66', true, true], ['8.67', true, true],
+    ['8.660', true, true], ['8.670', false, false], ['8.6', false, false]]) {
+    const result = checkProof(exact, [...base, R('CX = ' + value, 'algebra', [2, 3, 4])]);
+    const row = result.results.at(-1);
+    check('rounding against exact goal ' + value, row.ok === ok && !!row.numeric === rounded &&
+      !!row.rounded === rounded && (result.solvedAt >= 0) === ok);
+  }
 }
 
 // ---- quadrilaterals

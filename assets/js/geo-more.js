@@ -137,7 +137,10 @@ export function expandNames(input, ctx) {
       .replace(/(?<!על\s+)היקף\s+(?:ה?מעגל\s+)?(?:שמרכזו\s+)?([A-Z])(?![A-Z])/g, 'P($1)');
   }
   // π is a number: 2π → 2*3.14159…, πr² → 3.14159…r²
-  if (input.includes('π')) input = input.replace(/(\d)\s*π/g, '$1*π').replace(/π/g, String(Math.PI));
+  if (input.includes('π')) {
+    input = input.replace(/(\d)\s*π/g, '$1*π');
+    input = ctx?.leanScalars ? input.replace(/π(?=[a-zA-Zα-ωΑ-Ω√])/g, 'π*') : input.replace(/π/g, String(Math.PI));
+  }
   const names = ctx && !Array.isArray(ctx) ? ctx.names : null;
   if (!names) return input;
   const pts = new Set(ctx.pointNames || []);
@@ -1106,14 +1109,14 @@ export function install(api) {
   // a question with `rounding: { min: m }` a rounded answer (see roundedFollows).
   const linear = CHECKS.algebra;
   if (linear) {
-    CHECKS.algebra = (claim, refRows, problem) => {
+    CHECKS.algebra = (claim, refRows, problem, decimals) => {
       const out = linear(claim, refRows, problem);
       if (!out.ok && claim.type === 'ineq' && ratioIneq(claim, refRows, eqVec)) return { ok: true, proof: out.proof.replace('linarith', 'nlinarith') };
       if (out.ok || claim.type !== 'eq' || !refRows.length) return out;
       const polys = refRows.filter((r) => r.claim.type === 'eq').map((r) => eqVec(r.claim));
       if (!polys.length) return out;
       if (numericFollows(polys, eqVec(claim), problem.points)) return { ok: true, proof: out.proof, numeric: true };
-      if (problem.rounding && roundedFollows(polys, eqVec(claim), problem)) return { ok: true, proof: out.proof, numeric: true, rounded: true };
+      if (problem.rounding && decimals !== null && roundedFollows(polys, eqVec(claim), problem, decimals)) return { ok: true, proof: out.proof, numeric: true, rounded: true };
       return out;
     };
   }
@@ -1165,11 +1168,11 @@ export function ratioIneq(claim, refRows, eqVec) {
 // whose number has d ≥ m decimals is right when the exact value x of its left side follows from the
 // cited rows and |15.32 − x| ≤ 10⁻ᵈ (one unit in the last digit), so every valid rounding counts.
 const decimals = (v) => { const s = Math.abs(v).toFixed(9).replace(/0+$/, ''); const i = s.indexOf('.'); return i < 0 || i === s.length - 1 ? 0 : s.length - i - 1; };
-export function roundedFollows(polys, target, problem) {
+export function roundedFollows(polys, target, problem, precision) {
   const min = (problem.rounding && problem.rounding.min) || 0;
   if (!target.has('1')) return false;
   const w = -target.get('1');
-  const d = decimals(w);
+  const d = precision ?? decimals(w);
   if (d < min) return false;
   const rest = new Map([...target].filter(([k]) => k !== '1'));
   if (!rest.size) return false;

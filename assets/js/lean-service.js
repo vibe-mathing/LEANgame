@@ -7,7 +7,7 @@
 // because browsers ask a visitor's permission before a public site may reach localhost.
 
 import { t, esc } from './i18n.js';
-import { fmtClaim, claimKey } from './geo.js';
+import { fmtClaim, claimKey, parseClaim, answerDecimals } from './geo.js';
 
 const DEFAULT_URL = 'http://localhost:8790';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -49,16 +49,24 @@ function reasonFor(p, row, r) {
 }
 
 // The request: the question and the rows, as structures (never Lean text).
-function request(p, rows, results) {
+export function leanRequest(p, rows, results) {
+  const ctx = { ...p, leanScalars: true };
+  const structured = (text, original) => {
+    if (!text || !['eq', 'ineq'].includes(original?.type)) return original;
+    return parseClaim(text, ctx).claim || null;
+  };
   return {
     points: p.points,
     // every field of a diagram fact except its display text and Lean text (a circle's `on`, a tangent's `p`, `t`)
     config: p.config.map(({ text, lean, ...fact }) => fact),
-    givens: p.givensParsed,
-    goal: p.goalParsed,
+    givens: p.givensParsed.map((c, i) => structured(p.givens[i].claim, c)),
+    goal: structured(p.goal, p.goalParsed),
     allowed: p.allowed,
+    rounding: p.rounding,
+    mixedUnits: p.mixedUnits,
     rows: rows.map((row, i) => ({
-      claim: results[i] && results[i].parsed.ok ? results[i].parsed.claim : null,
+      claim: results[i]?.parsed.ok ? structured(row.text, results[i].parsed.claim) : null,
+      ...(p.rounding && row.reason === 'algebra' && { precision: results[i]?.rounded || !results[i]?.ok ? answerDecimals(row.text) : null }),
       reason: reasonFor(p, row, results[i]),
       refs: row.refs || [],
     })),
@@ -74,7 +82,7 @@ export async function leanCheck(p, rows, results) {
     const r = await fetch(url + '/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request(p, rows, results)),
+      body: JSON.stringify(leanRequest(p, rows, results)),
       signal: AbortSignal.timeout(90000),
     });
     const res = await r.json();

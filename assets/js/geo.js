@@ -233,19 +233,23 @@ function parseSide(src, points, rays) {
   const tokens = src.match(/[+-]?[^+-]+/g);
   if (!tokens || tokens.join('') !== src) return fail('unknownTerm', { t: `$${safe(src)}$` });
   const terms = [];
+  const products = parseCtx?.leanScalars ? [] : null;
   let k = 0;
   let deg = false;
   for (const tok of tokens) {
     const sign = tok[0] === '-' ? -1 : 1;
     const r = parseProduct(tok.replace(/^[+-]/, ''), points, rays);
     if (!r.ok) return r;
+    if (products) products.push({ sign, factors: r.scalars, t: r.t });
     if (r.deg) deg = true;
     if (!r.t) { k += sign * r.c; continue; }
     const key = termKey(r.t);
     const same = terms.find((x) => termKey(x.t) === key);
     if (same) same.c += sign * r.c; else terms.push({ c: sign * r.c, t: r.t });
   }
-  return { ok: true, side: { terms: terms.filter((x) => Math.abs(x.c) > EPS), k, deg } };
+  const side = { terms: terms.filter((x) => Math.abs(x.c) > EPS), k, deg };
+  if (products?.some(p => p.factors.some(([s, e]) => e < 0 || /[Π√A-Z]|[.,]\d{4}/.test(s)))) side.products = products;
+  return { ok: true, side };
 }
 
 const NUM_RE = /^(\d+(?:[.,]\d+)?)?(?:√(\d+(?:[.,]\d+)?))?(°)?(.*)$/;
@@ -256,11 +260,14 @@ function parseProduct(body, points, rays) {
   let c = 1;
   let deg = false;
   const f = new Map(); // key → { t, e }
+  const scalars = parseCtx?.leanScalars ? [] : null;
   for (let i = 0; i < pieces.length; i += 2) {
     const piece = pieces[i];
     const sgn = pieces[i - 1] === '/' ? -1 : 1;
     const m = piece.match(NUM_RE);
     const hasNum = !!(m[1] || m[2]);
+    if (scalars && m[1]) scalars.push([m[1], sgn]);
+    if (scalars && m[2]) scalars.push(['√' + m[2], sgn]);
     if (hasNum) c *= ((m[1] ? num(m[1]) : 1) * (m[2] ? Math.sqrt(num(m[2])) : 1)) ** sgn;
     if (m[3]) deg = true;
     let rest = m[4];
@@ -270,9 +277,10 @@ function parseProduct(body, points, rays) {
     }
     let e = 1;
     if (rest.endsWith('²')) { e = 2; rest = rest.slice(0, -1); }
+    if (scalars && rest === 'Π') { c *= Math.PI ** (e * sgn); scalars.push(['Π', e * sgn]); continue; }
     const a = parseAtom(rest, points, rays);
     if (!a.ok) return a;
-    if (a.num != null) { c *= (a.num ** e) ** sgn; continue; }
+    if (a.num != null) { c *= (a.num ** e) ** sgn; scalars?.push([rest, e * sgn]); continue; }
     const key = termKey(a.term);
     const cur = f.get(key) || { t: a.term, e: 0 };
     cur.e += e * sgn;
@@ -280,10 +288,10 @@ function parseProduct(body, points, rays) {
   }
   if (!Number.isFinite(c)) return fail('unknownTerm', { t: `$${safe(body)}$` });
   const fs = [...f.values()].filter((x) => x.e !== 0);
-  if (!fs.length) return { ok: true, c, deg };
+  if (!fs.length) return { ok: true, c, deg, scalars };
   if (fs.some((x) => x.t.kind === 'ang') && (fs.length > 1 || fs[0].e !== 1) && !arcClaim) return fail('angleProduct');
-  if (fs.length === 1 && fs[0].e === 1) return { ok: true, c, t: fs[0].t, deg };
-  return { ok: true, c, t: { kind: 'mono', f: fs, key: alg.keyOf(new Map(fs.map((x) => [termKey(x.t), x.e]))) }, deg };
+  if (fs.length === 1 && fs[0].e === 1) return { ok: true, c, t: fs[0].t, deg, scalars };
+  return { ok: true, c, t: { kind: 'mono', f: fs, key: alg.keyOf(new Map(fs.map((x) => [termKey(x.t), x.e]))) }, deg, scalars };
 }
 
 // What a term measures: an angle ('ang'), or a length to some power ('L1' for AB, 'L2' for
@@ -2135,8 +2143,27 @@ function consResult(problem, row, n) {
   return { n, parsed: { ok: true, claim }, ok: true, msg: null, lean: info.lean.replace(/⟩ :=/, `, s${n}⟩ :=`).replace(/, h\w+, s/, ', s'), goal: false, cons: true };
 }
 
-// Check every row. rows: [{ text, reason, refs: [rowNumbers] }]; a construction row also has
-// `cons` (see buildConstruction).
+// Preserve a student's written precision, including trailing zeros.
+export function answerDecimals(text) {
+  for (const side of String(text).split('=')) {
+    const m = side.trim().match(/^[+−-]?\d+(?:[.,](\d+))?[°º]?$/);
+    if (m) return m[1]?.length || 0;
+  }
+  return null;
+}
+
+// Compare the quantity including its coefficient and constant offset, in either equation order.
+function roundedGoal(claim, goal, decimals, min) {
+  if (decimals === null || decimals < min || claim.type !== 'eq' || goal?.type !== 'eq') return false;
+  const split = (c) => !c.R.terms.length && c.L.terms.length ? [c.L, c.R] :
+    !c.L.terms.length && c.R.terms.length ? [c.R, c.L] : null;
+  const a = split(claim), b = split(goal);
+  if (!a || !b) return false;
+  const delta = eqVec({ type: 'eq', L: a[0], R: b[0] });
+  return !delta.size && Math.abs(a[1].k - b[1].k) <= 10 ** -decimals + 1e-12;
+}
+
+// Check every claim, its reason and its numbered references. Construction rows also carry `cons`.
 export function checkProof(problem0, rows) {
   const problem = withConstructions(problem0, rows);
   const results = [];
@@ -2176,23 +2203,31 @@ export function checkProof(problem0, rows) {
       readings.push(...combos.slice(0, 27));
     }
     const check = CHECKS[rid];
+    const decimals = problem.rounding && rid === 'algebra' ? answerDecimals(row.text) : null;
     // an equilateral claim by a theorem or by calculation: each of its equations, same reason
     const parts = claim.type === 'equi' && rid !== 'given' ? claimEqs(claim) : [claim];
     let out = null;
+    let numeric = false;
+    let rounded = false;
     for (const part of parts) {
       let first = null;
       out = null;
       for (const rr of readings) {
         const o = check
-          ? check(part, rr, problem)
+          ? check(part, rr, problem, decimals)
           : { ok: false, msg: { key: 'reasonNoFit', vars: { rid } }, proof: `${REASONS[rid].lean} ${refNames(rr)}`.trim() };
         first = first || o;
         if (o.ok) { out = o; break; }
       }
       out = out || first;
       if (!out.ok) break;
+      numeric ||= !!out.numeric;
+      rounded ||= !!out.rounded;
     }
     res.ok = out.ok;
+    res.numeric = res.ok && numeric;
+    res.rounded = res.ok && rounded;
+    if (res.ok && problem.rounding && roundedGoal(claim, problem.goalParsed, decimals, problem.rounding.min || 0)) res.goal = true;
     res.msg = out.msg || null;
     res.lean = `${head} ${out.proof}`;
   });

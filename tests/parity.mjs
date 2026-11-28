@@ -9,27 +9,10 @@
 
 import { PROBLEMS, STAGES } from '../assets/js/data.js';
 import * as geo from '../assets/js/geo.js';
+import { leanRequest } from '../assets/js/lean-service.js';
 
 const URL_ = (process.argv[2] || 'http://localhost:8790').replace(/\/+$/, '');
 for (const s of STAGES) for (const p of PROBLEMS[s.id] || []) geo.prepareProblem(p, s.id);
-
-// The request lean-service.js sends.
-function request(p, rows, results) {
-  const reasonFor = (row, r) => {
-    if (!row.reason || !r || !r.parsed.ok) return row.reason || null;
-    const key = geo.claimKey(r.parsed.claim);
-    const restated = p.givens.some((g, i) => (g.also || []).includes(row.reason) && geo.claimKey(p.givensParsed[i]) === key);
-    return restated ? 'given' : row.reason;
-  };
-  return {
-    points: p.points,
-    config: p.config.map(({ text, lean, ...fact }) => fact),
-    givens: p.givensParsed,
-    goal: p.goalParsed,
-    allowed: p.allowed,
-    rows: rows.map((row, i) => ({ claim: results[i].parsed.ok ? results[i].parsed.claim : null, reason: reasonFor(row, results[i]), refs: row.refs || [] })),
-  };
-}
 
 // Test-only questions: triangle ABC with D on BC, so angles at B and C have several names.
 const triangleWithD = (givens, goal) => geo.prepareProblem({
@@ -47,6 +30,26 @@ const [P1, P2, P3] = PROBLEMS.L02;
 const R = (text, reason, refs = []) => ({ text, reason, refs });
 
 const CASES = [
+  ['Bagrut rectangle area using the next two sides', geo.prepareProblem({
+    points: { A: [0, 0], B: [6, 0], C: [6, 4], D: [0, 4] }, segments: ['AB', 'BC', 'CD', 'DA'],
+    config: [], givens: [{ claim: 'ABCD מלבן' }], goal: 'S□ABCD = BC*CD',
+  }, 'L11'), [R('ABCD מלבן', 'given'), R('S□ABCD = BC*CD', 'quad_area', [1])]],
+  ['Bagrut radius from exact circle area', geo.prepareProblem({
+    points: { P: [0, 0], C: [21, 0] }, segments: ['PC'], config: [], givens: [{ claim: 'π*PC² = 441π' }],
+    goal: 'PC = 21',
+  }, 'L11'), [R('π*PC² = 441π', 'given'), R('PC = 21', 'algebra', [1]), R('PC = 20', 'algebra', [1])]],
+  ['Bagrut rectangle angles and a wrong diagonal', geo.prepareProblem({
+    points: { A: [0, 0], B: [6, 0], C: [6, 4], D: [0, 4] }, segments: ['AB', 'BC', 'CD', 'DA', 'AC'],
+    config: [], givens: [{ claim: 'ABCD מלבן' }], goal: '∢ABC = 90°',
+  }, 'L11'), [R('ABCD מלבן', 'given'), R('∢ABC = 90°', 'quad_props', [1]), R('∢BAC = 90°', 'quad_props', [1])]],
+  ['Bagrut exact circumference with π', geo.prepareProblem({
+    points: { O: [0, 0], A: [5, 0] }, segments: ['OA'], config: [{ type: 'circle', o: 'O', on: ['A'] }],
+    givens: [{ claim: 'OA = 5' }], goal: 'P(O) = 10π',
+  }, 'L11'), [R('OA = 5', 'given'), R('P(O) = 2π*OA', 'circumference'), R('P(O) = 10π', 'algebra', [1, 2])]],
+  ['Bagrut twenty percent of a perimeter', geo.prepareProblem({
+    points: { A: [0, 0], B: [3, 0], C: [0, 4] }, segments: ['AB', 'BC', 'CA'], config: [],
+    givens: [{ claim: 'AB + BC + CA = 12' }], goal: '0.2AB + 0.2BC + 0.2CA = 2.4',
+  }, 'L11'), [R('AB + BC + CA = 12', 'given'), R('0.2AB + 0.2BC + 0.2CA = 2.4', 'algebra', [1])]],
   // the playable problems, as written in their hints
   ['L01-1 reference', V1, [R('∢AOC=40', 'given'), R('∢AOC=∢BOD', 'vert_angles'), R('∢BOD=40', 'algebra', [1, 2])]],
   ['L01-2 reference', A2, [R('∢AOC=130', 'given'), R('∢AOC+∢COB=180', 'adj_angles'), R('∢COB=50', 'algebra', [1, 2])]],
@@ -192,7 +195,7 @@ for (const [label, p, rows] of CASES) {
   const t0 = Date.now();
   let res;
   try {
-    const r = await fetch(URL_ + '/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request(p, rows, local.results)) });
+    const r = await fetch(URL_ + '/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(leanRequest(p, rows, local.results)) });
     res = await r.json();
   } catch (e) {
     console.error(`Lean service not reachable at ${URL_}: ${e.message}`);
