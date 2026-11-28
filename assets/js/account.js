@@ -8,7 +8,7 @@
 // Strings live here, not in i18n.js, so this module stays self-contained.
 
 import { getLang, esc, L } from './i18n.js';
-import { STAGES, problemList, stageNumber } from './data.js';
+import { STAGES, problemList, stageNumber, progressKey } from './data.js';
 import * as auth from './auth.js';
 
 // ---------------------------------------------------------------- strings
@@ -780,7 +780,7 @@ async function pageJoin(host, route) {
 function readProgress() {
   try { return JSON.parse(localStorage.getItem('lg.progress')) || {}; } catch { return {}; }
 }
-const solvedCount = (progress) => problemList().filter((x) => progress[`${x.stage}-${x.n}`]?.solved).length;
+const solvedCount = (progress) => problemList().filter((x) => progress[progressKey(x.stage, x.n)]?.solved).length;
 
 function progressBlocks(progress) {
   return STAGES.map((s) => {
@@ -789,7 +789,7 @@ function progressBlocks(progress) {
     return `<div class="prog-stage">
       <span class="prog-stage-name">${esc(tt('adm.stage', { n: stageNumber(s.id) }))} · ${esc(L(s.name))}</span>
       <span class="prog-pips">${items.map((x) => {
-        const done = progress[`${x.stage}-${x.n}`]?.solved;
+        const done = progress[progressKey(x.stage, x.n)]?.solved;
         return `<span class="prog-pip${done ? ' done' : ''}" title="${esc(L(x.problem.title))}">${done ? ic('check') : x.n}</span>`;
       }).join('')}</span>
     </div>`;

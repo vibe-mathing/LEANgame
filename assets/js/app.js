@@ -1,7 +1,7 @@
 // LEANgame website: hash router and the three views (home, topic, problem).
 
 import { t, L, getLang, setLang, rich, mathSpan, esc } from './i18n.js';
-import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList, UNI_SITE } from './data.js';
+import { TOPICS, STAGES, REASONS, PROBLEMS, stageNumber, problemList, UNI_SITE, progressKey } from './data.js';
 import { checkProof, prepareProblem, fmtClaim, leanTheorem, parseClaim, leanClaim, autoReason, liveFormat, renamedAngles, syncConstructions, claimKey, findReason } from './geo.js';
 import { renderDiagram, claimToItems, provenMarks } from './diagram.js';
 import { leanEnabled, leanState, leanCheck, applyLean } from './lean-service.js';
@@ -31,7 +31,7 @@ const REPO_URL = document.querySelector('meta[name="lg-repo"]')?.content || '';
 for (const s of STAGES) for (const p of PROBLEMS[s.id] || []) prepareProblem(p, s.id);
 
 const progress = () => store.get('progress', {});
-const pkey = (stage, n) => `${stage}-${n}`;
+const pkey = progressKey; // "<stage>-<n>", or a moved problem's own key (data.js)
 const isSolved = (stage, n) => !!progress()[pkey(stage, n)]?.solved;
 // `key`: a teacher bank question keeps its progress under "tq-<id>", apart from the stages.
 function saveProgress(stage, n, data, key = pkey(stage, n)) {

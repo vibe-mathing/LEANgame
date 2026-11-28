@@ -77,9 +77,9 @@ const CASES = [
   ['L03-1 other properties', PROBLEMS.L03[0], [R('AB=AC', 'given'), R('BD=DC', 'given'), R('∢BAD = ∢CAD', 'iso_median', [1, 2]), R('∢ADB = 90', 'iso_median', [1, 2]),
     R('AD ⊥ BD', 'perp_def', [4]), R('AD ⊥ BC', 'iso_median', [1])]],
   ['L03-2', PROBLEMS.L03[1], [R('AB=AC', 'given'), R('∢ABD=∢ACE', 'iso_base', [1]), R('BD=CE', 'given'), R('ABD≅ACE', 'SAS', [1, 2, 3]), R('AD=AE', 'cpct_side', [4])]],
-  ['L03-3', PROBLEMS.L03[2], [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('∢ADB+∢ADE=180', 'adj_angles'), R('∢AEC+∢AED=180', 'adj_angles'),
+  ['L03-4 (from the inside out)', PROBLEMS.L03.find((p) => p.n === 4), [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('∢ADB+∢ADE=180', 'adj_angles'), R('∢AEC+∢AED=180', 'adj_angles'),
     R('∢ADB=∢AEC', 'algebra', [2, 3, 4]), R('BD=CE', 'given'), R('ADB≅AEC', 'SAS', [1, 5, 6]), R('AB=AC', 'cpct_side', [7])]],
-  ['L03 converse and wrong rows', PROBLEMS.L03[2], [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('AD=AE', 'iso_converse', [2]),
+  ['L03 converse and wrong rows', PROBLEMS.L03.find((p) => p.n === 4), [R('AD=AE', 'given'), R('∢ADE=∢AED', 'iso_base', [1]), R('AD=AE', 'iso_converse', [2]),
     R('AB=AE', 'iso_converse', [2]), R('∢ADB=∢AEC', 'iso_base', [1])]],
 
   // stages 4–11: every problem as its hints solve it, then rows both must reject
@@ -140,7 +140,7 @@ const CASES = [
       ['L02-5', Q('L02', 5), [R('AO = OB', 'given'), R('CO = OD', 'given'), R('∢AOC = ∢BOD', 'vert_angles'), R('AOC ≅ BOD', 'SAS', [1, 2, 3]), R('AC = BD', 'cpct_side', [4])]],
       ['L02-6', Q('L02', 6), [R('∢CAO = ∢DBO', 'given'), R('AO = OB', 'given'), R('∢AOC = ∢BOD', 'vert_angles'), R('AOC ≅ BOD', 'ASA', [1, 2, 3]), R('CO = OD', 'cpct_side', [4])]],
       ['L02-7', Q('L02', 7), [R('AB = AC', 'given'), R('BD = DC', 'given'), R('AD = AD', 'common_side'), R('ABD ≅ ACD', 'SSS', [1, 2, 3]), R('∢ADB = ∢ADC', 'cpct_angle', [4]), R('∢ADB + ∢ADC = 180', 'adj_angles'), R('∢ADB = 90', 'algebra', [5, 6])]],
-      ['L03-4', Q('L03', 4), [R('AB = AC', 'given'), R('∢ABC = ∢ACB', 'iso_base', [1]), R('∢ABD + ∢ABC = 180', 'adj_angles'), R('∢ACE + ∢ACB = 180', 'adj_angles'), R('∢ABD = ∢ACE', 'algebra', [2, 3, 4])]],
+      ['L03-3 (equal exterior angles)', Q('L03', 3), [R('AB = AC', 'given'), R('∢ABC = ∢ACB', 'iso_base', [1]), R('∢ABD + ∢ABC = 180', 'adj_angles'), R('∢ACE + ∢ACB = 180', 'adj_angles'), R('∢ABD = ∢ACE', 'algebra', [2, 3, 4])]],
       ['L03-5', Q('L03', 5), [R('∢ABC = ∢ACB', 'given'), R('AB = AC', 'iso_converse', [1]), R('BD = DC', 'given'), R('∢BAD = ∢CAD', 'iso_median', [2, 3])]],
       ['L03-6', Q('L03', 6), [R('AB = AC', 'given'), R('AD ⊥ BC', 'given'), R('BD = DC', 'iso_median', [1, 2]), R('BD + DC = BC', 'segment_add'), R('BC = 10', 'given'), R('BD = 5', 'algebra', [3, 4, 5])]],
       ['L04-5', Q('L04', 5), [R('DE ∥ BC', 'given'), R('∢DAB = 50', 'given'), R('∢EAC = 60', 'given'), R('∢DAB = ∢ABC', 'alt_angles', [1]), R('∢EAC = ∢ACB', 'alt_angles', [1]), R('∢BAC + ∢ABC + ∢ACB = 180', 'tri_sum'), R('∢BAC = 70', 'algebra', [2, 3, 4, 5, 6])]],

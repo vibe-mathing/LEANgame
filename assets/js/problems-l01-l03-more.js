@@ -158,7 +158,9 @@ export const PROBLEMS_L01_L03_MORE = {
 
   L03: [
     {
-      n: 4,
+      // question 3 since 2026-11-28 (before "from the inside out"); its progress keeps "L03-4"
+      n: 3,
+      key: 'L03-4',
       title: H('זוויות חיצוניות שוות', 'Equal exterior angles'),
       intro: H('במשולש $ABC$ מתקיים $AB = AC$. הצלע $BC$ מוארכת לשני הצדדים, עד $D$ ועד $E$.', 'In triangle $ABC$, $AB = AC$. Side $BC$ is extended both ways, to $D$ and to $E$.'),
       points: { A: [0, 4], B: [-2, 0], C: [2, 0], D: [-4.5, 0], E: [4.5, 0] },

@@ -451,7 +451,9 @@ export const PROBLEMS = {
       ],
     },
     {
-      n: 3,
+      // question 4 since 2026-11-28 (the base-angles question came first); its progress keeps "L03-3"
+      n: 4,
+      key: 'L03-3',
       title: { he: 'מבפנים החוצה', en: 'From the inside out' },
       intro: { he: 'במשולש $ABC$ הנקודות $D$ ו-$E$ נמצאות על הצלע $BC$.', en: 'In triangle $ABC$, points $D$ and $E$ lie on side $BC$.' },
       points: { A: [0, 4], B: [-4, 0], C: [4, 0], D: [-1.5, 0], E: [1.5, 0] },
@@ -479,9 +481,17 @@ export const PROBLEMS = {
 };
 
 // More problems for stages 1–3 (problems-l01-l03-more.js). Each has a fixed number of its own
-// (progress is saved per stage and number); the list is kept in number order.
+// (progress is saved per stage and number, or under its own `key` after a move, see progressKey);
+// the list is kept in number order.
 for (const [stage, list] of Object.entries(PROBLEMS_L01_L03_MORE)) {
   PROBLEMS[stage] = [...(PROBLEMS[stage] || []), ...list].sort((a, b) => a.n - b.n);
+}
+
+// Where a problem's progress is saved: "<stage>-<n>", or the problem's own `key` when it moved to
+// another number, so a student's proof and "solved" stay with the problem.
+export function progressKey(stage, n) {
+  const p = (PROBLEMS[stage] || []).find((x) => x.n === n);
+  return (p && p.key) || `${stage}-${n}`;
 }
 
 export function stageById(id) { return STAGES.find((s) => s.id === id); }

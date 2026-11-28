@@ -7,7 +7,7 @@
 // the site-wide settings the admin saves on the admin page (Firestore config/tools,
 // tracks.default), and the settings for the student's track (tracks['3'], …).
 
-import { STAGES, PROBLEMS, REASONS, stageNumber } from './data.js';
+import { STAGES, PROBLEMS, REASONS, stageNumber, progressKey } from './data.js';
 import { parseClaim, claimKey, fmtClaim, checkProof, termKey } from './geo.js';
 import { t, L, esc } from './i18n.js';
 
@@ -38,7 +38,7 @@ const DEFAULTS = { ...Object.fromEntries(SETTABLE.map((id) => [id, TOOLS[id].ope
 const TRACKS = ['default', '3', '4', '5', 'uni'];
 
 // Problems as 'L01-2' keys, and their site label "1.2".
-const problemKey = (stage, n) => `${stage}-${n}`;
+const problemKey = progressKey;
 const splitKey = (k) => { const m = /^(L\d\d)-(\d+)$/.exec(k || ''); return m ? { stage: m[1], n: +m[2] } : null; };
 const problemLabel = (k) => { const s = splitKey(k); return s ? `${stageNumber(s.stage)}.${s.n}` : ''; };
 const problemExists = (k) => { const s = splitKey(k); return !!(s && (PROBLEMS[s.stage] || []).some((p) => p.n === s.n)); };
