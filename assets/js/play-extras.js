@@ -26,6 +26,16 @@ const TXT = {
     rowN: 'שורה {n}',
     then: ', ואז ',
     yours: 'הטענה שלכם',
+    angleBtn: 'זווית',
+    angleTitle: 'זווית לפי שלוש נקודות: לחצו כאן, ואז על נקודה על שוק אחת, על הקודקוד ועל נקודה על השוק השנייה.',
+    ang0: 'לחצו על נקודה על שוק אחת',
+    ang1: 'עכשיו על הקודקוד',
+    ang2: 'ועכשיו על נקודה על השוק השנייה',
+    tri0: 'לחצו על קודקודי המשולש',
+    tri1: 'עוד שני קודקודים',
+    tri2: 'ועוד קודקוד אחד',
+    buildCancel: 'ביטול',
+    backspace: 'מחיקת התו האחרון',
   },
   en: {
     tip: 'Tap a point, side or angle in the diagram to add it to the claim.',
@@ -40,6 +50,16 @@ const TXT = {
     rowN: 'row {n}',
     then: ', then ',
     yours: 'your claim',
+    angleBtn: 'Angle',
+    angleTitle: 'An angle by three points: tap here, then a point on one arm, the vertex and a point on the other arm.',
+    ang0: 'Tap a point on one arm',
+    ang1: 'Now the vertex',
+    ang2: 'Now a point on the other arm',
+    tri0: 'Tap the triangle’s vertices',
+    tri1: 'Two more vertices',
+    tri2: 'One more vertex',
+    buildCancel: 'Cancel',
+    backspace: 'Delete the last character',
   },
 };
 
@@ -224,4 +244,56 @@ export function findSkip(p, rows, upto, text) {
     if (done) return done;
   }
   return null;
+}
+
+// ---------------------------------------------------------------- naming an angle or a triangle by its points
+// While the claim ends (at the caret) in "∢" or "△" and fewer than three letters, a tap near a point
+// adds that point to the name: ∢, a point on one arm, the vertex, a point on the other arm gives ∢XYZ.
+// app.js snaps every tap to the nearest point in this state, so a point is easy to hit with a finger,
+// and the diagram shows the points chosen so far (diagram.js markPick, kind 'build').
+
+const BUILD = /(∢|△)([A-Z]{0,2})$/;
+
+// { sym, letters, at } when the text before the caret is naming an angle or a triangle, else null.
+// `at` is where the "∢" or "△" starts.
+export function building(value, caret) {
+  const before = String(value).slice(0, caret ?? String(value).length);
+  const m = BUILD.exec(before);
+  return m ? { sym: m[1], letters: m[2], at: before.length - m[0].length } : null;
+}
+
+// The claim after point X joins the name being built: { value, caret, done, name }, or null when X
+// can't go next (the same point again; for an angle, the vertex can't also be an arm's end).
+export function addBuildPoint(value, caret, b, X) {
+  const L = b.letters;
+  if (L.includes(X)) return null;
+  const at = caret ?? value.length;
+  const next = value.slice(0, at) + X + value.slice(at);
+  const letters = L + X;
+  return { value: next, caret: at + 1, done: letters.length === 3, name: b.sym + letters };
+}
+
+// The step's words for the chip on the diagram: "∢B · Now the vertex".
+export function buildSaid(b) {
+  return PX((b.sym === '∢' ? 'ang' : 'tri') + b.letters.length);
+}
+
+// The claim with the name being built taken out (the "∢" or "△" too), for the chip's cancel.
+export function dropBuild(value, caret, b) {
+  const at = caret ?? value.length;
+  return { value: value.slice(0, b.at) + value.slice(at), caret: b.at };
+}
+
+// ⌫ under the claim (the phone keyboard can stay closed): deletes the selection, or before the caret a
+// spaced sign (" = ") or "S△" as one key, else one character.
+export function backspace(value, start, end) {
+  const a = Math.max(0, Math.min(start ?? value.length, value.length));
+  const z = Math.max(a, Math.min(end ?? a, value.length));
+  if (z > a) return { value: value.slice(0, a) + value.slice(z), caret: a };
+  if (!a) return { value, caret: 0 };
+  const before = value.slice(0, a);
+  const m = /\s*[=+\-−<>≅∼∥⊥]\s*$|S[△□]$|\s+$/u.exec(before);
+  const cut = m ? m[0].length : [...before].pop().length;
+  const head = before.slice(0, before.length - cut);
+  return { value: head + value.slice(a), caret: head.length };
 }

@@ -12,6 +12,7 @@ import { accountRoute, accountTitle, viewAccount, bindAccount, accountSlot, init
 import { syncProgress, isStaff as isStaffUser, onAuthChange } from './auth.js';
 import { appStrip, appFootLink } from './mobile-app.js';
 import { mountConstructions } from './constructions-ui.js';
+import { building, addBuildPoint, buildSaid, dropBuild, backspace } from './play-extras.js';
 import { curriculumOf, inLevel, REASON_ALIASES, AAS_NAMES, STAGE_CURRICULUM, EXAM, TOPIC_LEVELS, LEVELS, MINISTRY } from './curriculum.js';
 import { currentUser } from './auth.js';
 import { PX, DEV_SKIP, insertPick, newReasons, findSkip } from './play-extras.js';
@@ -705,6 +706,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
             <p class="intro">${rich(L(p.intro))}</p>
           </header>
           <div class="diagram-card paper" id="diagram">
+            <button type="button" class="dg-angle" id="dgAngle" aria-pressed="false" title="${esc(PX('angleTitle'))}"><b aria-hidden="true">∢</b><span>${esc(PX('angleBtn'))}</span></button>
             <button type="button" class="dg-pin" id="dgPin" aria-pressed="true" title="${esc(PX('pin'))}" aria-label="${esc(PX('pin'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/></svg></button>
           </div>
           <p class="dg-tip">${esc(PX('tip'))}</p>
@@ -762,7 +764,7 @@ function viewProblem({ stage, n, problem: p, bank }) {
               <div class="claim-field">
                 <input id="claimInput" class="claim-input" dir="ltr" spellcheck="false" autocapitalize="characters" placeholder="${t('pp.claimPh')}">
                 <div class="symkeys" role="group" aria-label="symbols">
-                  ${['∢', '△', 'S△', 'S□', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 6, '∼': 9, '/': 9, 'S△': 6, 'S□': 6 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}
+                  ${['∢', '△', 'S△', 'S□', '≅', '⊥', '∥', '∼', '<', '>', '=', '+', '−', '²', '/', '°'].filter((s) => sNum >= ({ '∥': 4, '<': 5, '>': 5, '²': 6, '∼': 9, '/': 9, 'S△': 6, 'S□': 6 }[s] || 1)).map((s) => `<button type="button" class="symkey" data-sym="${s}">${s}</button>`).join('')}<button type="button" class="symkey symkey-del" data-sym="⌫" title="${esc(PX('backspace'))}" aria-label="${esc(PX('backspace'))}">⌫</button>
                 </div>
               </div>
               <div class="claim-preview" id="preview" aria-live="polite"></div>
@@ -905,6 +907,70 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   const leanToggle = $('#leanToggle', root);
   const liveLean = $('#liveLean', root);
   leanToggle.checked = state.showLean;
+
+  // Naming an angle (or a triangle) by its points (play-extras.js building). The "∢ angle" button on the
+  // diagram starts "∢" in the claim; while the claim ends in ∢ or △ and fewer than three letters, a tap
+  // anywhere near a point adds that point, and the diagram rings the points chosen so far. This runs
+  // before the tap-to-insert handler above (capture) and stops it only in that state; the button then
+  // says what to tap next, and pressing it again takes the half-written name out.
+  const angleBtn = $('#dgAngle', root);
+  const caretAt = () => input.selectionStart ?? input.value.length;
+  let buildHover = null; // the point under the mouse while naming
+  function syncBuild() {
+    const b = building(input.value, caretAt());
+    dg.el.classList.toggle('is-building', !!b);
+    angleBtn.setAttribute('aria-pressed', String(!!b));
+    angleBtn.title = b ? PX('buildCancel') : PX('angleTitle');
+    angleBtn.innerHTML = b
+      ? `<b dir="ltr">${esc(b.sym + b.letters)}</b><span>${esc(buildSaid(b))}</span>${icon('x')}`
+      : `<b aria-hidden="true">∢</b><span>${esc(PX('angleBtn'))}</span>`;
+    const pts = b ? [...b.letters, ...(buildHover && !b.letters.includes(buildHover) ? [buildHover] : [])] : [];
+    dg.markPick({ kind: 'build', p: pts, hover: pts.length > (b ? b.letters.length : 0) });
+  }
+  const nudge = () => { angleBtn.classList.remove('is-nudge'); void angleBtn.offsetWidth; angleBtn.classList.add('is-nudge'); };
+  dg.el.addEventListener('click', (e) => {
+    const b = building(input.value, caretAt());
+    if (!b) return;
+    const touch = lastPointer !== 'mouse';
+    // a lone "∢" and a tap inside an angle: tap-to-insert puts that angle in the ∢'s place
+    if (b.sym === '∢' && !b.letters) {
+      const hit = dg.pick(e.clientX, e.clientY, touch);
+      if (hit && hit.kind === 'ang') return;
+    }
+    e.stopImmediatePropagation();
+    const hit = dg.pick(e.clientX, e.clientY, touch, { snap: true });
+    const r = hit && addBuildPoint(input.value, caretAt(), b, hit.p[0]);
+    if (!r) { nudge(); return; }
+    input.value = r.value;
+    if (!touch) input.focus();
+    try { input.setSelectionRange(r.caret, r.caret); } catch { /* ignore */ }
+    buildHover = null;
+    showMsg('');
+    updatePreview();
+    if (r.done) dg.markPick({ kind: b.sym === '∢' ? 'ang' : 'tri', p: [...b.letters, hit.p[0]] }, true);
+  }, true);
+  dg.el.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const b = building(input.value, caretAt());
+    if (!b) return;
+    dg.markPick(null); // no side or angle outline while naming by points
+    const h = dg.pick(e.clientX, e.clientY, false, { snap: true });
+    const X = h ? h.p[0] : null;
+    if (X !== buildHover) { buildHover = X; syncBuild(); }
+  });
+  dg.el.addEventListener('pointerleave', () => { if (buildHover) { buildHover = null; syncBuild(); } });
+  angleBtn.addEventListener('click', () => {
+    const b = building(input.value, caretAt());
+    const r = b ? dropBuild(input.value, caretAt(), b) : insertPick(input.value, caretAt(), { kind: 'ang', text: '∢' });
+    input.value = r.value;
+    if (lastPointer === 'mouse') input.focus();
+    try { input.setSelectionRange(r.caret, r.caret); } catch { /* ignore */ }
+    buildHover = null;
+    showMsg('');
+    updatePreview();
+  });
+  // the caret moved inside the claim (a tap or an arrow key): the naming state follows it
+  for (const ev of ['keyup', 'pointerup']) input.addEventListener(ev, () => syncBuild());
   let result = checkProof(p, state.rows);
   let wasSolved = result.solvedAt >= 0;
 
@@ -1081,10 +1147,14 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       const r = parseClaim(v, p);
       preview.className = 'claim-preview ' + (r.ok ? 'is-ok' : 'is-err');
       preview.innerHTML = r.ok ? mathSpan(fmtClaim(r.claim)) : msgHTML(r.error);
+      // half-way through naming an angle by its points: what to tap next, not an error
+      const bd = !r.ok && building(input.value, caretAt());
+      if (bd) { preview.className = 'claim-preview'; preview.innerHTML = `<span class="muted">${esc(buildSaid(bd))}</span>`; }
     }
     syncPreviewHighlight();
     renderReasonField();
     updateLiveLean();
+    syncBuild();
   }
 
   const upto = () => (state.editing != null ? state.editing : state.rows.length);
@@ -1123,7 +1193,7 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     state.rows = [...state.rows.slice(0, at), ...made, ...later];
     resetComposer();
     renderRows();
-    input.focus();
+    refocus();
   }
 
   // A calculation (or an identity such as AB = AB) fills in its own reason.
@@ -1169,10 +1239,12 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     const fresh = newReasons(p, stage, progress(), pk);
     quickIds = ['given', 'algebra', ...fresh];
     quickWrap.classList.toggle('has-new', fresh.length > 0);
-    quickWrap.innerHTML = quickIds.map((id) => {
+    const chip = (id) => {
       const isNew = fresh.includes(id);
       return `<button type="button" class="qchip${isNew ? ' is-new' : ''}" data-r="${id}" aria-pressed="${state.reason === id}"${isNew ? ` title="${esc(PX('newTitle'))}"` : ''}>${reasonShort(id)}${isNew ? `<span class="qnew">${esc(PX('newTag'))}</span>` : ''}</button>`;
-    }).join('');
+    };
+    // the new ones in a row of their own, which scrolls sideways on a phone (styles.css)
+    quickWrap.innerHTML = ['given', 'algebra'].map(chip).join('') + (fresh.length ? `<span class="qnew-row">${fresh.map(chip).join('')}</span>` : '');
   }
 
   // Skip steps (a tool the admin opens): the rows the game would add for the claim being written.
@@ -1312,6 +1384,15 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     const s = b.dataset.sym;
     const a = input.selectionStart ?? input.value.length;
     const e = input.selectionEnd ?? input.value.length;
+    if (s === '⌫') {
+      const r = backspace(input.value, a, e);
+      input.value = r.value;
+      if (lastPointer === 'mouse' || document.activeElement === input) input.focus();
+      input.setSelectionRange(r.caret, r.caret);
+      showMsg('');
+      updatePreview();
+      return;
+    }
     const ins = ['=', '≅', '∼', '⊥', '∥', '<', '>', '+', '−'].includes(s) ? ` ${s} ` : s;
     input.value = input.value.slice(0, a) + ins + input.value.slice(e);
     // On a phone, keep the keyboard closed while the student builds the claim from keys and taps.
@@ -1329,10 +1410,10 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
   $('#composer', root).addEventListener('submit', (e) => {
     e.preventDefault();
     const text = input.value.trim();
-    if (!text) { input.focus(); preview.className = 'claim-preview is-err'; preview.innerHTML = msgHTML({ key: 'empty' }); return; }
+    if (!text) { refocus(); preview.className = 'claim-preview is-err'; preview.innerHTML = msgHTML({ key: 'empty' }); return; }
     const chain = chainParts(text);
     if (chain) { addChain(chain); return; }
-    if (!parseClaim(text, p).ok) { input.focus(); updatePreview(); return; }
+    if (!parseClaim(text, p).ok) { refocus(); updatePreview(); return; }
     let row;
     if (!state.reason && reasonInput.value.trim()) {
       const exact = exactReason(reasonInput.value, p.allowed);
@@ -1351,8 +1432,17 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
     if (state.editing != null) state.rows[state.editing] = row; else state.rows.push(row);
     resetComposer();
     renderRows();
-    input.focus();
+    refocus();
   });
+  // After a row goes in, the claim field takes the focus again, but on a phone only when the keyboard
+  // was already open: a claim built from taps and keys leaves it closed.
+  function refocus() {
+    if (lastPointer === 'mouse' || typingNow) input.focus();
+  }
+  let typingNow = false; // the claim or reason field had the focus when the row was sent (Enter)
+  $('#composer', root).addEventListener('submit', () => { typingNow = [input, reasonInput].includes(document.activeElement); }, true);
+  // A sign key or the angle button doesn't take the focus from the claim, so an open keyboard stays open.
+  for (const el of [$('.symkeys', root), angleBtn]) el.addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
   $('#cancelEdit', root).addEventListener('click', () => { resetComposer(); renderRows(); });
 
   // Skip steps: the rows go in where the claim was going; later rows move down, and their references
@@ -1390,7 +1480,8 @@ function bindProblem(root, { stage, n, problem: p, bank }) {
       state.refs = new Set(row.auto ? [] : row.refs);
       updatePreview();
       renderRows();
-      input.focus();
+      // on a phone the composer comes into view with the keyboard still closed
+      if (lastPointer === 'mouse') input.focus(); else $('#composer', root).scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   });
   // Swap a row with the one above or below it. References follow the rows, so a row that cited

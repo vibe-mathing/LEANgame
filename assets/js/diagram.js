@@ -207,6 +207,10 @@ function pickAt(model, P, T, tol) {
   let best = null;
   for (const X of model.names) { const d = near(X); if (d <= tol.pt && (!best || d < best.d)) best = { d, X }; }
   if (best) return { kind: 'pt', p: [best.X], text: best.X };
+  // Inside the middle of an angle's wedge, the angle wins over its own arms: a finger inside a narrow
+  // angle near its vertex is closer than tol.seg to an arm, and used to get that side instead.
+  const wedge = angleAt(model, P, T, tol);
+  if (wedge && wedge.mid) return { kind: 'ang', p: wedge.p, text: '∢' + wedge.p.join('') };
   // a segment (the piece between two neighbouring points)
   let seg = null;
   for (const [a, b] of model.pieces) {
@@ -219,12 +223,19 @@ function pickAt(model, P, T, tol) {
     if (d <= tol.seg && (!seg || d < seg.d)) seg = { d, a, b };
   }
   if (seg) return { kind: 'seg', p: [seg.a, seg.b], text: seg.a + seg.b };
-  // an angle: the sector at the nearest vertex that contains the tap
+  if (wedge) return { kind: 'ang', p: wedge.p, text: '∢' + wedge.p.join('') };
+  return null;
+}
+
+// The angle under T: the sector at the nearest vertex that contains it, { d, p, mid } or null. `mid`:
+// T lies in the middle 60% of the sector (by direction) and is not on any drawn segment through
+// another vertex (a cevian crossing the wedge keeps its own taps).
+function angleAt(model, P, T, tol) {
   let ang = null;
   for (const V of Object.keys(model.arms)) {
     const list = model.arms[V];
     if (list.length < 2) continue;
-    const d = near(V);
+    const d = dist(P[V], T);
     if (d > tol.ang) continue;
     const th = Math.atan2(T[1] - P[V][1], T[0] - P[V][0]);
     for (let i = 0; i < list.length; i++) {
@@ -233,12 +244,34 @@ function pickAt(model, P, T, tol) {
       const off = (th - m.a + 4 * Math.PI) % (2 * Math.PI);
       if (off > span) continue;
       if (span >= Math.PI - 1e-6 || d > 0.8 * Math.min(m.len, n.len)) break;
-      if (!ang || d < ang.d) ang = { d, p: [m.to, V, n.to] };
+      if (!ang || d < ang.d) ang = { d, p: [m.to, V, n.to], V, frac: off / span };
       break;
     }
   }
-  if (ang) return { kind: 'ang', p: ang.p, text: '∢' + ang.p.join('') };
-  return null;
+  if (!ang) return null;
+  let mid = ang.frac >= 0.2 && ang.frac <= 0.8;
+  if (mid) {
+    // a segment not through the vertex, within reach of the tap, still wins
+    for (const [a, b] of model.pieces) {
+      if (a === ang.V || b === ang.V) continue;
+      const A = P[a]; const B = P[b]; const V = P[ang.V];
+      const ux = B[0] - A[0]; const uy = B[1] - A[1];
+      const L2 = ux * ux + uy * uy;
+      if (!L2) continue;
+      if (Math.abs((V[0] - A[0]) * uy - (V[1] - A[1]) * ux) / Math.sqrt(L2) < 1) continue; // on an arm's line
+      const t = ((T[0] - A[0]) * ux + (T[1] - A[1]) * uy) / L2;
+      if (t <= 0 || t >= 1) continue;
+      if (Math.abs((T[0] - A[0]) * uy - (T[1] - A[1]) * ux) / Math.sqrt(L2) <= tol.seg) { mid = false; break; }
+    }
+  }
+  return { d: ang.d, p: ang.p, mid };
+}
+
+// The nearest point to T within `r`, as a pick, or null (naming an angle by its points: app.js).
+function pointNear(model, P, T, r) {
+  let best = null;
+  for (const X of model.names) { const d = dist(P[X], T); if (d <= r && (!best || d < best.d)) best = { d, X }; }
+  return best ? { kind: 'pt', p: [best.X], text: best.X } : null;
 }
 
 export function renderDiagram(problem, { width = 420, height = 320, pad = 50, animate = true, label = '' } = {}) {
@@ -279,16 +312,33 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
 
   // What is under the pointer: { kind: 'pt' | 'seg' | 'ang', p, text } or null. Tolerances are in
   // screen pixels (wider for a finger), so the diagram picks the same way at any size.
-  function pick(clientX, clientY, touch = false) {
+  // { snap: true }: only points, the nearest within a wide reach (naming an angle by its points).
+  function pick(clientX, clientY, touch = false, { snap = false } = {}) {
     const ctm = svg.getScreenCTM();
     if (!ctm) return null;
     const T = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
     const k = 1 / (Math.hypot(ctm.a, ctm.b) || 1);
     model = model || pickModel(cur.problem, cur.P);
+    if (snap) return pointNear(model, cur.P, [T.x, T.y], (touch ? 46 : 30) * k);
     return pickAt(model, cur.P, [T.x, T.y], { pt: (touch ? 17 : 11) * k, seg: (touch ? 15 : 9) * k, ang: (touch ? 80 : 66) * k });
+  }
+  // The points chosen so far while naming an angle or triangle ({ kind: 'build', sym, p }), with the
+  // side or arm between the first two; p empty clears it. Its own layer, so hover outlines don't erase it.
+  function drawBuild(hit) {
+    let g = svg.querySelector('.dg-build');
+    if (!g) {
+      g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', 'dg-build');
+      svg.append(g);
+    }
+    const { P } = cur;
+    const p = (hit.p || []).filter((x) => P[x]);
+    const arm = p.length >= 2 ? `<path class="bd-arm" d="M${pt(P[p[0]])}L${pt(P[p[1]])}"/>` : '';
+    g.innerHTML = arm + p.map((x, i) => `<circle class="bd-pt${hit.hover && i === p.length - 1 ? ' is-hover' : ''}" cx="${f(P[x][0])}" cy="${f(P[x][1])}" r="10"/>`).join('');
   }
   // Outline what a click would insert (null clears it); flash: briefly mark what was inserted.
   function markPick(hit, flash = false) {
+    if (hit && hit.kind === 'build') { drawBuild(hit); return; }
     const g = svg.querySelector('.dg-pick');
     if (!g) return;
     const key = hit ? hit.kind + hit.p.join('') : '';
@@ -300,6 +350,7 @@ export function renderDiagram(problem, { width = 420, height = 320, pad = 50, an
     const cls = flash ? ' pk-flash' : '';
     if (hit.kind === 'pt') g.innerHTML = `<circle class="pk-pt${cls}" cx="${f(P[hit.p[0]][0])}" cy="${f(P[hit.p[0]][1])}" r="9"/>`;
     else if (hit.kind === 'seg') g.innerHTML = `<path class="pk-seg${cls}" d="M${pt(P[hit.p[0]])}L${pt(P[hit.p[1]])}"/>`;
+    else if (hit.kind === 'tri') g.innerHTML = `<polygon class="pk-tri${cls}" points="${hit.p.map((q) => pt(P[q])).join(' ')}"/>`;
     else {
       const [X, V, Y] = hit.p;
       g.innerHTML = `<path class="pk-ang${cls}" d="${arcGeom(P[V], P[X], P[Y], angleRadius(X, V, Y, 40)).wedge}"/>`;

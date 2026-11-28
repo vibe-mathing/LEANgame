@@ -1087,3 +1087,51 @@ a.pager-btn:hover { border-color: var(--pen); color: var(--pen); }
 .exam-rules { margin-top: 22px; display: flex; align-items: flex-start; max-width: 90ch; line-height: 1.6; }
 .exam-rules a { color: var(--pen); }
 .sugg.is-note { color: var(--err); white-space: normal; }
+
+/* ---------------------------------------------------------------- the proof screen on a phone; naming an angle by its points
+   (app.js syncBuild with play-extras.js building; diagram.js draws .dg-build) */
+.stage-foot { flex-wrap: wrap; }
+.pips { flex-wrap: wrap; min-width: 0; }
+.dg-angle {
+  position: absolute; top: 6px; inset-inline-start: 6px; z-index: 2; max-width: calc(100% - 56px);
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--card) 90%, transparent);
+  color: var(--ink-2); font: inherit; font-size: .84rem; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer;
+}
+.dg-angle b { font-family: var(--font-math); font-size: 1.1rem; font-weight: 600; }
+.dg-angle span { overflow: hidden; text-overflow: ellipsis; }
+.dg-angle .ic { display: inline-flex; flex: none; }
+.dg-angle .ic svg { width: 14px; height: 14px; }
+.dg-angle:hover { border-color: var(--pen); color: var(--pen); }
+/* while naming, the button says what to tap next, in a strip above the drawing so it hides no point */
+.dg-angle[aria-pressed="true"] {
+  position: relative; top: auto; inset-inline-start: auto; display: flex; width: max-content; margin: 4px 4px 2px;
+  max-width: calc(100% - 52px); background: var(--pen); border-color: var(--pen); color: var(--pen-ink);
+}
+.claim-preview.is-err { display: block; }
+.dg-angle.is-nudge { animation: nudge .25s ease 2; }
+[dir="rtl"] .dg-angle.is-nudge { animation-name: nudge-rtl; }
+.dg.is-building { cursor: crosshair; }
+.dg-build { pointer-events: none; }
+.bd-pt { fill: var(--pen); fill-opacity: .16; stroke: var(--pen); stroke-width: 2.5; animation: hlin .2s ease; }
+.bd-pt.is-hover { fill-opacity: 0; stroke-dasharray: 4 3; }
+.bd-arm { stroke: var(--pen); stroke-width: 6; stroke-linecap: round; fill: none; opacity: .35; }
+.pk-tri { fill: var(--pen); opacity: .2; }
+.symkey-del { font-family: var(--font-ui); color: var(--muted); }
+.qnew-row { display: contents; }
+@media (max-width: 600px) {
+  /* nothing scrolls the page sideways (a stamp waiting to land is scaled up; clip keeps sticky working) */
+  #app { overflow-x: clip; }
+  /* the top bar scrolls away on the proof screen, so the pinned diagram gets the top of the screen */
+  body:has(.pp) .topbar { position: relative; }
+  .pp-problem > .diagram-card { top: 6px; }
+  /* "given", "algebra" and the new theorems in one row that scrolls sideways, not a line each
+     (the grid column must not grow to that row's width) */
+  .pp-grid, .composer { grid-template-columns: minmax(0, 1fr); }
+  .qnew-row { display: flex; gap: 6px; width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-top: 9px; margin-top: -3px; }
+  .qnew-row::-webkit-scrollbar { display: none; }
+  .qnew-row .qchip { flex: none; }
+  .symkey { min-width: 26px; }
+  .composer { gap: 4px; }
+  .cmp-label { margin-top: 2px; }
+}
