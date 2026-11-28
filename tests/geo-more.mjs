@@ -200,5 +200,45 @@ proof('sim_area without the ratio refused', circ, [R('△MOA ∼ △OEA', 'given
   proof('a cosine is not taken as positive', p, [R('cos∢ABC > cos∢ACB', 'given'), R('AC/AB = cos∢ABC/cos∢ACB', 'given'), R('AC > AB', 'algebra', [1, 2])], { rows: [true, false, false] });
 }
 
+// ---- arcs and circumferences: ⌒AB, ⌒ACB, P(O), P(OA), and the theorems arc_length and circumference
+{
+  const at = (deg, r = 5) => [r * Math.cos((deg * Math.PI) / 180), r * Math.sin((deg * Math.PI) / 180)];
+  const p = problem({
+    // circle O radius 5 through A, B, C (C on the major arc AB), D, E (a diameter); F on a circle of radius 3
+    points: { O: [0, 0], A: at(0), B: at(90), C: at(225), D: at(30), E: at(210), F: at(45, 3) },
+    segments: ['OA', 'OB', 'DE', 'OF'],
+    config: [{ type: 'circle', o: 'O', on: ['A', 'B', 'C', 'D', 'E'] }, { type: 'circle', o: 'O', on: ['F'] }],
+    givens: ['OA = 5', '∢AOB = 90°'],
+    goal: 'OA = 5',
+  });
+  const read = (s) => parseClaim(s, p);
+  const shows = (s, want) => { const r = read(s); check(`"${s}" reads as ${want}`, r.ok && fmtClaim(r.claim) === want, r.ok ? fmtClaim(r.claim) : JSON.stringify(r.error)); };
+  shows('⌒AB = 2.5π', '⌒AB = 2.5π');
+  shows('קשת AB = 2.5π', '⌒AB = 2.5π');
+  shows('⌒ACB = 7.5π', '⌒ACB = 7.5π');
+  shows('P(OF) = 6π', 'P(OF) = 6π');
+  check('a minor arc in Lean is π·r·∢/180', leanOfClaim(read('⌒AB = 2.5π').claim) === '(Real.pi * len O A * ang A O B / 180) = 2.5 * Real.pi', leanOfClaim(read('⌒AB = 2.5π').claim));
+  check('a major arc in Lean uses 360 − ∢', leanOfClaim(read('⌒ACB = 7.5π').claim).includes('(360 - ang A O B)'));
+  check('a half circle in Lean is π·r', leanOfClaim(read('⌒DE = 5π').claim) === '(Real.pi * len O A) = 5 * Real.pi');
+  const errKey = (s) => { const r = read(s); return r.ok ? 'ok' : r.error.key; };
+  check('P(O) with two circles around O asks for a point', errKey('P(O) = 10π') === 'circAmbiguous' && errKey('היקף המעגל שמרכזו O = 10π') === 'circAmbiguous');
+  check('an arc off every circle is refused', errKey('⌒AF = 1') === 'arcNoCircle');
+  check('an arc is a length, not an area', errKey('S△AOB + ⌒AB = 12.5') === 'mixedTypes');
+  check('outside arc claims an angle still may not multiply a length', errKey('OA*∢AOB = 450') === 'angleProduct');
+  const G = [R('OA = 5', 'given'), R('∢AOB = 90°', 'given')];
+  proof('minor arc', p, [...G, R('⌒AB = π*OA*∢AOB/180', 'arc_length'), R('⌒AB = 2.5π', 'algebra', [1, 2, 3])], { rows: [true, true, true, true] });
+  proof('major arc', p, [...G, R('⌒ACB = 2π*OA - π*OA*∢AOB/180', 'arc_length'), R('⌒ACB = 7.5π', 'algebra', [1, 2, 3])], { rows: [true, true, true, true] });
+  proof('arc over circumference', p, [G[1], R('⌒AB = P(OA)*∢AOB/360', 'arc_length'), R('⌒AB/P(OA) = 0.25', 'algebra', [1, 2])], { rows: [true, true, true] });
+  proof('circumference', p, [G[0], R('P(OA) = 2π*OA', 'circumference'), R('P(OA) = π*DE', 'circumference'), R('P(OA) = 10π', 'algebra', [1, 2])], { rows: [true, true, true, true] });
+  proof('a wrong arc length refused', p, [...G, R('⌒AB = π*OA*∢AOB/90', 'arc_length')], { rows: [true, true, false] });
+  proof('a radius of another circle refused', p, [R('P(OA) = 2π*OF', 'circumference')], { rows: [false] });
+  // the teacher editor: arcs and circumferences in the text; "על היקף המעגל" is still a circle fact
+  const drawing = { pts: [{ id: 'O', x: 0, y: 0 }, { id: 'A', x: 5, y: 0 }, { id: 'B', x: 0, y: 5 }], segs: [['O', 'A'], ['O', 'B']], circs: [{ o: 'O', r: 'A' }] };
+  const rv = buildReview(drawing, 'הנקודות A ו-B נמצאות על היקף המעגל שמרכזו O. נתון: OA = 5, אורך הקשת AB הוא 2.5π. הוכיחו: היקף המעגל O = 10π.', {});
+  check('the editor reads arcs and circumferences', JSON.stringify(rv.givens.map((g) => g.claim)) === '["OA = 5","⌒AB = 2.5π"]' && rv.goal && /^P/.test(rv.goal.claim) && !(rv.unknown || []).length,
+    JSON.stringify({ g: rv.givens.map((g) => g.claim), goal: rv.goal, u: rv.unknown }));
+  check('"על היקף המעגל שמרכזו O" is still a circle fact', (rv.facts || []).some((f) => f.fact === 'circle' && f.o === 'O'), JSON.stringify(rv.facts));
+}
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

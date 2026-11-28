@@ -7,7 +7,7 @@
 import { REASONS, STAGES } from './data.js';
 import { getLang } from './i18n.js';
 import * as alg from './algebra.js';
-import { install as installMore, expandNames, moreClaim } from './geo-more.js';
+import { install as installMore, expandNames, moreClaim, moreAtom } from './geo-more.js';
 
 const PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
 const others = (k) => [0, 1, 2].filter((x) => x !== k);
@@ -138,6 +138,9 @@ function parseQuad(s, points) {
 // The problem parseClaim is reading (null for a bare list of point names): for ∢A, which needs the
 // drawn segments. parseClaim is synchronous, so this is never stale.
 let parseCtx = null;
+// A claim with an arc or a circumference (⌒AB, P(O)): there an angle may multiply a length, as in the
+// arc length π·OA·∢AOB/180, and an angle counts as a number beside a ratio (⌒AB/P(O) = ∢AOB/360).
+let arcClaim = false;
 
 // The arms of the drawing at V: one point per ray from V along a drawn segment (the ray's
 // representative, as in angKey).
@@ -156,6 +159,8 @@ function drawnArms(problem, V) {
 
 function parseAtom(body, points, rays) {
   let m;
+  const more = moreAtom(body, points, parseCtx); // ⌒AB, ⌒ACB, P(O) (geo-more.js): the term carries dim, str and lean
+  if (more) return more;
   // The area of a triangle: S△ABC (also S(ABC)). Any order of the letters is the same area.
   if ((m = body.match(/^S(?:△|\()([A-Z])([A-Z])([A-Z])\)?$/))) {
     const pts = [m[1], m[2], m[3]];
@@ -276,7 +281,7 @@ function parseProduct(body, points, rays) {
   if (!Number.isFinite(c)) return fail('unknownTerm', { t: `$${safe(body)}$` });
   const fs = [...f.values()].filter((x) => x.e !== 0);
   if (!fs.length) return { ok: true, c, deg };
-  if (fs.some((x) => x.t.kind === 'ang') && (fs.length > 1 || fs[0].e !== 1)) return fail('angleProduct');
+  if (fs.some((x) => x.t.kind === 'ang') && (fs.length > 1 || fs[0].e !== 1) && !arcClaim) return fail('angleProduct');
   if (fs.length === 1 && fs[0].e === 1) return { ok: true, c, t: fs[0].t, deg };
   return { ok: true, c, t: { kind: 'mono', f: fs, key: alg.keyOf(new Map(fs.map((x) => [termKey(x.t), x.e]))) }, deg };
 }
@@ -284,11 +289,12 @@ function parseProduct(body, points, rays) {
 // What a term measures: an angle ('ang'), or a length to some power ('L1' for AB, 'L2' for
 // AB², 'L0' for a ratio or a sine). Only terms of one kind may be added or compared.
 function dimOf(t) {
+  if (t.dim) return t.dim;
   if (t.kind === 'ang') return 'ang';
   if (t.kind === 'seg') return 'L1';
   if (t.kind === 'trig') return 'L0';
   if (t.kind === 'area' || t.kind === 'area4') return 'L2';
-  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' ? x.e : x.t.kind === 'area' || x.t.kind === 'area4' ? 2 * x.e : 0), 0);
+  return 'L' + t.f.reduce((s, x) => s + (x.t.kind === 'seg' || x.t.dim === 'L1' ? x.e : x.t.kind === 'area' || x.t.kind === 'area4' ? 2 * x.e : 0), 0);
 }
 const kindType = (t) => (dimOf(t) === 'ang' ? 'ang' : dimOf(t));
 
@@ -304,6 +310,7 @@ export function parseClaim(input, ctx) {
   const rays = Array.isArray(ctx) ? null : ctx.rays;
   parseCtx = Array.isArray(ctx) || !ctx.points || !ctx.rays ? null : ctx;
   const s = normalizeInput(expandNames(input, ctx));
+  arcClaim = /⌒|P\([A-Z]|P⊙/.test(s);
   if (!s) return fail('empty');
   const ext = moreClaim(s, ctx); // claim types from geo-more.js ("CL משיק למעגל" …)
   if (ext) return ext;
@@ -355,7 +362,7 @@ export function parseClaim(input, ctx) {
   const [L, R] = sides;
   const all = [...L.terms, ...R.terms];
   if (!all.length) return fail('onlyNumbers');
-  const types = new Set(all.map((x) => kindType(x.t)));
+  const types = new Set(all.map((x) => (arcClaim && x.t.kind === 'ang' ? 'L0' : kindType(x.t))));
   if (L.deg || R.deg) types.add('ang');
   // A question marked mixedUnits (a price: 30 per m² of cloth plus 10 per m of ribbon) may add
   // lengths and areas; angles never mix with lengths.
@@ -564,6 +571,7 @@ const leanNum = (v) => {
 
 const POW = { 2: '²', 3: '³' };
 function atomStr(t) {
+  if (t.str) return t.str;
   if (t.kind === 'seg') return t.p.join('');
   if (t.kind === 'ang') return '∢' + t.p.join('');
   if (t.kind === 'trig') return t.fn + atomStr(t.a);
@@ -622,6 +630,7 @@ export function fmtClaim(c) {
 }
 
 function leanAtom(t) {
+  if (t.lean) return t.lean;
   if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
   if (t.kind === 'ang') return `ang ${t.p.join(' ')}`;
   if (t.kind === 'trig') return `${t.fn}D (${leanAtom(t.a)})`;
@@ -2084,6 +2093,7 @@ function claimPoints(c) {
   const term = (t) => {
     if (!t) return;
     if (t.kind === 'seg' || t.kind === 'ang' || t.kind === 'area' || t.kind === 'area4') t.p.forEach((x) => out.add(x));
+    else if (t.str && t.p) [...t.p, t.o].filter(Boolean).forEach((x) => out.add(x)); // ⌒AB, P(O)
     else if (t.kind === 'trig') term(t.a);
     else if (t.kind === 'mono') t.f.forEach((x) => term(x.t));
   };

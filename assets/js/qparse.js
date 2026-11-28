@@ -80,8 +80,17 @@ function computeRays(points) {
 }
 
 // What parseClaim needs to read claims about this drawing.
-export function claimContext(pos) {
-  return { pointNames: Object.keys(pos), points: pos, rays: computeRays(pos) };
+export function claimContext(pos, drawing) {
+  const ctx = { pointNames: Object.keys(pos), points: pos, rays: computeRays(pos) };
+  // the drawn circles, for arcs and circumferences in claims (⌒AB, P(O): geo-more.js)
+  const circs = ((drawing && drawing.circs) || []).filter((c) => pos[c.o] && pos[c.r]);
+  if (circs.length) {
+    ctx.config = circs.map((c) => {
+      const r = dist(pos[c.o], pos[c.r]);
+      return { type: 'circle', o: c.o, on: Object.keys(pos).filter((x) => x !== c.o && Math.abs(dist(pos[c.o], pos[x]) - r) <= 0.02 * r) };
+    });
+  }
+  return ctx;
 }
 
 export const angDeg = (pos, X, V, Y) => {
@@ -185,6 +194,12 @@ export function normalizeText(text) {
   s = s.replace(new RegExp(`${PF}זוו?ית\\s*(?=[A-Z]{1,3}(?![A-Z]))`, 'g'), '∢');
   s = s.replace(/∢\s+(?=[A-Z])/g, '∢').replace(/△\s+(?=[A-Z])/g, '△');
   s = s.replace(/(\d+(?:[.,]\d+)?)\s*(?:מעלות|מעלה|°)/g, '$1°');
+  // "אורך הקשת AB" → ⌒AB, "היקף המעגל O" and P(O) → P⊙O, without brackets, which would split the clause
+  // (geo-more.js reads both forms); "⌒AB הוא 5" → "⌒AB = 5". "על היקף המעגל שמרכזו O" stays (a circle fact).
+  s = s.replace(/(?:אורך\s+)?ה?קשת\s+([A-Z]{2,3})(?![A-Z])/g, '⌒$1')
+    .replace(/(?<!על\s+)היקף\s+(?:ה?מעגל\s+)?(?:שמרכזו\s+)?([A-Z])(?![A-Z])/g, 'P⊙$1')
+    .replace(/\bP\s*\(\s*([A-Z])\s*([A-Z])?\s*\)/g, (m, o, x) => `P⊙${o}${x || ''}`)
+    .replace(/(⌒[A-Z]{2,3}|P⊙[A-Z]{1,2})\s+(?:הוא|היא|שווה\s+ל-?)\s*/g, '$1 = ');
   // "הזווית ∢COB": the word goes, the sign stays
   s = s.replace(new RegExp(`${PF}זוו?ית\\s*∢`, 'g'), '∢');
   // "X גדולה פי 2 מ-Y" → X = 2Y; "X קטנה פי 2 מ-Y" → 2X = Y; "X גדולה ב-20° מ-Y" → X − 20° = Y
@@ -547,7 +562,7 @@ function headExpr(s) {
   while (toks.length && (OP_END.test(out[out.length - 1]) || OP_START.test(toks[0]))) out.push(toks.shift());
   return out.join(' ');
 }
-const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△□°.,√²π+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△□°.,√²π+\-*/()=<>∥⊥≅∼\s])*/g;
+const REL_RUN = /(?:sin|cos|tan|[A-Z0-9∢△□⌒⊙°.,√²π+\-*/()\s])*[=<>∥⊥≅∼](?:sin|cos|tan|[A-Z0-9∢△□⌒⊙°.,√²π+\-*/()=<>∥⊥≅∼\s])*/g;
 
 function relations(clause, ctx) {
   const items = [];
@@ -781,6 +796,12 @@ function termVal(t, pos) {
   if (t.kind === 'seg') return { v: dist(pos[t.p[0]], pos[t.p[1]]), dim: 1 };
   if (t.kind === 'ang') return { v: angDeg(pos, ...t.p), dim: 0, ang: true };
   if (t.kind === 'trig') return { v: Math[t.fn](angDeg(pos, ...t.a.p) / DEG), dim: 0 };
+  if (t.kind === 'arc' || t.kind === 'circum') { // ⌒AB, P(O) (geo-more.js): r·θ and 2πr
+    const r = dist(pos[t.o], pos[t.rp]);
+    if (t.kind === 'circum') return { v: 2 * Math.PI * r, dim: 1 };
+    const th = t.half ? Math.PI : angDeg(pos, t.p[0], t.o, t.p[t.p.length - 1]) / DEG;
+    return { v: r * (t.major ? 2 * Math.PI - th : th), dim: 1 };
+  }
   if (t.kind === 'area' || t.kind === 'area4') {
     const Q = t.p.map((x) => pos[x]); // the shoelace formula, for a triangle or a quadrilateral
     return { v: Math.abs(Q.reduce((s, q, i) => s + q[0] * Q[(i + 1) % Q.length][1] - Q[(i + 1) % Q.length][0] * q[1], 0)) / 2, dim: 2 };
@@ -1156,7 +1177,7 @@ export function canonClaim(c) {
 export function buildReview(drawing, text, { title = '', stage = null } = {}) {
   const pos = solveDrawing(drawing);
   const parsed = parseText(text, { pos, segs: drawing.segs || [] });
-  const ctx = claimContext(pos);
+  const ctx = claimContext(pos, drawing);
   const seen = new Set();
   const givens = [];
   for (const g of parsed.givens) {
@@ -1248,7 +1269,7 @@ function tangentFacts(parsed, drawing, pos) {
 // The checks behind the review screen. Errors block saving; warnings are for the teacher to judge.
 export function reviewReport(review, drawing) {
   const pos = solveDrawing(drawing);
-  const ctx = claimContext(pos);
+  const ctx = claimContext(pos, drawing);
   const names = Object.keys(pos);
   const errors = [];
   const warnings = [];
@@ -1287,7 +1308,7 @@ export function reviewReport(review, drawing) {
   const used = new Set();
   const mark = (s) => { for (const ch of String(s).match(/[A-Z]/g) || []) used.add(ch); };
   // not point names: sin/cos/tan, and the S of an area (S△ABC, S(ABC))
-  const letters = (s) => String(s).replace(/sin|cos|tan/gi, '').replace(/S(?=\s*[△□(])/g, '');
+  const letters = (s) => String(s).replace(/sin|cos|tan/gi, '').replace(/S(?=\s*[△□(])/g, '').replace(/P(?=\s*(?:⊙|\(\s*[A-Z]))/g, '');
   review.givens.forEach((g) => mark(letters(g.claim)));
   if (goalClaim) mark(letters(goalClaim));
   (review.facts || []).forEach((f) => [f.p, f.a, f.b, f.o, f.l1, f.l2, f.line, ...(f.pts || [])].forEach((x) => x && mark(x)));
@@ -1342,7 +1363,7 @@ function factHolds(f, drawing, pos, review) {
 // The problem object the player runs (the format of PROBLEMS in data.js).
 export function buildProblem(review, drawing) {
   const pos = solveDrawing(drawing);
-  const ctx = claimContext(pos);
+  const ctx = claimContext(pos, drawing);
   const points = {};
   for (const n of Object.keys(pos)) points[n] = [+pos[n][0].toFixed(12), +pos[n][1].toFixed(12)];
   const segs = (drawing.segs || []).filter(([a, b]) => pos[a] && pos[b]).map(([a, b]) => a + b);
@@ -1458,7 +1479,7 @@ export function playable(stored, id) {
   if (pr.names && typeof pr.names === 'object') {
     const names = {};
     for (const [k, v] of Object.entries(pr.names).slice(0, 8)) {
-      if (/^[A-Za-zα-ωΑ-Ω]{1,2}$/.test(k) && typeof v === 'string' && /^[A-Z∢△□]{2,7}$/.test(v)) names[k] = v;
+      if (/^[A-Za-zα-ωΑ-Ω]{1,2}$/.test(k) && typeof v === 'string' && /^[A-Z∢△□⌒]{2,7}$/.test(v)) names[k] = v;
     }
     if (Object.keys(names).length) out.names = names;
   }

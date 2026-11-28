@@ -85,6 +85,7 @@ function termStr(a, atom) {
 // ---------------------------------------------------------------- claims written out
 
 function leanAtom(t) {
+  if (t.lean) return t.lean; // ⌒AB, P(O) (geo-more.js): their formula
   if (t.kind === 'seg') return `len ${t.p[0]} ${t.p[1]}`;
   if (t.kind === 'area') return `area ${t.p.join(' ')}`;
   if (t.kind === 'area4') return `area4 ${t.p.join(' ')}`;
@@ -124,6 +125,7 @@ export function leanOfClaim(c, warn) {
 }
 
 function schoolAtom(t) {
+  if (t.str) return t.str;
   if (t.kind === 'seg') return t.p.join('');
   if (t.kind === 'area') return 'S△' + t.p.join('');
   if (t.kind === 'area4') return 'S□' + t.p.join('');
@@ -172,7 +174,7 @@ export function describeProblem(problem, { ask = null } = {}) {
 export function problemToLean(problem, opts = {}) {
   const pos = problem.points;
   const names = Object.keys(pos);
-  const ctx = Q.claimContext(pos);
+  const ctx = { ...Q.claimContext(pos), config: problem.config || [] }; // with its circles, for ⌒AB and P(O)
   const warnings = [];
   const warn = (v) => warnings.push(H(`המספר ${v} עוגל`, `The number ${v} was rounded`));
   const parse = (s, what) => {

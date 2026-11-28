@@ -17,6 +17,8 @@ import { addTo, factorsOf, keyOf, mulKeys, follows as algFollows } from './algeb
 //   chords_product  → chords_product (L10, proved)
 //   secant_tangent  → secant_tangent, secant_secant (L10, proved)
 //   law_sines_2r    → law_sines_circum (Derived, proved)
+//   arc_length, circumference → none needed: in Lean ⌒AB and P(O) are written as their formulas
+//                     (π·r·∢AOB/180, 2π·r), so these steps are `ring` (no LeanGame statement yet)
 //   area_split      → area_split (L06)
 //   same_height     → area_same_height (L06, school axiom)
 //   sim_area        → sim_area, sim_area_BC, sim_area_AC (Derived, proved)
@@ -43,6 +45,12 @@ export const MORE_REASONS = {
   secant_tangent: R('L10', 'theorem', 0, 'secant_tangent',
     ['חותכים ומשיק', 'חותך ומשיק מנקודה חיצונית', 'אם מנקודה $P$ מחוץ למעגל יוצאים חותך הפוגש את המעגל ב-$A$ וב-$B$ ומשיק בנקודה $T$, אז $PT² = PA·PB$. לשני חותכים: $PA·PB = PC·PD$.'],
     ['Secant and tangent', 'Secant and tangent from a point', 'If a secant from an outside point $P$ meets the circle at $A$ and $B$, and a tangent touches it at $T$, then $PT² = PA·PB$. For two secants, $PA·PB = PC·PD$.']),
+  arc_length: R('L10', 'theorem', 0, 'arc_length',
+    ['אורך קשת', 'אורך קשת', 'במעגל שרדיוסו $r$, אורך קשת שהזווית המרכזית שלה $α$ הוא $2πr·\\frac{α}{360}$, כלומר החלק $\\frac{α}{360}$ מהיקף המעגל. כותבים $⌒AB$ לקשת הקטנה ו-$⌒ACB$ לקשת שעוברת דרך $C$ (או "קשת AB").'],
+    ['Arc length', 'Arc length', 'In a circle of radius $r$, an arc whose central angle is $α$ has length $2πr·\\frac{α}{360}$, the part $\\frac{α}{360}$ of the circumference. Write $⌒AB$ for the minor arc and $⌒ACB$ for the arc through $C$.']),
+  circumference: R('L10', 'theorem', 0, 'circumference',
+    ['היקף מעגל', 'היקף מעגל', 'היקף מעגל שרדיוסו $r$ הוא $2πr$ (או $π$ כפול הקוטר). כותבים $P(O)$ להיקף המעגל שמרכזו $O$, או $P(OA)$ כשכמה מעגלים חולקים את המרכז $O$ (או "היקף המעגל O").'],
+    ['Circumference', 'Circumference', 'A circle of radius $r$ has circumference $2πr$ ($π$ times the diameter). Write $P(O)$ for the circumference of the circle with centre $O$, or $P(OA)$ when several circles share the centre $O$.']),
   // L11 trigonometry and areas
   law_sines_2r: R('L11', 'theorem', 0, 'law_sines_circum',
     ['משפט הסינוסים (2R)', 'משפט הסינוסים עם רדיוס המעגל החוסם', 'במשולש החסום במעגל שרדיוסו $R$, כל צלע חלקי הסינוס של הזווית שמולה שווה ל-$2R$: $\\frac{a}{\\sin α} = 2R$.'],
@@ -123,6 +131,11 @@ export const MORE_QUADS = {
 const GREEK = 'α-ωΑ-Ω';
 export function expandNames(input, ctx) {
   if (typeof input !== 'string' || !input) return input;
+  // arcs and circumferences in words: "קשת AB" → ⌒AB, "היקף המעגל O" → P(O) (see moreAtom)
+  if (/קשת|היקף/.test(input)) {
+    input = input.replace(/(?:אורך\s+)?ה?קשת\s+([A-Z]{2,3})(?![A-Z])/g, '⌒$1')
+      .replace(/(?<!על\s+)היקף\s+(?:ה?מעגל\s+)?(?:שמרכזו\s+)?([A-Z])(?![A-Z])/g, 'P($1)');
+  }
   // π is a number: 2π → 2*3.14159…, πr² → 3.14159…r²
   if (input.includes('π')) input = input.replace(/(\d)\s*π/g, '$1*π').replace(/π/g, String(Math.PI));
   const names = ctx && !Array.isArray(ctx) ? ctx.names : null;
@@ -138,6 +151,92 @@ export function expandNames(input, ctx) {
     s = s.replace(new RegExp(before + e + after, 'g'), term);
   }
   return s;
+}
+
+// ---------------------------------------------------------------- arcs and circumferences
+// The circles of the drawing: circle facts with the same centre and the same drawn radius (2%) are one
+// circle, and a tangent's point of contact is on its circle. { o, r, on: [points, sorted] }.
+export function circleGroups(problem) {
+  const P = (problem && problem.points) || {};
+  const out = [];
+  const add = (o, x) => {
+    if (!P[o] || !P[x] || o === x) return;
+    const r = Math.hypot(P[o][0] - P[x][0], P[o][1] - P[x][1]);
+    let g = out.find((c) => c.o === o && Math.abs(c.r - r) <= 0.02 * Math.max(c.r, r));
+    if (!g) out.push((g = { o, r, on: [] }));
+    if (!g.on.includes(x)) g.on.push(x);
+  };
+  for (const c of (problem && problem.config) || []) {
+    if (c.type === 'circle') (c.on || []).forEach((x) => add(c.o, x));
+    if (c.type === 'tangent') add(c.o, c.t);
+  }
+  out.forEach((g) => g.on.sort());
+  return out;
+}
+
+const pfail = (key, vars) => ({ ok: false, error: { key, vars } });
+const sideOfPts = (P, A, B, X) => {
+  const c = (P[B][0] - P[A][0]) * (P[X][1] - P[A][1]) - (P[B][1] - P[A][1]) * (P[X][0] - P[A][0]);
+  return Math.abs(c) < 1e-9 * (1 + Math.abs(P[B][0] - P[A][0]) + Math.abs(P[B][1] - P[A][1])) ? 0 : Math.sign(c);
+};
+
+// Atoms that geo.js's parseAtom asks for first:
+//   ⌒AB   the minor arc AB of the circle through A and B (a half circle when AB is a diameter);
+//   ⌒ACB  the arc from A to B through C (minor or major, as the drawing shows);
+//   P(O)  the circumference of the circle with centre O; P(OA) the one through A, when several
+//         circles share the centre O.
+// A term carries its key (k: minor arc, K: major arc, P: circumference, each with the centre and the
+// circle's first point, then the arc's ends), its dimension, how it is shown and its Lean form (the
+// formula: an arc is r·θ, a circumference 2πr), so geo.js, qparse.js and leanconv.js need no more.
+export function moreAtom(body, points, ctx) {
+  let m;
+  if ((m = body.match(/^⌒([A-Z])([A-Z])([A-Z])?$/))) {
+    const [A, X, Y] = [m[1], m[2], m[3]];
+    const [B, C] = Y ? [Y, X] : [X, null];
+    const pts = [A, B, C].filter(Boolean);
+    const bad = pts.find((x) => !points.includes(x));
+    if (bad) return pfail('unknownPoint', { p: `$${bad}$` });
+    if (new Set(pts).size < pts.length) return pfail('repeatPoint');
+    const groups = circleGroups(ctx).filter((g) => pts.every((x) => g.on.includes(x)));
+    if (!groups.length) return pfail('arcNoCircle', { a: `$${body}$` });
+    if (groups.length > 1) return pfail('arcAmbiguous', { a: `$${body}$` });
+    const g = groups[0];
+    const P = ctx.points;
+    const [E1, E2] = [A, B].sort();
+    const o = g.o;
+    const R = g.on[0];
+    // a half circle when the centre is on AB; else C on the minor arc when C and O are on opposite sides of AB
+    const half = sideOfPts(P, A, B, o) === 0;
+    const major = !half && C != null && sideOfPts(P, A, B, C) === sideOfPts(P, A, B, o);
+    const key = `${major ? 'K' : 'k'}:${o}${R}:${E1}${E2}`;
+    const r = `len ${o} ${R}`;
+    const lean = half ? `(Real.pi * ${r})` : major ? `(Real.pi * ${r} * (360 - ang ${A} ${o} ${B}) / 180)` : `(Real.pi * ${r} * ang ${A} ${o} ${B} / 180)`;
+    return { ok: true, term: { kind: 'arc', p: [A, ...(C ? [C] : []), B], o, rp: R, major, half, key, dim: 'L1', str: `⌒${A}${C || ''}${B}`, lean } };
+  }
+  if ((m = body.match(/^P(?:\(([A-Z])([A-Z])?\)|⊙([A-Z])([A-Z])?)$/))) { // P(O), P(OA); P⊙O from the editor's text
+    const [o, X] = m[1] ? [m[1], m[2]] : [m[3], m[4]];
+    for (const x of [o, X].filter(Boolean)) if (!points.includes(x)) return pfail('unknownPoint', { p: `$${x}$` });
+    const around = circleGroups(ctx).filter((g) => g.o === o);
+    const groups = X ? around.filter((g) => g.on.includes(X)) : around;
+    if (!groups.length) return pfail('circNoCircle', { o: `$${o}$` });
+    if (groups.length > 1) return pfail('circAmbiguous', { o: `$${o}$`, ex: `$P(${o}${groups[0].on[0]})$` });
+    const R = groups[0].on[0];
+    return { ok: true, term: { kind: 'circum', p: [o, R], o, rp: R, key: `P:${o}${R}`, dim: 'L1', str: around.length > 1 ? `P(${o}${X || R})` : `P(${o})`, lean: `(2 * Real.pi * len ${o} ${R})` } };
+  }
+  return null;
+}
+
+// The value of an arc or circumference key in a drawing (atomValue, below).
+function arcValue(points, atom) {
+  const m = atom.match(/^([kKP]):([A-Z])([A-Z])(?::([A-Z])([A-Z]))?$/);
+  if (!m) return null;
+  const [, kind, o, R, A, B] = m;
+  if (!points[o] || !points[R]) return null;
+  const r = Math.hypot(points[o][0] - points[R][0], points[o][1] - points[R][1]);
+  if (kind === 'P') return 2 * Math.PI * r;
+  if (!points[A] || !points[B]) return null;
+  const th = (angleAt(points, A, o, B) * Math.PI) / 180;
+  return r * (kind === 'K' ? 2 * Math.PI - th : th);
 }
 
 // ---------------------------------------------------------------- more claim types
@@ -330,7 +429,7 @@ function atomValue(points, atom) {
     for (let i = 0; i < 4; i++) s += q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1];
     return Math.abs(s) / 2;
   }
-  return null;
+  return arcValue(points, atom); // ⌒AB, ⌒ACB, P(O)
 }
 
 // ---------------------------------------------------------------- numeric calculation check
@@ -508,6 +607,14 @@ export function install(api) {
   const done = (ok, rid, strs, proof) => (ok ? { ok: true, proof } : strs.length ? gives(rid, strs[0], proof) : fail2('reasonNoFit', proof, { rid }));
 
   // The area terms of a claim: S△ABC on its own or inside a product.
+  // The terms of one kind in a claim (arcs, circumferences), on their own or inside a product.
+  function termsOf(claim, kind) {
+    if (!claim || (claim.type !== 'eq' && claim.type !== 'ineq')) return [];
+    const out = new Map();
+    const take = (t) => { if (t.kind === kind) out.set(t.key, t); else if (t.kind === 'mono') t.f.forEach((x) => take(x.t)); };
+    for (const { t } of [...claim.L.terms, ...claim.R.terms]) take(t);
+    return [...out.values()];
+  }
   function areaTris(claim) {
     if (!claim || (claim.type !== 'eq' && claim.type !== 'ineq')) return [];
     const out = new Map();
@@ -591,6 +698,38 @@ export function install(api) {
         }
       }
       return done(fits(problem, claim, strs, refRows), 'law_sines_2r', strs, proof);
+    },
+    // ⌒AB = π·r·∢AOB/180 (a major arc π·r·(360 − ∢AOB)/180, a half circle π·r), with r any radius of
+    // its circle, or as a part of the circumference: ⌒AB = P(O)·∢AOB/360.
+    arc_length(claim, refRows, problem) {
+      const proof = 'arc_length';
+      const strs = [];
+      for (const t of termsOf(claim, 'arc')) {
+        const g = circleGroups(problem).find((c) => c.o === t.o && c.on.includes(t.rp));
+        if (!g) continue;
+        const [A, B] = [t.p[0], t.p[t.p.length - 1]];
+        const o = t.o;
+        const circ = `P(${o}${t.rp})`;
+        for (const X of g.on) {
+          const r = `${o}${X}`;
+          strs.push(t.half ? `${t.str}=π*${r}` : t.major ? `${t.str}=2π*${r}-π*${r}*∢${A}${o}${B}/180` : `${t.str}=π*${r}*∢${A}${o}${B}/180`);
+        }
+        strs.push(t.half ? `${t.str}=${circ}/2` : t.major ? `${t.str}=${circ}-${circ}*∢${A}${o}${B}/360` : `${t.str}=${circ}*∢${A}${o}${B}/360`);
+      }
+      return done(fits(problem, claim, strs, refRows), 'arc_length', strs, proof);
+    },
+    // P(O) = 2π·r for any radius r of the circle, or π times a diameter.
+    circumference(claim, refRows, problem) {
+      const proof = 'circumference';
+      const strs = [];
+      for (const t of termsOf(claim, 'circum')) {
+        const g = circleGroups(problem).find((c) => c.o === t.o && c.on.includes(t.rp));
+        if (!g) continue;
+        const circ = `P(${t.o}${t.rp})`;
+        for (const X of g.on) strs.push(`${circ}=2π*${t.o}${X}`);
+        for (const X of g.on) for (const Y of g.on) if (X < Y && between(problem, X, t.o, Y)) strs.push(`${circ}=π*${X}${Y}`);
+      }
+      return done(fits(problem, claim, strs, refRows), 'circumference', strs, proof);
     },
     area_split(claim, refRows, problem) {
       const proof = 'area_split';
@@ -989,7 +1128,7 @@ const posMono = (side, eqVec) => {
   const v = eqVec({ type: 'eq', L: side, R: { terms: [], k: 0 } });
   if (v.size !== 1) return null;
   const [[key, c]] = [...v];
-  if (!(c > 0) || (key !== '1' && !key.split('*').every((f) => /^(s|S|Q|a):/.test(f)))) return null;
+  if (!(c > 0) || (key !== '1' && !key.split('*').every((f) => /^(s|S|Q|a|k|K|P):/.test(f)))) return null;
   return { key, c };
 };
 const invKey = (k) => { const f = factorsOf(k); for (const [a, e] of f) f.set(a, -e); return keyOf(f); };
